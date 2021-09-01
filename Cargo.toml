@@ -1,0 +1,9 @@
+[workspace]
+members = [ "ogma", "ogma-ls", "ogma-shell" ]
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.bench]
+debug = 2 # Turn on for profiling benching
