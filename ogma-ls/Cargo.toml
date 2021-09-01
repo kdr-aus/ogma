@@ -1,0 +1,29 @@
+[package]
+name = "ogma-ls"
+version = "0.1.0"
+authors = ["Kurt Lawrence <kurtlawrence92@gmail.com>"]
+edition = "2018"
+
+[lib]
+path = "lib.rs"
+
+[[bin]]
+name = "ogma-ls"
+path = "main.rs"
+
+[dependencies]
+# workspace
+ogma = { path = "../ogma" }
+
+# crates.io
+bitflags = "1"
+crossbeam-channel = "0.5"
+fxhash = "0.2"
+log = "0.4"
+lsp-server = "0.5"
+lsp-types = "0.89"
+parking_lot = "0.11"
+rayon = "1"
+serde = "1"
+serde_json = "1"
+simplelog = "0.10"
