@@ -5,8 +5,7 @@ use super::{
     *,
 };
 use ::kserd::Number;
-use ::libs::divvy::Str;
-use ::rayon::prelude::*;
+use ::libs::{divvy::Str, fastrand, rayon::prelude::*};
 use ::table::Entry;
 use std::{
     cell::RefCell,

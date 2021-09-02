@@ -2,6 +2,7 @@ use ::libs::{
     colored::Colorize,
     crossbeam::{channel::bounded, select as crossbeam_select, thread::scope},
     divvy::Switch,
+    fastrand,
 };
 use std::{cmp, io};
 use tui::{backend::Backend, layout::*, style::*, text::*, widgets::*, Frame, Terminal as Term};

@@ -1,7 +1,6 @@
 //! A terminal interface for `ogma`.
 #![warn(missing_docs)]
-use ::libs::{colored::*, divvy::*};
-use fxhash::FxHashMap as HashMap;
+use ::libs::{colored::*, divvy::*, fxhash::FxHashMap as HashMap};
 use ogma::bat::Batch;
 use ogma_ls::{completion::Node, Workspace};
 use std::{

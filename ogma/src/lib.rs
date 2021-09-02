@@ -1,7 +1,7 @@
 //! Table expression system.
 #![warn(missing_docs)]
 
-use ::libs::{colored::*, divvy::Str};
+use ::libs::{colored::*, divvy::Str, fxhash::*, parking_lot};
 use ::numfmt::Formatter;
 use ::table::Entry;
 use std::{
@@ -24,10 +24,10 @@ mod tests;
 mod types;
 mod var;
 
-type HashMap<K, V> = fxhash::FxHashMap<K, V>;
-type HashSet<T> = fxhash::FxHashSet<T>;
+type HashMap<K, V> = FxHashMap<K, V>;
+type HashSet<T> = FxHashSet<T>;
 type Result<T> = std::result::Result<T, Error>;
-type Mutex<T> = ::parking_lot::Mutex<T>;
+type Mutex<T> = parking_lot::Mutex<T>;
 
 pub use self::types::Value;
 use self::types::{AsType, Table};

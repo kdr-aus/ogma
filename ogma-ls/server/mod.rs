@@ -1,11 +1,15 @@
 //! Server items.
 
 use super::{add_doc_body, completion::*, doc_header, linech_to_idx, File};
-use ::libs::crossbeam::channel::{Receiver, Sender};
-use fxhash::FxHashMap as HashMap;
+use ::libs::{
+    crossbeam::channel::{Receiver, Sender},
+    fxhash::FxHashMap as HashMap,
+    rayon,
+    serde::{Deserialize, Serialize},
+    serde_json::{from_value, to_value, Value},
+};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{lsp_notification, lsp_request, Url};
-use serde_json::{from_value, to_value, Value};
 use std::{marker::PhantomData, path::PathBuf, sync::Arc};
 
 mod completion;
@@ -184,8 +188,8 @@ trait RpcNotication: Send + Sync + 'static {
 }
 
 trait LsMethod<P>: Send + Sync + 'static {
-    type Output: serde::Serialize;
-    type Error: serde::Serialize;
+    type Output: Serialize;
+    type Error: Serialize;
 
     fn call(&self, params: P) -> Res<Self::Output, Self::Error>;
 
@@ -241,7 +245,7 @@ struct ServerCommand<T, P>(T, PhantomData<fn(P)>);
 impl<T, P> ServerCommand<T, P>
 where
     T: LsMethod<P>,
-    P: for<'de> serde::Deserialize<'de> + Send + 'static,
+    P: for<'de> Deserialize<'de> + Send + 'static,
 {
     fn method(method: T) -> Self {
         ServerCommand(method, PhantomData)
@@ -251,7 +255,7 @@ where
 impl<T, P> ServerCommand<T, P>
 where
     T: LsNotify<P>,
-    P: for<'de> serde::Deserialize<'de> + Send + 'static,
+    P: for<'de> Deserialize<'de> + Send + 'static,
 {
     fn notify(notify: T) -> Self {
         ServerCommand(notify, PhantomData)
@@ -261,7 +265,7 @@ where
 impl<T, P> RpcRequest for ServerCommand<T, P>
 where
     T: LsMethod<P>,
-    P: for<'de> serde::Deserialize<'de> + 'static,
+    P: for<'de> Deserialize<'de> + 'static,
 {
     fn call(&self, params: Value) -> Result<Value, Error> {
         let ser_data = |data: Option<_>| {
@@ -294,7 +298,7 @@ where
 impl<T, P> RpcNotication for ServerCommand<T, P>
 where
     T: LsNotify<P>,
-    P: for<'de> serde::Deserialize<'de> + 'static,
+    P: for<'de> Deserialize<'de> + 'static,
 {
     fn call(&self, params: Value) {
         from_value(params).map(|param| self.0.call(param)).ok();

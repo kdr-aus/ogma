@@ -13,11 +13,8 @@ libs = { path = "../libs" }
 ogma =    { path = "../ogma" }
 ogma-ls = { path = "../ogma-ls" }
 
-
 # crates.io
 cansi =	"2"
 crossterm = "0.20"
-fastrand = "1"
-fxhash = "0.2"
 tui = { version = "0.16", default-features = false, features = [ "crossterm" ] }
 unicode-width = "0.1"

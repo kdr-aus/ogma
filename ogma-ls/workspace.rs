@@ -1,8 +1,7 @@
 use super::{completion::*, *};
-use fxhash::FxHashMap as HashMap;
+use ::libs::{fxhash::FxHashMap as HashMap, parking_lot::RwLock};
 use lsp_types::{TextDocumentContentChangeEvent, Url};
 use ogma::{ast::Tag, Definitions};
-use parking_lot::RwLock;
 use std::{collections::VecDeque, sync::Arc};
 
 type Version = i32;

@@ -13,3 +13,9 @@ divvy = { git = "https://github.com/kdr-aus/divvy" }
 # crates.io
 colored = "2"
 crossbeam = "0.8"
+fastrand = "1"
+fxhash = "0.2"
+parking_lot = "0.11"
+rayon = "1"
+serde = "1"
+serde_json = "1"

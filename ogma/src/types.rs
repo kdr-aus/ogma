@@ -3,7 +3,10 @@ use super::{
     err, impls, parsing, Error, ErrorTrace, HashMap, HelpMessage, Mutex, Result,
 };
 use ::kserd::{Kserd, Number, ToKserd, ToKserdErr, Value as KValue};
-use ::libs::divvy::Str;
+use ::libs::{
+    divvy::Str,
+    parking_lot::{const_rwlock, RwLock},
+};
 use std::{convert::TryFrom, fmt, hash, ops, sync::Arc};
 use table::Entry;
 
@@ -497,11 +500,11 @@ impl Field {
 }
 
 // ###### PRIM #################################################################
-pub struct PrimTyDef(parking_lot::RwLock<Option<Arc<TypeDef>>>);
+pub struct PrimTyDef(RwLock<Option<Arc<TypeDef>>>);
 
 impl PrimTyDef {
     const fn new() -> Self {
-        PrimTyDef(parking_lot::const_rwlock(None))
+        PrimTyDef(const_rwlock(None))
     }
 
     fn set(&self, data: Arc<TypeDef>) {
