@@ -4,8 +4,8 @@ use super::{
     types::{Type as Ty, *},
     *,
 };
-use ::libs::divvy::Str;
 use ::kserd::Number;
+use ::libs::divvy::Str;
 use ::rayon::prelude::*;
 use ::table::Entry;
 use std::{

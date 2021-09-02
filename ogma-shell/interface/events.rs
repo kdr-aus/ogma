@@ -1,4 +1,4 @@
-use crossbeam::channel::{unbounded, Receiver};
+use ::libs::crossbeam::channel::{unbounded, Receiver};
 use crossterm::event::{read, Event as XtEvent, KeyEvent};
 use std::io;
 

@@ -1,9 +1,6 @@
 //! A terminal interface for `ogma`.
 #![warn(missing_docs)]
-use ::libs::{
-    colored::*,
-    divvy::*
-};
+use ::libs::{colored::*, divvy::*};
 use fxhash::FxHashMap as HashMap;
 use ogma::bat::Batch;
 use ogma_ls::{completion::Node, Workspace};
@@ -349,13 +346,7 @@ impl RunState {
             })
     }
 
-    fn process_batch<W: Write>(
-        &mut self,
-        tab_id: TabId,
-        cancelled: Switch,
-        buf: W,
-        batch: Batch,
-    ) {
+    fn process_batch<W: Write>(&mut self, tab_id: TabId, cancelled: Switch, buf: W, batch: Batch) {
         use ogma::bat::Outcome::*;
         let defs = self.wsp.defs.read().clone();
         self.process_seq(tab_id, cancelled, buf, move |cx| {

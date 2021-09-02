@@ -1,5 +1,5 @@
 use super::InputBuffer;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use ::libs::crossbeam::channel::{unbounded, Receiver, Sender};
 use std::sync::Arc;
 
 const CMPL_ITEMS_LIM: usize = 10;

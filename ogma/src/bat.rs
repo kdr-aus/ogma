@@ -5,6 +5,7 @@
 use crate::{
     process_definition, process_expression, recognise_definition, Error, Location, Mutex, Result,
 };
+use ::libs::divvy::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -14,7 +15,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use ::libs::divvy::*;
 
 /// A batch to process.
 pub struct Batch {

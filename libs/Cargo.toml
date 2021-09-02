@@ -12,3 +12,4 @@ divvy = { git = "https://github.com/kdr-aus/divvy" }
 
 # crates.io
 colored = "2"
+crossbeam = "0.8"

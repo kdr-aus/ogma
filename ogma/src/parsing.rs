@@ -4,8 +4,8 @@ use super::{
     ast::{self, *},
     Definitions, Error, ErrorTrace, HashSet,
 };
-use ::libs::divvy::Str;
 use ::kserd::Number;
+use ::libs::divvy::Str;
 use nom::{
     branch::*, bytes::complete::*, character::complete::*, combinator::*, error::ParseError,
     error::*, multi::*, sequence::*, IResult, Offset,

@@ -1,6 +1,7 @@
 //! Server items.
 
 use super::{add_doc_body, completion::*, doc_header, linech_to_idx, File};
+use ::libs::crossbeam::channel::{Receiver, Sender};
 use fxhash::FxHashMap as HashMap;
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{lsp_notification, lsp_request, Url};
@@ -13,8 +14,8 @@ mod hover;
 mod initialize;
 
 // ###### RUNNING ##############################################################
-type Tx = crossbeam_channel::Sender<Message>;
-type Rx = crossbeam_channel::Receiver<Message>;
+type Tx = Sender<Message>;
+type Rx = Receiver<Message>;
 type Wsp = super::Workspace;
 
 /// Run a new `ogma` language server, using the LSP protocol.

@@ -1,8 +1,8 @@
 use ::libs::{
+    colored::Colorize,
+    crossbeam::{channel::bounded, select as crossbeam_select, thread::scope},
     divvy::Switch,
-    colored::Colorize
 };
-use crossbeam::{channel::bounded, thread::scope};
 use std::{cmp, io};
 use tui::{backend::Backend, layout::*, style::*, text::*, widgets::*, Frame, Terminal as Term};
 
@@ -685,7 +685,7 @@ where
             mods: KeyModifiers::CONTROL,
         };
         loop {
-            crossbeam::select! {
+            crossbeam_select! {
                 recv(donerx) -> _ => break,
                 default(std::time::Duration::from_secs(1)) => {
                     let cancelled = events.any(|x| x == break_ev);

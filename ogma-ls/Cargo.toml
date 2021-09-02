@@ -13,11 +13,11 @@ path = "main.rs"
 
 [dependencies]
 # workspace
+libs = { path = "../libs" }
 ogma = { path = "../ogma" }
 
 # crates.io
 bitflags = "1"
-crossbeam-channel = "0.5"
 fxhash = "0.2"
 log = "0.4"
 lsp-server = "0.5"

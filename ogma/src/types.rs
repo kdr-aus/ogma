@@ -2,8 +2,8 @@ use super::{
     ast::{self, DefinitionType, Location, Tag},
     err, impls, parsing, Error, ErrorTrace, HashMap, HelpMessage, Mutex, Result,
 };
-use ::libs::divvy::Str;
 use ::kserd::{Kserd, Number, ToKserd, ToKserdErr, Value as KValue};
+use ::libs::divvy::Str;
 use std::{convert::TryFrom, fmt, hash, ops, sync::Arc};
 use table::Entry;
 
