@@ -3,7 +3,7 @@ use super::{
     types::{Type, TypeDef},
     Error, ErrorTrace,
 };
-use colored::*;
+use ::libs::colored::*;
 use std::{
     error, fmt,
     io::{self, Write},

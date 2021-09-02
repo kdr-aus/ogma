@@ -1,0 +1,14 @@
+[package]
+name = "libs"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+# kdr-aus git
+divvy = { git = "https://github.com/kdr-aus/divvy" }
+
+# crates.io
+colored = "2"

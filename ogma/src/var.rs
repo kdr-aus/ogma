@@ -3,7 +3,7 @@ use super::{
     types::{Type, Value},
     HashMap,
 };
-use ::divvy::Str;
+use ::libs::divvy::Str;
 use std::{cell::*, rc::Rc, sync::Arc};
 
 // ###### VARIABLE #############################################################

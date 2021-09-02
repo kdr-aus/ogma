@@ -9,15 +9,13 @@ path = "lib.rs"
 
 [dependencies]
 # workspace
+libs = { path = "../libs" }
 ogma =    { path = "../ogma" }
 ogma-ls = { path = "../ogma-ls" }
 
-# kdr-aus git
-divvy = { git = "https://github.com/kdr-aus/divvy" }
 
 # crates.io
 cansi =	"2"
-colored = "2"
 crossbeam = "0.8"
 crossterm = "0.20"
 fastrand = "1"

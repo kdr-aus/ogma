@@ -1,6 +1,6 @@
 //! This handles definitions (fns, structs, enums)
 use crate::{ast::Location, impls::*, types::Types, *};
-use ::divvy::Str;
+use ::libs::divvy::Str;
 
 /// The working set of `ogma` definitions.
 ///

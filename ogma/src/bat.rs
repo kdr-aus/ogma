@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use ::libs::divvy::*;
 
 /// A batch to process.
 pub struct Batch {
@@ -255,7 +256,7 @@ pub fn process(
     batch: &Batch,
     root: &Path,
     wd: &Path,
-    progress: &divvy::ProgressTx,
+    progress: &ProgressTx,
     mut definitions: crate::Definitions,
 ) -> Vec<(Outcome, Duration)> {
     let ff = batch.fail_fast;
@@ -295,7 +296,7 @@ pub fn process(
             });
 
     let prog = progress;
-    let failure = ::divvy::Switch::off();
+    let failure = Switch::off();
     let sw_if_fail = |o: &_| {
         if matches!(o, Outcome::Failed(_)) {
             failure.flip_on();
@@ -407,7 +408,7 @@ impl From<&Outcome> for OutcomeProgress {
 }
 
 fn report_progress(
-    progress: &::divvy::ProgressTx,
+    progress: &ProgressTx,
     results: &ProgressResults,
     item_idx: usize,
     outcome: &Outcome,

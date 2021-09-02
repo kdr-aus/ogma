@@ -1,6 +1,9 @@
 //! A terminal interface for `ogma`.
 #![warn(missing_docs)]
-use colored::*;
+use ::libs::{
+    colored::*,
+    divvy::*
+};
 use fxhash::FxHashMap as HashMap;
 use ogma::bat::Batch;
 use ogma_ls::{completion::Node, Workspace};
@@ -122,7 +125,7 @@ struct RunState {
 struct Context<'a> {
     root: &'a Path,
     wd: &'a Path,
-    progress: &'a ::divvy::ProgressTx,
+    progress: &'a ProgressTx,
 }
 
 // ###### ON ENTER PRESS #######################################################
@@ -249,15 +252,15 @@ impl RunState {
         }
     }
 
-    fn process_seq<W, F>(&mut self, tab_id: TabId, cancelled: ::divvy::Switch, mut buf: W, f: F)
+    fn process_seq<W, F>(&mut self, tab_id: TabId, cancelled: Switch, mut buf: W, f: F)
     where
         W: Write,
         F: FnOnce(Context) -> String + Send + 'static,
     {
         let root = self.root.to_path_buf();
         let wd = self.tab_wd(tab_id).to_path_buf();
-        let progress = ::divvy::ProgressTx::dummy();
-        let completed = ::divvy::Switch::off();
+        let progress = ProgressTx::dummy();
+        let completed = Switch::off();
         let completed_clone = completed.clone();
 
         let thread = std::thread::Builder::new()
@@ -290,7 +293,7 @@ impl RunState {
     fn process_expr<W: Write>(
         &mut self,
         tab_id: TabId,
-        cancelled: ::divvy::Switch,
+        cancelled: Switch,
         buf: W,
         expr: String,
         input: ::ogma::Value,
@@ -349,7 +352,7 @@ impl RunState {
     fn process_batch<W: Write>(
         &mut self,
         tab_id: TabId,
-        cancelled: ::divvy::Switch,
+        cancelled: Switch,
         buf: W,
         batch: Batch,
     ) {

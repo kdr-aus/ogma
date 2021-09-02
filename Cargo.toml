@@ -1,5 +1,5 @@
 [workspace]
-members = [ "ogma", "ogma-ls", "ogma-shell" ]
+members = [ "ogma", "ogma-ls", "ogma-shell", "libs" ]
 
 [profile.release]
 lto = true

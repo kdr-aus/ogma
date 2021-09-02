@@ -5,13 +5,14 @@ authors = ["kurt <kurtlawrence92@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+# workspace
+libs = { path = "../libs" }
+
 # kdr-aus git
-divvy = { git = "https://github.com/kdr-aus/divvy" }
 numfmt = { git = "https://github.com/kdr-aus/numfmt" }
 table = { git = "https://github.com/kdr-aus/table" }
 
 # crates.io
-colored = "2"
 comfy-table = "4"
 fastrand = "1"
 fxhash = "0.2"

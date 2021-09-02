@@ -1,5 +1,5 @@
 use crate::{ast::*, err::Category, hir::*, parsing::*, types::*, HelpParameter::*, *};
-use ::divvy::ProgressTx;
+use ::libs::divvy::ProgressTx;
 use ::table::Entry::*;
 
 #[test]

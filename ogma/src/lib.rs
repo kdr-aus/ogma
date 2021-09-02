@@ -1,10 +1,12 @@
 //! Table expression system.
 #![warn(missing_docs)]
 
-use ::divvy::Str;
 use ::numfmt::Formatter;
 use ::table::Entry;
-use colored::*;
+use ::libs::{
+    colored::*,
+    divvy::Str
+};
 use std::{
     fmt,
     io::{self, Write},

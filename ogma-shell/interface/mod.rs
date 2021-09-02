@@ -1,4 +1,7 @@
-use colored::Colorize;
+use ::libs::{
+    divvy::Switch,
+    colored::Colorize
+};
 use crossbeam::{channel::bounded, thread::scope};
 use std::{cmp, io};
 use tui::{backend::Backend, layout::*, style::*, text::*, widgets::*, Frame, Terminal as Term};
@@ -27,7 +30,7 @@ const SCROLL_LINES: i32 = 5;
 // ###### CONFIG ###############################################################
 pub type Input = String;
 pub type TabId = u64;
-pub type Cancelled = ::divvy::Switch;
+pub type Cancelled = Switch;
 type DecorationFn = Box<dyn Fn(Input, usize) -> String>;
 type EnterFn = Box<dyn FnMut(Input, TabId, Cancelled) -> ConfigUpdate + Send>;
 type ConfigBldr = Box<dyn FnMut() -> Config>;

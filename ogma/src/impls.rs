@@ -4,7 +4,7 @@ use super::{
     types::{Type as Ty, *},
     *,
 };
-use ::divvy::Str;
+use ::libs::divvy::Str;
 use ::kserd::Number;
 use ::rayon::prelude::*;
 use ::table::Entry;

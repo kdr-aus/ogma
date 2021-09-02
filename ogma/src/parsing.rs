@@ -4,7 +4,7 @@ use super::{
     ast::{self, *},
     Definitions, Error, ErrorTrace, HashSet,
 };
-use ::divvy::Str;
+use ::libs::divvy::Str;
 use ::kserd::Number;
 use nom::{
     branch::*, bytes::complete::*, character::complete::*, combinator::*, error::ParseError,
