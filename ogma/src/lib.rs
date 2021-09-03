@@ -394,7 +394,7 @@ mod fscache {
     };
 
     const LIFESPAN: Duration = Duration::from_secs(60 * 3); // 3 minutes
-    const DEBOUNCE: Duration = Duration::from_millis(25); // 25ms fs watching
+    const DEBOUNCE: Duration = Duration::from_millis(5); // 5ms fs watching
     static INIT: Once = Once::new();
 
     #[derive(PartialEq, Eq, Hash)]
@@ -421,7 +421,7 @@ mod fscache {
             T: AsType,
             T: TryFrom<crate::types::Value>,
         {
-            std::thread::sleep(DEBOUNCE); // we sleep for the debounce duration to give time for the fs watcher to catch up
+            std::thread::sleep(DEBOUNCE * 5); // we sleep for the 5 x debounce duration to give time for the fs watcher to catch up
 
             let key = Key::from::<T>(path);
             let mut lock = self.map.lock();
@@ -452,7 +452,9 @@ mod fscache {
             P: AsRef<Path>,
         {
             let paths: HashSet<String> = paths.map(|p| path_to_str(p.as_ref())).collect();
+            if !paths.is_empty() {
             self.map.lock().retain(|k, _| !paths.contains(&k.0));
+            }
         }
     }
 

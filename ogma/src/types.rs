@@ -15,7 +15,7 @@ type TrTable = ::table::Table<Value>;
 
 /// Wrapper of a table, used to specialise drop and cloning behaviour.
 #[derive(Clone, PartialEq, Debug, Default)]
-pub struct Table(Arc<TrTable>);
+pub struct Table(pub(crate) Arc<TrTable>);
 
 impl Table {
     pub fn get_mut(&mut self) -> Option<&mut TrTable> {
