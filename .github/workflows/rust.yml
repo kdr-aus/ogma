@@ -1,0 +1,65 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      
+    name: Rust Tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+      
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: rustfmt,clippy
+
+    - name: Fix cargo cache permission issue
+      run: sudo chown -R $(whoami):$(id -ng) ~/.cargo/
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Cache cargo Registry
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+        
+    - name: Cache cargo Index
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('Cargo.lock') }}
+      
+    - name: Cache cargo Build
+      uses: actions/cache@v2
+      with:
+        path: target/debug
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('Cargo.lock') }}
+
+    - name: Check Formatting
+      run: cargo +stable fmt -- --check
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Build
+      run: cargo build
+
+    - name: Check Clippy
+      run: cargo clippy --all-features -- -D warnings
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Test
+      run: cargo test
