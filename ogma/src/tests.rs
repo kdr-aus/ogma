@@ -210,6 +210,32 @@ fn unused_arg_test() {
     );
 }
 
+#[test]
+fn fs_caching_removes_changed_files() {
+    let defs = &Definitions::new();
+
+    std::fs::write("ls-test/test-file.csv", "a,b\n1,2").unwrap();
+    let x = process_w_nil("open 'ls-test/test-file.csv'", defs);
+    let exp = vec![vec![o("a"), o("b")], vec![n(1), n(2)]];
+    let table = match &x {
+        Ok(Value::Tab(table)) => table.clone(),
+        _ => unreachable!("should be a table"),
+    };
+    check_is_table(x, exp.clone());
+
+    let x = process_w_nil("open 'ls-test/test-file.csv'", defs);
+    let table2 = match &x {
+        Ok(Value::Tab(table)) => table.clone(),
+        _ => unreachable!("should be a table"),
+    };
+    assert!(Arc::ptr_eq(&table.0, &table2.0));
+
+    std::fs::write("ls-test/test-file.csv", "a,c\n1,3").unwrap();
+    let x = process_w_nil("open 'ls-test/test-file.csv'", defs);
+    let exp = vec![vec![o("a"), o("c")], vec![n(1), n(3)]];
+    check_is_table(x, exp.clone());
+}
+
 // ###### COMMANDS #############################################################
 fn n<N: Into<::kserd::Number>>(n: N) -> Entry<Value> {
     Entry::Num(n.into())
@@ -3084,6 +3110,7 @@ fn ls_test() {
         vec![o("0.txt"), o("file"), n(60), o("txt")],
         vec![o("a.txt"), o("file"), n(0), o("txt")],
         vec![o("b.txt"), o("file"), n(13), o("txt")],
+        vec![o("test-file.csv"), o("file"), n(7), o("csv")],
     ];
     check_is_table(x, t);
 }

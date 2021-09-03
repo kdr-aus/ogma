@@ -1016,9 +1016,9 @@ orld
 
     #[test]
     fn converting_cansi() {
-        use ::colored::*;
+        use ::libs::colored::*;
 
-        ::colored::control::set_override(true);
+        ::libs::colored::control::set_override(true);
 
         let colours = format!(
             "{}{}{}{}{}{}{}{}{}",
