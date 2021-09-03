@@ -12,9 +12,8 @@ use std::{
     cmp,
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
-    hash, mem,
+    mem,
     rc::Rc,
-    sync::Weak,
     time::Instant,
 };
 
@@ -2782,42 +2781,6 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Open -----------------------------------------------------------------
-// temporary caching of opened tables. TblPtr only does ptr_eq
-// periodically we clear out the cache except to recent fetches
-::lazy_static::lazy_static! {
-    static ref OPENED_CACHE: Mutex<HashMap<TblPtr, (Table, Instant)>> = {
-        std::thread::Builder::new()
-            .name("ogma-open-cache-cleaner".to_string())
-            .spawn(clean_opened_cache)
-            .unwrap();
-        Default::default()
-    };
-}
-
-fn clean_opened_cache() {
-    let lifespan = std::time::Duration::from_secs(60 * 2);
-    loop {
-        std::thread::sleep(lifespan);
-        let mut lock = OPENED_CACHE.lock();
-        lock.retain(|_, v| v.1.elapsed() < lifespan);
-        drop(lock);
-    }
-}
-
-struct TblPtr(Weak<::table::DataTable>);
-impl PartialEq for TblPtr {
-    fn eq(&self, other: &Self) -> bool {
-        Weak::ptr_eq(&self.0, &other.0)
-    }
-}
-impl Eq for TblPtr {}
-impl hash::Hash for TblPtr {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        let ptr: usize = self.0.as_ptr() as usize;
-        ptr.hash(hasher)
-    }
-}
-
 fn open_help() -> HelpMessage {
     HelpMessage {
         desc: "open something
@@ -2864,30 +2827,21 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
             // 3. Support more than just comma for dsv types
 
             let p: Str = arg.resolve(|| val, &cx)?.try_into()?;
-            let s = scrub_filepath(&p, &cx)
-                .and_then(std::fs::read_to_string)
-                .map_err(|e| Error::io(&blktag, e))?;
-            let table =
-                Table::from(::table::parse_dsv(',', &s).map_obj(|s| Value::Str(Str::new(s))));
+            let path = scrub_filepath(&p, &cx).map_err(|e| Error::io(&blktag, e))?;
+            let table = match FSCACHE.get::<Table>(&path) {
+                Some(table) => table,
+                None => {
+                    let s = std::fs::read_to_string(&path).map_err(|e| Error::io(&blktag, e))?;
+
+                    let table = Table::from(
+                        ::table::parse_dsv(',', &s).map_obj(|s| Value::Str(Str::new(s))),
+                    );
+                    FSCACHE.insert(&path, table.clone());
+                    table
+                }
+            };
 
             cx.done_o(table)
-
-            // TODO this has an opened cache mechanism, I would like to re-work this in a
-            // future feature.
-            //             let arctable = ::repr::fit::Table::fit(&kserd, cx.cx)
-            //                 .map_err(|e| cnv_fit_err(e, arg.tag()))?
-            //                 .data;
-            //             let mut lock = OPENED_CACHE.lock();
-            //             let e = lock
-            //                 .entry(TblPtr(Arc::downgrade(&arctable)))
-            //                 .or_insert_with(|| {
-            //                     (
-            //                         arctable.map_ref_obj(|t| Value::Str(t.clone())).into(),
-            //                         Instant::now(),
-            //                     )
-            //                 });
-            //             e.1 = Instant::now();
-            //             cx.done_o(e.0.clone())
         }),
         Ty::Str => blk.eval_o(move |val, cx| {
             let p: Str = arg.resolve(|| val, &cx)?.try_into()?;

@@ -388,20 +388,54 @@ pub fn print_ogma_data(data: types::OgmaData) -> String {
 mod fscache {
     use super::FSCACHE;
     use super::{HashMap, Mutex};
-    use crate::types::Type;
-    use std::time::{Duration, Instant};
+    use crate::types::{AsType, Type};
+    use std::{
+        convert::TryFrom,
+        path::Path,
+        time::{Duration, Instant},
+    };
 
     const LIFESPAN: Duration = Duration::from_secs(60 * 3); // 3 minutes
 
     #[derive(PartialEq, Eq, Hash)]
     struct Key(String, Type);
-    struct Value(Instant, crate::types::Value);
+    type Value = (Instant, crate::types::Value);
     type Map = HashMap<Key, Value>;
 
     #[derive(Default)]
     pub struct FsCache(Mutex<Map>);
 
+    impl Key {
+        fn from<T: AsType>(path: &Path) -> Self {
+            Key(path.display().to_string(), T::as_type())
+        }
+    }
+
     impl FsCache {
+        pub fn get<T>(&self, path: &Path) -> Option<T>
+        where
+            T: AsType,
+            T: TryFrom<crate::types::Value>,
+        {
+            let key = Key::from::<T>(path);
+            let mut lock = self.0.lock();
+            lock.get_mut(&key)
+                .map(|x| {
+                    x.0 = Instant::now();
+                    x.1.clone()
+                })
+                .and_then(|x| T::try_from(x).ok())
+        }
+
+        pub fn insert<T>(&self, path: &Path, value: T)
+        where
+            T: AsType,
+            T: Into<crate::types::Value>,
+        {
+            let key = Key::from::<T>(path);
+            self.0.lock().insert(key, (Instant::now(), value.into()));
+        }
+
         pub fn remove_expired(&self, age: Duration) {
             self.0.lock().retain(|_, v| v.0.elapsed() < age);
         }
