@@ -373,3 +373,44 @@ pub fn print_ogma_data(data: types::OgmaData) -> String {
     use kserd::ToKserd;
     data.into_kserd().unwrap().as_str()
 }
+
+// ###### CACHING ##############################################################
+::lazy_static::lazy_static! {
+    static ref FSCACHE: fscache::FsCache = {
+        std::thread::Builder::new()
+            .name("ogma-fs-cache-cleaner".to_string())
+            .spawn(fscache::clean_opened_cache_periodically)
+            .unwrap();
+        Default::default()
+    };
+}
+
+mod fscache {
+    use super::FSCACHE;
+    use super::{HashMap, Mutex};
+    use crate::types::Type;
+    use std::time::{Duration, Instant};
+
+    const LIFESPAN: Duration = Duration::from_secs(60 * 3); // 3 minutes
+
+    #[derive(PartialEq, Eq, Hash)]
+    struct Key(String, Type);
+    struct Value(Instant, crate::types::Value);
+    type Map = HashMap<Key, Value>;
+
+    #[derive(Default)]
+    pub struct FsCache(Mutex<Map>);
+
+    impl FsCache {
+        pub fn remove_expired(&self, age: Duration) {
+            self.0.lock().retain(|_, v| v.0.elapsed() < age);
+        }
+    }
+
+    pub fn clean_opened_cache_periodically() {
+        loop {
+            std::thread::sleep(LIFESPAN);
+            FSCACHE.remove_expired(LIFESPAN);
+        }
+    }
+}
