@@ -2845,11 +2845,18 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
         }),
         Ty::Str => blk.eval_o(move |val, cx| {
             let p: Str = arg.resolve(|| val, &cx)?.try_into()?;
-            scrub_filepath(&p, &cx)
-                .and_then(std::fs::read_to_string)
-                .map(Str::from)
-                .map_err(|e| Error::io(&blktag, e))
-                .and_then(|s| cx.done_o(s))
+            let path = scrub_filepath(&p, &cx).map_err(|e| Error::io(&blktag, e))?;
+            let s = match FSCACHE.get::<Str>(&path) {
+                Some(s) => s,
+                None => {
+                    let s = std::fs::read_to_string(&path)
+                        .map(Str::from)
+                        .map_err(|e| Error::io(&blktag, e))?;
+                    FSCACHE.insert(&path, s.clone());
+                    s
+                }
+            };
+            cx.done_o(s)
         }),
         x => Err(Error {
             help_msg: None,
