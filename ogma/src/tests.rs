@@ -216,10 +216,7 @@ fn fs_caching_removes_changed_files() {
 
     std::fs::write("ls-test/test-file.csv", "a,b\n1,2").unwrap();
     let x = process_w_nil("open 'ls-test/test-file.csv'", defs);
-    let exp = vec![
-        vec![o("a"), o("b")],
-        vec![n(1), n(2),]
-    ];
+    let exp = vec![vec![o("a"), o("b")], vec![n(1), n(2)]];
     let table = match &x {
         Ok(Value::Tab(table)) => table.clone(),
         _ => unreachable!("should be a table"),
@@ -235,10 +232,7 @@ fn fs_caching_removes_changed_files() {
 
     std::fs::write("ls-test/test-file.csv", "a,c\n1,3").unwrap();
     let x = process_w_nil("open 'ls-test/test-file.csv'", defs);
-    let exp = vec![
-        vec![o("a"), o("c")],
-        vec![n(1), n(3),]
-    ];
+    let exp = vec![vec![o("a"), o("c")], vec![n(1), n(3)]];
     check_is_table(x, exp.clone());
 }
 
@@ -5042,4 +5036,3 @@ fn def_argument_resolving_soundness2() {
         ],
     );
 }
-

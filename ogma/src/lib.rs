@@ -453,7 +453,7 @@ mod fscache {
         {
             let paths: HashSet<String> = paths.map(|p| path_to_str(p.as_ref())).collect();
             if !paths.is_empty() {
-            self.map.lock().retain(|k, _| !paths.contains(&k.0));
+                self.map.lock().retain(|k, _| !paths.contains(&k.0));
             }
         }
     }
