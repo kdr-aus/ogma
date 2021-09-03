@@ -3110,6 +3110,7 @@ fn ls_test() {
         vec![o("0.txt"), o("file"), n(60), o("txt")],
         vec![o("a.txt"), o("file"), n(0), o("txt")],
         vec![o("b.txt"), o("file"), n(13), o("txt")],
+        vec![o("test-file.csv"), o("file"), n(7), o("csv")],
     ];
     check_is_table(x, t);
 }
