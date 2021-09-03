@@ -226,6 +226,8 @@ where
     I: AsType + Into<Value> + 'static,
     S: Into<Arc<str>>,
 {
+    fscache::ensure_init(root); // initialise the cache
+
     let expr = parsing::expression(expr, loc, defs).map_err(|e| e.0)?;
     hir::handle_help(&expr, defs)?;
     let vars = var::Locals::default();
@@ -376,26 +378,24 @@ pub fn print_ogma_data(data: types::OgmaData) -> String {
 
 // ###### CACHING ##############################################################
 ::lazy_static::lazy_static! {
-    static ref FSCACHE: fscache::FsCache = {
-        std::thread::Builder::new()
-            .name("ogma-fs-cache-cleaner".to_string())
-            .spawn(fscache::clean_opened_cache_periodically)
-            .unwrap();
-        Default::default()
-    };
+    static ref FSCACHE: fscache::FsCache = Default::default();
 }
 
 mod fscache {
     use super::FSCACHE;
-    use super::{HashMap, Mutex};
+    use super::{HashMap, HashSet, Mutex};
     use crate::types::{AsType, Type};
+    use ::libs::parking_lot::Once;
     use std::{
         convert::TryFrom,
-        path::Path,
+        error,
+        path::{Path, PathBuf},
         time::{Duration, Instant},
     };
 
     const LIFESPAN: Duration = Duration::from_secs(60 * 3); // 3 minutes
+    const DEBOUNCE: Duration = Duration::from_millis(25); // 25ms fs watching
+    static INIT: Once = Once::new();
 
     #[derive(PartialEq, Eq, Hash)]
     struct Key(String, Type);
@@ -403,22 +403,28 @@ mod fscache {
     type Map = HashMap<Key, Value>;
 
     #[derive(Default)]
-    pub struct FsCache(Mutex<Map>);
+    pub struct FsCache {
+        map: Mutex<Map>,
+    }
 
     impl Key {
         fn from<T: AsType>(path: &Path) -> Self {
-            Key(path.display().to_string(), T::as_type())
+            Key(path_to_str(path), T::as_type())
         }
     }
 
     impl FsCache {
+        /// This can be called multiple times, and will only initialise on the first call.
+
         pub fn get<T>(&self, path: &Path) -> Option<T>
         where
             T: AsType,
             T: TryFrom<crate::types::Value>,
         {
+            std::thread::sleep(DEBOUNCE); // we sleep for the debounce duration to give time for the fs watcher to catch up
+
             let key = Key::from::<T>(path);
-            let mut lock = self.0.lock();
+            let mut lock = self.map.lock();
             lock.get_mut(&key)
                 .map(|x| {
                     x.0 = Instant::now();
@@ -433,18 +439,83 @@ mod fscache {
             T: Into<crate::types::Value>,
         {
             let key = Key::from::<T>(path);
-            self.0.lock().insert(key, (Instant::now(), value.into()));
+            self.map.lock().insert(key, (Instant::now(), value.into()));
         }
 
         pub fn remove_expired(&self, age: Duration) {
-            self.0.lock().retain(|_, v| v.0.elapsed() < age);
+            self.map.lock().retain(|_, v| v.0.elapsed() < age);
         }
+
+        pub fn remove_path_changes<I, P>(&self, paths: I)
+        where
+            I: Iterator<Item = P>,
+            P: AsRef<Path>,
+        {
+            let paths: HashSet<String> = paths.map(|p| path_to_str(p.as_ref())).collect();
+            self.map.lock().retain(|k, _| !paths.contains(&k.0));
+        }
+    }
+
+    pub fn ensure_init(root: &Path) {
+        let canon_root = root
+            .canonicalize()
+            .expect("must be able to canonicalize root");
+
+        INIT.call_once(|| {
+            std::thread::Builder::new()
+                .name("ogma-fs-cache-cleaner".to_string())
+                .spawn(clean_opened_cache_periodically)
+                .unwrap();
+            std::thread::Builder::new()
+                .name("ogma-fs-watcher".to_string())
+                .spawn(|| watch_fs(canon_root).expect("failed to start fs watcher"))
+                .unwrap();
+        });
+    }
+
+    fn path_to_str(path: &Path) -> String {
+        path.display().to_string().to_lowercase()
     }
 
     pub fn clean_opened_cache_periodically() {
         loop {
             std::thread::sleep(LIFESPAN);
             FSCACHE.remove_expired(LIFESPAN);
+        }
+    }
+
+    pub fn watch_fs(canon_root: PathBuf) -> Result<(), Box<dyn error::Error>> {
+        use ::notify::{DebouncedEvent::*, *};
+
+        // create the mpsc channel to communicate with the file watcher
+        let (wsx, wrx) = std::sync::mpsc::channel();
+        let mut watcher = notify::watcher(wsx, DEBOUNCE)
+            .map_err(|e| format!("failed to setup watcher: {}", e))?;
+
+        // spawn a new thread in which we look for events
+        let _ = watcher.watch(&canon_root, RecursiveMode::Recursive);
+
+        let mut set = HashSet::default();
+        loop {
+            std::thread::sleep(DEBOUNCE);
+            set.clear();
+            for ev in wrx.try_iter() {
+                match ev {
+                    Write(p) | Create(p) | Remove(p) => {
+                        set.insert(p);
+                    }
+                    Rename(a, b) => {
+                        set.insert(a);
+                        set.insert(b);
+                    }
+                    _ => (),
+                }
+            }
+
+            let drain = set
+                .drain()
+                .map(|x| x.strip_prefix(&canon_root).unwrap().to_path_buf());
+            FSCACHE.remove_path_changes(drain);
         }
     }
 }
