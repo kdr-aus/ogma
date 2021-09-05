@@ -52,7 +52,7 @@ jobs:
       run: cargo build --release
 
     - name: Publish Release
-      uses: actions/release-action@v1
+      uses: ncipollo/release-action@v1
       with:
-          artifacts: "target/release/ogma-bin.exe"
-          token: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: "target/release/ogma-bin.exe"
+        token: ${{ secrets.GITHUB_TOKEN }}
