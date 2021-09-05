@@ -1,0 +1,19 @@
+[package]
+name = "bin"
+version = "0.1.0"
+authors = ["kurt <kurtlawrence92@gmail.com>"]
+edition = "2018"
+
+[[bin]]
+path = "main.rs"
+name = "ogma-bin"
+
+[dependencies]
+# workspace
+libs = { path = "../libs" }
+ogma = { path = "../ogma" }
+ogma-shell = { path = "../ogma-shell" }
+
+# crates.io
+clap = "2"
+glob = "0.3"
