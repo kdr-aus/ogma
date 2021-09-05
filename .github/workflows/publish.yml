@@ -1,0 +1,58 @@
+name: Publish
+
+on:
+  push:
+    branches: [release]
+
+jobs:
+  publish-windows:
+    name: Publish Assets
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+      
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Cache cargo Registry
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/registry
+        key: Publish-cargo-registry-${{ hashFiles('Cargo.lock') }}
+        
+    - name: Cache cargo Index
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/git
+        key: Publish-cargo-index-${{ hashFiles('Cargo.lock') }}
+      
+    - name: Cache cargo Build
+      uses: actions/cache@v2
+      with:
+        path: target
+        key: Publish-cargo-build-target-${{ hashFiles('Cargo.lock') }}
+     
+    - name: Test
+      run: |
+          cargo build
+          cargo test
+
+    - name: Build Release
+      run: cargo build --release
+
+    - name: Publish Release
+      uses: actions/release-action@v1
+      with:
+          artifacts: "target/release/ogma-bin.exe"
+          token: ${{ secrets.GITHUB_TOKEN }}
