@@ -37,7 +37,9 @@ fn main() {
         // run the ogma-shell/REPL since no processing files were given
         run_shell(defs)
     } else {
-        process_files(defs, files, verbose)
+        if let Err(_) = process_files(defs, files, verbose) {
+            std::process::exit(1); // failed
+        }
     }
 }
 
@@ -87,7 +89,7 @@ fn run_shell(defs: Vec<PathBuf>) {
     shell.run().expect("failed running the ogma shell")
 }
 
-fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) {
+fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) -> Result<(), ()> {
     let mut definitions = ogma::Definitions::default();
 
     // add defs
@@ -110,8 +112,10 @@ fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) {
         .collect::<Vec<_>>();
 
     for (path, batch) in files.iter().zip(batches) {
-        process_and_print_batch(path, &batch, &definitions, verbose)
+        process_and_print_batch(path, &batch, &definitions, verbose)?;
     }
+
+    Ok(())
 }
 
 fn process_and_print_batch(
@@ -119,7 +123,7 @@ fn process_and_print_batch(
     batch: &ogma::bat::Batch,
     defs: &ogma::Definitions,
     verbose: bool,
-) {
+) -> Result<(), ()> {
     use ogma::bat::Outcome::*;
     use std::io::Write;
 
@@ -151,6 +155,7 @@ fn process_and_print_batch(
         .ok();
     }
 
+    let mut errors = false;
     for ((line, ty), err) in report()
         .zip(outcomes.into_iter())
         .filter_map(|(x, o)| match o {
@@ -158,12 +163,19 @@ fn process_and_print_batch(
             _ => None,
         })
     {
+        errors = true;
         writeln!(buf, "--- Error line {} :: {:?} ---", line, ty).ok();
         ogma::print_error(&err, buf).ok();
     }
 
-    println!(
-        "{}",
-        String::from_utf8(buffer).expect("all written output should be utf8")
-    )
+    let p = String::from_utf8(buffer).expect("all written output should be utf8");
+
+    if errors {
+        eprintln!("{}", p);
+        return Err(());
+    } else if verbose {
+        println!("{}", p);
+    }
+
+    Ok(())
 }
