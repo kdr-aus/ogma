@@ -36,10 +36,8 @@ fn main() {
     if files.is_empty() {
         // run the ogma-shell/REPL since no processing files were given
         run_shell(defs)
-    } else {
-        if let Err(_) = process_files(defs, files, verbose) {
-            std::process::exit(1); // failed
-        }
+    } else if process_files(defs, files, verbose).is_err() {
+        std::process::exit(1); // failed
     }
 }
 
@@ -104,10 +102,13 @@ fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) -> Resu
     let batches = files
         .iter()
         .map(|p| {
-            ogma::bat::parse_file(p).expect(&format!(
-                "failed parsing in '{}' as batch process",
-                p.display()
-            ))
+            ogma::bat::parse_file(p).unwrap_or_else(|e| {
+                panic!(
+                    "failed parsing in '{}' as batch process: {}",
+                    p.display(),
+                    e
+                )
+            })
         })
         .collect::<Vec<_>>();
 
@@ -138,7 +139,7 @@ fn process_and_print_batch(
     let dummy = &::libs::divvy::ProgressTx::dummy();
     let defs = defs.clone();
     let p = Path::new(".");
-    let outcomes = ogma::bat::process(&batch, p, p, dummy, defs);
+    let outcomes = ogma::bat::process(batch, p, p, dummy, defs);
 
     let report = || batch.items.iter().map(|i| (i.line, i.ty()));
 
