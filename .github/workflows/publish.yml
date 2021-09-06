@@ -1,0 +1,115 @@
+name: Publish
+
+on:
+  push:
+    tags: '*'
+
+jobs:
+  linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Release
+      run: cargo build --release
+      
+    - name: Create output directory
+      run: mkdir output
+
+    - name: Copy files to output
+      run: |
+        cp target/release/ogma-bin output/ogma
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: linux
+        path: output/*
+
+  windows:
+    name: Build Windows
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Release
+      run: |
+        set RUSTFLAGS="-C target-feature=+crt-static"
+        cargo build --release
+      
+    - name: Create output directory
+      run: mkdir output
+
+    - name: Copy files to output
+      run: |
+        cp target\release\ogma-bin.exe output\ogma.exe
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: windows
+        path: output\*
+
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs:
+      - linux
+      - windows
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Create output directories
+      run: mkdir output && mkdir output/linux && mkdir output/windows
+
+    - name: Download Linux Artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: linux
+        path: output/linux
+    
+    - name: Download Windows Artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: windows
+        path: output/windows
+
+    - name: Restore Linux file modes
+      run: chmod 755 output/linux/*
+
+    - name: Compress OS items
+      run: |
+        cd output/linux
+        tar -zcvf linux.tar.gz *
+        cd ../..
+        cd output/windows
+        zip -r windows.zip *
+        cd ../..
+    
+    - name: Create Release
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: "output/linux/linux.tar.gz,output/windows/windows.zip"
+        bodyFile: RELEASE.md
+        token: ${{ secrets.GITHUB_TOKEN }}
