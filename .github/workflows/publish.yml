@@ -75,8 +75,8 @@ jobs:
 
     - name: Compress OS items
       run: |
-        tar -zcvf linux.tar.gz output/linux
-        zip -r windows.zip output/windows
+        tar -zcvf linux.tar.gz output/linux/
+        zip -r windows.zip output/windows/
     
     - name: Create Release
       uses: ncipollo/release-action@v1
