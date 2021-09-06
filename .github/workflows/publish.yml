@@ -75,11 +75,15 @@ jobs:
 
     - name: Compress OS items
       run: |
-        tar -zcvf linux.tar.gz output/linux/*
-        zip -r windows.zip output/windows/*
+        cd output/linux
+        tar -zcvf linux.tar.gz *
+        cd ../..
+        cd output/windows
+        zip -r windows.zip *
+        cd ../..
     
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "linux.tar.gz,windows.zip"
+        artifacts: "output/linux/linux.tar.gz,output/windows/windows.zip"
         token: ${{ secrets.GITHUB_TOKEN }}
