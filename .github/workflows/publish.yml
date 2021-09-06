@@ -59,7 +59,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Create output directories
-      run: mkdir output && mkdir output/linux && output/windows
+      run: mkdir output && mkdir output/linux && mkdir output/windows
 
     - name: Download Linux Artifacts
       uses: actions/download-artifact@v2
