@@ -95,6 +95,9 @@ jobs:
         name: windows
         path: output/windows
 
+    - name: Restore Linux file modes
+      run: chmod 755 output/linux/*
+
     - name: Compress OS items
       run: |
         cd output/linux
