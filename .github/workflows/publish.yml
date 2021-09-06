@@ -52,7 +52,9 @@ jobs:
         override: true
 
     - name: Build Release
-      run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --release
+      run: |
+        set RUSTFLAGS="-C target-feature=+crt-static"
+        cargo build --release
       
     - name: Create output directory
       run: mkdir output
