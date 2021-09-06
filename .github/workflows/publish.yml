@@ -58,23 +58,28 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Create output directory
-      run: mkdir output
+    - name: Create output directories
+      run: mkdir output && mkdir output/linux && output/windows
 
     - name: Download Linux Artifacts
       uses: actions/download-artifact@v2
       with:
         name: linux
-        path: output
+        path: output/linux
     
     - name: Download Windows Artifacts
       uses: actions/download-artifact@v2
       with:
         name: windows
-        path: output
+        path: output/windows
+
+    - name: Compress OS items
+      run: |
+        tar -zcvf linux.tar.gz output/linux
+        zip -r windows.zip output/windows
     
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "output/*"
+        artifacts: "linux.tar.gz,windows.zip"
         token: ${{ secrets.GITHUB_TOKEN }}
