@@ -1,24 +1,5 @@
 
       
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-
-    - name: Cache cargo Registry
-      uses: actions/cache@v2
-      with:
-        path: ~/.cargo/registry
-        key: Publish-cargo-registry-${{ hashFiles('Cargo.lock') }}
-        
-    - name: Cache cargo Index
-      uses: actions/cache@v2
-      with:
-        path: ~/.cargo/git
-        key: Publish-cargo-index-${{ hashFiles('Cargo.lock') }}
-      
     - name: Cache cargo Build
       uses: actions/cache@v2
       with:

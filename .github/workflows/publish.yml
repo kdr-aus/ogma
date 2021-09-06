@@ -13,12 +13,22 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Release
+      run: cargo build --release
+      
     - name: Create output directory
       run: mkdir output
 
     - name: Copy files to output
       run: |
-        cp Cargo.toml output/
+        cp target/release/ogma-bin output/ogma
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
@@ -34,12 +44,22 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Release
+      run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --release
+      
     - name: Create output directory
       run: mkdir output
 
     - name: Copy files to output
       run: |
-        cp bin\main.rs output\
+        cp target\release\ogma-bin.exe output\ogma.exe
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
