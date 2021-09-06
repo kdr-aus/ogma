@@ -111,4 +111,5 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         artifacts: "output/linux/linux.tar.gz,output/windows/windows.zip"
+        bodyFile: RELEASE.md
         token: ${{ secrets.GITHUB_TOKEN }}
