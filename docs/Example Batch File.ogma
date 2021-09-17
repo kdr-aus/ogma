@@ -2,4 +2,4 @@
 \ 5 | + 5
 
 # Opening a file
-open "../data/diamonds.csv" | filter carat > 1
+ls | filter size > 50 | fold 0 + $row.size
