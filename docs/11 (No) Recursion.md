@@ -1,9 +1,8 @@
 <iframe src="/.ibox.html?raw=true" style="border:none; position:fixed; width:40px; right:0; z-index=999;"></iframe>
 
 # (No) Recursion
----
 
-Recursion is **not** supported in `ogma`. _This is intentional for the static type
+Recursion is **not** supported in ogma. _This is intentional for the static type
 checking **and** lazy evaluation_. If a definition is defined which is not comprised of already
 known definitions, an error will be returned:
 
@@ -16,11 +15,12 @@ Unknown Command: operation `recurse` not defined
 --> help: view a list of definitions using `def --list`
 ```
 
-Although `ogma` lacks first class support for recursion, problems can be solved using
+Although ogma lacks first class support for recursion, problems can be solved using
 conditionals and ranges. Below are some examples of where recursion would be used, and how
-one can replicate it in `ogma`.
+one can replicate it in ogma.
 
 ## Power
+---
 `n` raised to the power of `x` can be written in terms of itself:
 ```plaintext
 n^x :=
@@ -37,15 +37,17 @@ def pwr (n x) { if { \$x | = 0 } 1 { range 1 $x | fold $n * $n } }
 
 The result can be checked:
 ```plaintext
->> pwr 2 3
+.> pwr 2 3
 8
->> pwr 2 2
+.> pwr 2 2
 4
->> pwr 2 1
+.> pwr 2 1
 2
->> pwr 2 0
+.> pwr 2 0
 1
 ```
+
+![](./assets/no-recursion.pwr.gif?raw=true)
 
 > A specialisation can be done for when the input is a number type. This means only a
 > single parameter (`exp`) can be required:
@@ -54,6 +56,7 @@ The result can be checked:
 > ```
 
 ## Factorial
+---
 `n` factorial can be written in terms of itself:
 ```plaintext
 n! :=
@@ -64,29 +67,18 @@ n! :=
 
 Similarly to `pwr`, one can define factorial using ranges:
 ```plaintext
-def fact Num () { if {<= 1} 1 { + 1 | range 1 #i | fold 1 * $row.i } }
+def fact Num () { if {<= 1} 1 { + 1 | range 1 | fold 1 * $row.i } }
 ```
 
 Since `fact` is now defined for a number input, one can build a table listing factorials:
 ```plaintext
->> range 1 11 | append --'i!' { get i | fact }
-┌──────┬──────────┐
-│ i    ┆ i!       │
-╞══════╪══════════╡
-│ 1.0  ┆ 1.0      │
-│ 2.0  ┆ 2.0      │
-│ 3.0  ┆ 6.0      │
-│ 4.0  ┆ 24.0     │
-│ 5.0  ┆ 120.0    │
-│ 6.0  ┆ 720.0    │
-│ 7.0  ┆ 5.04 K   │
-│ 8.0  ┆ 40.32 K  │
-│ 9.0  ┆ 362.88 K │
-│ 10.0 ┆ 3.628 M  │
-└──────┴──────────┘
+.> range 1 11 | append --'i!' { get i | fact }
 ```
 
+![](./assets/no-recursion.fact.gif?raw=true)
+
 ## Fibonacci
+---
 A fibonacci term follows the sequence: `0,1,1,2,3,5,8,13`
 This can be represented recursively:
 ```plaintext
@@ -108,11 +100,12 @@ def-ty Fib { x:Num prev:Num }
 def fib-inner (n) { range 1 $n | fold { Fib 1 0 } { let $acc | Fib { + $acc.x $acc.prev } $acc.x } }
 
 # Define the main fib impl which _extracts_ the actual fibonacci number.
-# '{fib-inner $n}.x' does the calculation _and_ extraction.
+# '{fib-inner #i}.x' does the calculation _and_ extraction.
 def fib Num () { if {<= 1} #i {fib-inner #i}.x }
 ```
 
-With these functions the first 10 fibonacci numbers can be printed out like so:
+With these functions the first 10 fibonacci numbers can be printed out like so, we encourage you to
+try it yourself!
 ```plaintext
 range 1 11 | append --Fibonacci { get i | fib }
 ```
@@ -147,6 +140,7 @@ def fib-table Num () { range 1 #i |
 ```
 
 ## GCD - Greatest Common Divisor
+---
 The greatest common divisor of two numbers, calculated 
 [using Euclid's
 algorithm](https://www.khanacademy.org/computing/computer-science/cryptography/modarithmetic/a/the-euclidean-algorithm)
@@ -185,6 +179,8 @@ The code above does the following:
 4. Continue iterating whilst `get t1 | != 0`, that is, while the Tuple's 2nd element has
    not reached zero,
 5. Do the reduction math; inputs `$acc`, calculates the mod between the 1st and 2nd
-   element, build a new Tuple with `t1` going into `t0` and the mod being `t1`,
+   element, build a new Tuple with `t1` going into `t0` and the mod being `t1`
+   `let $acc | get t0 | mod $acc.t1 | Tuple $acc.t1 #i`,
 6. Extract the 1st element out of the folded value.
 
+![](./assets/no-recursion.gcd.gif?raw=true)
