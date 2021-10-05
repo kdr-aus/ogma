@@ -11,7 +11,6 @@ efficiently work with tabular data.
 ![](./docs/assets/common-cmds.filter.gif?raw=true)
 
 # Getting Started
----
 
 - [📥 Installation](https://daedalus.report/d/docs/Ogma.book/02%20getting%20started/2.1%20installation.md?pwd-raw=docs)
 - [📖 Documentation](https://daedalus.report/d/docs/Ogma.book/01%20Introduction.md?pwd-raw=docs)
@@ -19,7 +18,7 @@ efficiently work with tabular data.
 - [❤️ Support us!](https://forum.daedalus.report/)
 
 # Language Characteristics
----
+
 ogma takes inspiration from multiple sources. 
 For the _semantics_, programming languages Rust, Haskell, ML, and Elm have
 all been an influence, while the _syntax_ is derived primarily from terminal shells (with
@@ -31,7 +30,7 @@ smatterings from other languages). Some major characteristics of ogma are:
 
 
 # Development and Support
----
+
 The ogma project needs development and financial support to help keep the project growing.
 Financial support in the form of sponsorship is greatly appreciated, helping us spend more time on
 the project.
@@ -42,7 +41,7 @@ community around the project and it is encouraged to participate.
 
 
 # Release Process
----
+
 When a release is ready, simply create a release tag and push it to Github.
 The release workflow will take care of the build and release creation.
 **The release body uses [RELEASE.md](./RELEASE.md) as the release notes.
