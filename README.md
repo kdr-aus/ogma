@@ -15,7 +15,7 @@ efficiently work with tabular data.
 - [📥 Installation](https://daedalus.report/d/docs/Ogma.book/02%20getting%20started/2.1%20installation.md?pwd-raw=docs)
 - [📖 Documentation](https://daedalus.report/d/docs/Ogma.book/01%20Introduction.md?pwd-raw=docs)
 - [❓ Forum](https://forum.daedalus.report/)
-- [❤️ Support us!](https://forum.daedalus.report/)
+- [❤️ Support us!](https://github.com/sponsors/kdr-aus)
 
 # Language Characteristics
 
