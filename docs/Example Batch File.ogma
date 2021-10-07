@@ -1,0 +1,5 @@
+# First expression
+\ 5 | + 5
+
+# Opening a file
+ls | filter size > 50 | fold 0 + $row.size

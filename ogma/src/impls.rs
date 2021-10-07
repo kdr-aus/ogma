@@ -2784,7 +2784,7 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
 fn open_help() -> HelpMessage {
     HelpMessage {
         desc: "open something
-Table (default): gets 'fit' as a table
+Table (default): parse file as a table
 String: reads file as string"
             .into(),
         params: vec![HelpParameter::Required("file".into())],
@@ -2800,10 +2800,6 @@ String: reads file as string"
             HelpExample {
                 desc: "open a file along a path",
                 code: "open 'path/to a/file.csv'",
-            },
-            HelpExample {
-                desc: "open a table by fitting a kserd",
-                code: "open '[ [\"one\", \"two\"], [1, 2] ]'",
             },
             HelpExample {
                 desc: "open a file as a string",
