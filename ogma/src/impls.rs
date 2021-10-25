@@ -13,8 +13,6 @@ use std::{
     cmp,
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
-    fs::File,
-    io::prelude::*,
     mem,
     rc::Rc,
     time::Instant,
@@ -2869,10 +2867,7 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
 
 /// Read a file to a String, but not necessarily from UTF-8
 fn read_file(path: impl AsRef<Path>) -> io::Result<String> {
-    let mut buf = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    decode(&buf, DecoderTrap::Strict, encodings::UTF_8).0
+    decode(&std::fs::read(path)?, DecoderTrap::Strict, encodings::UTF_8).0
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
