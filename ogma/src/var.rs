@@ -40,24 +40,22 @@ impl Variable {
             .0
             .get(self.env_idx)
             .expect("environment should have variable at location");
-        if cfg!(debug_assertions) && self.ty != val.ty() {
-            panic!(
-                "trying to get a variable with type `{}` but the variable is of type `{}`. possibly it has not been set yet?",
-                val.ty(),
-                self.ty
-            );
-        }
+        debug_assert!(
+            self.ty == val.ty(),
+            "trying to get a variable with type `{}` but the variable is of type `{}`. possibly it has not been set yet?",
+            val.ty(),
+            self.ty,
+        );
         val
     }
 
     pub fn set_data(&self, env: &mut Environment, val: Value) {
-        if cfg!(debug_assertions) && self.ty != val.ty() {
-            panic!(
-                "trying to set a variable with type `{}` but the variable is of type `{}`",
-                val.ty(),
-                self.ty
-            );
-        }
+        debug_assert!(
+            self.ty == val.ty(),
+            "trying to set a variable with type `{}` but the variable is of type `{}`",
+            val.ty(),
+            self.ty
+        );
 
         *Arc::make_mut(&mut env.0)
             .get_mut(self.env_idx)
@@ -66,6 +64,7 @@ impl Variable {
 }
 
 // ###### LOCALS ###############################################################
+#[allow(dead_code)]
 #[derive(Debug)]
 struct LocalEntry {
     defined_depth: u32,

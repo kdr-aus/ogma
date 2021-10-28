@@ -360,11 +360,14 @@ impl Step {
             // we runtime check the step's output type with the eval type in debug mode.
             // this should help isolate pervasive typing bugs but won't impact release performance
             if let Ok((r, _)) = &r {
-                if r.ty() != self.out_ty {
-                    panic!("the Step's specified output type does not match the evaluated type, one of the types is incorrect!
+                assert!(
+                    r.ty() == self.out_ty,
+                    "the Step's specified output type does not match the evaluated type, one of the types is incorrect!
 OUTPUT TYPE: {}
-EVAL VALUE: {:?}", self.out_ty, r);
-                }
+EVAL VALUE: {:?}", 
+                    self.out_ty,
+                    r,
+                );
             }
         }
         r
@@ -657,14 +660,14 @@ fn resolve_expr(expr: &ExprEvaluator, inty: &Type, input: Value, cx: Context) ->
         // runtime check the input type matches this type.
         // only do check in debug mode.
         let ity = input.ty();
-        if inty != &ity {
-            panic!(
-                "arguments expected input type does not match supplied input type.
+        assert!(
+            inty == &ity,
+            "arguments expected input type does not match supplied input type.
 expected input type: {}
 supplied input type: {}",
-                inty, ity
-            );
-        }
+            inty,
+            ity
+        );
     }
     expr.eval(input, cx)
 }

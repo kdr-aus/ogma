@@ -384,6 +384,7 @@ pub struct Variant {
     pub fields: Option<Fields>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Field {
     name: Tag,
