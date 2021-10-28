@@ -333,7 +333,7 @@ def has specialised syntax which takes variable params: ( )"
         };
         Err(help_as_error(&help))
     } else if s.contains(" --list") {
-        let post = s.splitn(2, " | ").nth(1).filter(|x| !x.is_empty());
+        let post = s.split_once(" | ").map(|x| x.1);
         Ok((Value::Tab(construct_def_table(defs)), post))
     } else if s.contains(" --clear") {
         defs.clear(false);

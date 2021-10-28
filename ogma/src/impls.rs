@@ -2827,7 +2827,7 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
             let table = match FSCACHE.get::<Table>(&path) {
                 Some(table) => table,
                 None => {
-                    let s = std::fs::read_to_string(&path).map_err(|e| Error::io(&blktag, e))?;
+                    let s: Str = read_file(&path).map_err(|e| Error::io(&blktag, e))?.into();
 
                     let table = Table::from(
                         ::table::parse_dsv(',', &s).map_obj(|s| Value::Str(Str::new(s))),
@@ -2845,9 +2845,8 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
             let s = match FSCACHE.get::<Str>(&path) {
                 Some(s) => s,
                 None => {
-                    let s = std::fs::read_to_string(&path)
-                        .map(Str::from)
-                        .map_err(|e| Error::io(&blktag, e))?;
+                    let s: Str = read_file(&path).map_err(|e| Error::io(&blktag, e))?.into();
+
                     FSCACHE.insert(&path, s.clone());
                     s
                 }
@@ -2859,6 +2858,15 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
             ..Error::wrong_input_type(&x, &blk.op_tag)
         }),
     }
+}
+
+/// Read a file to a String, but not necessarily from UTF-8
+fn read_file(path: impl AsRef<Path>) -> io::Result<String> {
+    use ::encoding::{all::UTF_8, decode, DecoderTrap};
+
+    decode(&std::fs::read(path)?, DecoderTrap::Strict, UTF_8)
+        .0
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 // ------ Or -------------------------------------------------------------------
