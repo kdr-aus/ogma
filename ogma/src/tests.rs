@@ -3463,6 +3463,45 @@ fn nth_testing() {
     );
 }
 
+#[test]
+fn open_bom_test() {
+    let defs = &Definitions::new();
+
+    let exp = vec![
+        vec![o("English name"), o("Native name")],
+        vec![o("English"), o("English")],
+        vec![o("German"), o("Deutsch")],
+        vec![o("French"), o("Français")],
+        vec![o("Russian"), o("Русский")],
+        vec![o("Japanese"), o("日本語")],
+    ];
+
+    let utf8 = {
+        std::fs::write("ls-test/test-file.csv", b"English name,Native name\nEnglish,English\nGerman,Deutsch\nFrench,Fran\xc3\xa7ais\nRussian,\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9\nJapanese,\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e\n").unwrap();
+        process_w_nil("open 'ls-test/test-file.csv'", defs)
+    };
+
+    let utf8bom = {
+        std::fs::write("ls-test/test-file.csv", b"\xef\xbb\xbfEnglish name,Native name\nEnglish,English\nGerman,Deutsch\nFrench,Fran\xc3\xa7ais\nRussian,\xd0\xa0\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9\nJapanese,\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e\n").unwrap();
+        process_w_nil("open 'ls-test/test-file.csv'", defs)
+    };
+
+    let utf16le = {
+        std::fs::write("ls-test/test-file.csv", b"\xff\xfeE\x00n\x00g\x00l\x00i\x00s\x00h\x00 \x00n\x00a\x00m\x00e\x00,\x00N\x00a\x00t\x00i\x00v\x00e\x00 \x00n\x00a\x00m\x00e\x00\n\x00E\x00n\x00g\x00l\x00i\x00s\x00h\x00,\x00E\x00n\x00g\x00l\x00i\x00s\x00h\x00\n\x00G\x00e\x00r\x00m\x00a\x00n\x00,\x00D\x00e\x00u\x00t\x00s\x00c\x00h\x00\n\x00F\x00r\x00e\x00n\x00c\x00h\x00,\x00F\x00r\x00a\x00n\x00\xe7\x00a\x00i\x00s\x00\n\x00R\x00u\x00s\x00s\x00i\x00a\x00n\x00,\x00 \x04C\x04A\x04A\x04:\x048\x049\x04\n\x00J\x00a\x00p\x00a\x00n\x00e\x00s\x00e\x00,\x00\xe5e,g\x9e\x8a\n\x00").unwrap();
+        process_w_nil("open 'ls-test/test-file.csv'", defs)
+    };
+
+    let utf16be = {
+        std::fs::write("ls-test/test-file.csv", b"\xfe\xff\x00E\x00n\x00g\x00l\x00i\x00s\x00h\x00 \x00n\x00a\x00m\x00e\x00,\x00N\x00a\x00t\x00i\x00v\x00e\x00 \x00n\x00a\x00m\x00e\x00\n\x00E\x00n\x00g\x00l\x00i\x00s\x00h\x00,\x00E\x00n\x00g\x00l\x00i\x00s\x00h\x00\n\x00G\x00e\x00r\x00m\x00a\x00n\x00,\x00D\x00e\x00u\x00t\x00s\x00c\x00h\x00\n\x00F\x00r\x00e\x00n\x00c\x00h\x00,\x00F\x00r\x00a\x00n\x00\xe7\x00a\x00i\x00s\x00\n\x00R\x00u\x00s\x00s\x00i\x00a\x00n\x00,\x04 \x04C\x04A\x04A\x04:\x048\x049\x00\n\x00J\x00a\x00p\x00a\x00n\x00e\x00s\x00e\x00,e\xe5g,\x8a\x9e\x00\n").unwrap();
+        process_w_nil("open 'ls-test/test-file.csv'", defs)
+    };
+
+    check_is_table(utf8, exp.clone());
+    check_is_table(utf8bom, exp.clone());
+    check_is_table(utf16le, exp.clone());
+    check_is_table(utf16be, exp.clone());
+}
+
 // ------ Or -------------------------------------------------------------------
 #[test]
 fn or_help_msg() {
