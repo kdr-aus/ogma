@@ -2,7 +2,7 @@ name: Markdown
 
 on:
   push:
-    branches: [ main, fix-markdown ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
