@@ -16,7 +16,7 @@ It does the following:
 3. Gets the length of "Hello, world!",
 4. Tests if the length if equal to 13
 
-```plaintext
+```ogma
 \'Hello' | + ', world!' | len | = 13
 ```
 

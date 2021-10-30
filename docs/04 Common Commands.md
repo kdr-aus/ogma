@@ -15,7 +15,7 @@ comes with some examples and is a good place to start.
 
 > ❗When starting out it is recommended to save the list of commands for easy reference:
 >
-> ```plaintext
+> ```ogma
 > def --list | save ogma-defs.csv
 > ```
 
@@ -29,7 +29,7 @@ command, it sees use in many cases when the input needs to be adjusted for a cha
 the command uses a special character, there is no need to add a space after the command. Below are
 some examples:
 
-```plaintext
+```ogma
 \ 3 --> Make input 3
 \3  --> Same as \ 3
 \$x --> Input variable $x
@@ -75,7 +75,7 @@ between the input and the argument whilst `cmp` returns an ordering type. These 
 turn are used by the operators `=`, `!=`, `<`, `>`, `<=`, `>=` for ordering operators. The
 comparison operators show case **_derived_** implementations. For example, the help of `=` outputs:
 
-```plaintext
+```ogma
 >> = --help
 Help: `=`
 --> shell:0
@@ -96,7 +96,7 @@ user-defined types being able to leverage `eq` and `cmp` with minimal implementa
 Below is a `Point` type defined, along with an implementation of `eq`. By implementing `eq`, the
 commands `=` and `!=` extend to work with `Point`. User defined types is documented later on.
 
-```plaintext
+```ogma
 def-ty Point { x:Num y:Num }
 def eq Point (rhs) { and {get x | = $rhs.x} {get y | = $rhs.y} }
 ```
@@ -118,7 +118,7 @@ This means that the `get` command must _specify_ the **expected** type when work
 input. The expected type is specified using a flag, for example `--Str` to expect a string type.
 If no flag is specified, `Num` type is assumed.
 
-```plaintext
+```ogma
 Tuple 1 2 | get t0 --> returns 1
 Tuple 1 2 | get t1 --> returns 2
 open diamonds.csv | last get color --> ERROR: tried to get a number but found a string
@@ -141,7 +141,7 @@ a table:
 `filter` demonstrates common table operation semantics, the `--help` alludes to
 the use:
 
-```plaintext
+```ogma
 >> filter --help
 Help: `filter`
 --> shell:0
@@ -253,7 +253,7 @@ For example, to output the _count_ of each cut type entry in `diamonds.csv`, fir
 Grouping is also very useful for creating summaries, the expression below summarizes the
 `diamonds.csv` dataset by outputting the maximum price and sum of the carats, grouped by 'cut':
 
-```plaintext
+```ogma
 open diamonds.csv | grp cut | append
 --'Max Price' {get value --Table | fold 0 max $row.price}
 --'Total Carats' {get value --Table | fold 0 + $row.carat}

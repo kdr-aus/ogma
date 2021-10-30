@@ -17,7 +17,7 @@ used with table operations when the input is a `TableRow`.
 For example, to create a column of 'Price per Carat', the price is fetched and set to `$price`, the
 carats are fetched and set to `$carat`, then the divide command is called with the two variables.
 
-```plaintext
+```ogma
 open diamonds.csv | append --'Price per Carat' {
 let {get price} $price {get carat} $ct | / $price $ct }
 ```
@@ -27,7 +27,7 @@ let {get price} $price {get carat} $ct | / $price $ct }
 A more idiomatic way of achieving the same result without the use of variables is to use the dot
 (`.`) operator:
 
-```plaintext
+```ogma
 open diamonds.csv | append --'Price per Carat' / #i.price #i.carat
 ```
 

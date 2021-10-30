@@ -5,7 +5,7 @@
 A batch file is one with the `ogma` extension. It defines implementations, types, and expressions.
 Below is an example of a batch file:
 
-```plaintext
+```ogma
 # First expression
 \ 5 | + 5
 

@@ -6,7 +6,7 @@ Recursion is **not** supported in ogma. _This is intentional for the static type
 checking **and** lazy evaluation_. If a definition is defined which is not comprised of already
 known definitions, an error will be returned:
 
-```plaintext
+```ogma
 >> def recurse () { recurse }
 Unknown Command: operation `recurse` not defined
 --> shell:17
@@ -25,7 +25,7 @@ one can replicate it in ogma.
 
 `n` raised to the power of `x` can be written in terms of itself:
 
-```plaintext
+```ogma
 n^x :=
     x = 0 => 1
         x => n * n^(x-1)
@@ -35,13 +35,13 @@ This can also be framed iteratively; multiply _n_ with itself _x_ times. The bas
 where `x=0`, which returns 1 (ie `n^0=1`).
 Using a range with `n` as a seed can achieve the same result:
 
-```plaintext
+```ogma
 def pwr (n x) { if { \$x | = 0 } 1 { range 1 $x | fold $n * $n } }
 ```
 
 The result can be checked:
 
-```plaintext
+```ogma
 .> pwr 2 3
 8
 .> pwr 2 2
@@ -57,7 +57,7 @@ The result can be checked:
 > A specialisation can be done for when the input is a number type. This means only a
 > single parameter (`exp`) can be required:
 >
-> ```plaintext
+> ```ogma
 > def pwr Num (exp) { if {\$exp | = 0} 1 {let $n | range 1 $exp | fold $n * $n} }
 > ```
 
@@ -67,7 +67,7 @@ The result can be checked:
 
 `n` factorial can be written in terms of itself:
 
-```plaintext
+```ogma
 n! :=
     n = 0 => 1
     n = 1 => 1
@@ -76,13 +76,13 @@ n! :=
 
 Similarly to `pwr`, one can define factorial using ranges:
 
-```plaintext
+```ogma
 def fact Num () { if {<= 1} 1 { + 1 | range 1 | fold 1 * $row.i } }
 ```
 
 Since `fact` is now defined for a number input, one can build a table listing factorials:
 
-```plaintext
+```ogma
 .> range 1 11 | append --'i!' { get i | fact }
 ```
 
@@ -95,7 +95,7 @@ Since `fact` is now defined for a number input, one can build a table listing fa
 A fibonacci term follows the sequence: `0,1,1,2,3,5,8,13`
 This can be represented recursively:
 
-```plaintext
+```ogma
 fib n :=
     n = 0 => 0
     n = 1 => 1
@@ -105,7 +105,7 @@ fib n :=
 To define _two_ variables that are tracked, a _type definition_ is used. Below are the
 definitions and some comments about the structure.
 
-```plaintext
+```ogma
 # Define a structure to hold two numbers, the current 'x' and the previous number 'prev'
 def-ty Fib { x:Num prev:Num }
 
@@ -122,13 +122,13 @@ def fib Num () { if {<= 1} #i {fib-inner #i}.x }
 With these functions the first 10 fibonacci numbers can be printed out like so, we encourage you to
 try it yourself!
 
-```plaintext
+```ogma
 range 1 11 | append --Fibonacci { get i | fib }
 ```
 
 It is also possible to inspect the state by way of the `fib-inner`:
 
-```plaintext
+```ogma
 range 1 11 | append --'Fib working' fib-inner get i
 ```
 
@@ -147,7 +147,7 @@ In the code below `$acc` is the _growing_ `Table`, and for each fold iteration:
    (using `nth {len | - 1} get i` and `nth {len | - 2} get i` respectively),
 2. the summed value is appended as a row to the input.
 
-```plaintext
+```ogma
 def fib-table Num () { range 1 #i |
     fold {range 0 2}
     { let
@@ -167,7 +167,7 @@ The greatest common divisor of two numbers, calculated
 algorithm](https://www.khanacademy.org/computing/computer-science/cryptography/modarithmetic/a/the-euclidean-algorithm)
 can be written recursively:
 
-```plaintext
+```ogma
 gcd a b :=
   a = 0 => b
   b = 0 => a
@@ -180,7 +180,7 @@ numbers `a` and `b`. For this example the `Tuple` structure will be demonstrated
 To seed the number of fold iterations that are required to reach the GCD, the minimum
 between the absolutes of a and b is taken.
 
-```plaintext
+```ogma
 # Greatest Common Divisor
 # Invariant that `b < a` is upheld to reduce number of branches.
 def gcd (a b) { range 0 {\$a|abs|min {\$b|abs}} |
