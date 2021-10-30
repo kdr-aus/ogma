@@ -4,8 +4,9 @@
 
 To view a list of available commands, use the command `def --list`. This will output a table of commands,
 including user defined implementations.
-To view, say, the _arithmetic_ commands, a filter can be applied to the table: `def --list | filter 'category' --Str = 'arithmetic'`. Since the table will be elided, the table can be written
-to disk using `def --list | save ogma-defs.csv`.
+To view, say, the _arithmetic_ commands, a filter can be applied to the table:
+`def --list | filter 'category' --Str = 'arithmetic'`.
+Since the table will be elided, the table can be written to disk using `def --list | save ogma-defs.csv`.
 Most commands are defined by `ogma` intrinsically for various reasons such as performance, arity,
 and specialisations.
 To view the information about a single command, use `<cmd> --help` where `<cmd>` is the command name.

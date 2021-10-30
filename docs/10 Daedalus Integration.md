@@ -19,7 +19,7 @@ The evaluation widget is not limited to just a file type. When defining a codebl
 
 For example the codeblock:
 
-````
+````md
 ```ogma,no-parallelise,fail-fast
 # First expression
 \ 'foo' | + ' bar'
@@ -41,7 +41,7 @@ Would render as:
 
 Files can also be linked in:
 
-````
+````md
 ```ogma
 Example Batch File.ogma
 ```

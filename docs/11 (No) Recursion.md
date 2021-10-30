@@ -132,7 +132,7 @@ It is also possible to inspect the state by way of the `fib-inner`:
 range 1 11 | append --'Fib working' fib-inner get i
 ```
 
-**Alternative Method: constructing a growing table**
+### Alternative Method: constructing a growing table
 
 Since a fibonacci sequence is based on the numbers that come before it, there is an
 alternate way to construct a table of the sequence which demonstrates how to use `fold`
@@ -196,7 +196,8 @@ The code above does the following:
 1. Defines a range from 0 to the minimum of the absolutes between _a_ and _b_. The minimum
    expression uses some condensed syntax, but can be read like `\ $a | abs | min { \ $b | abs }`,
 2. `fold-while` is used to stop iterating early if the break condition is met,
-3. The seed value places the _smaller_ number into the 2nd tuple element (`if {\$a|< $b} {Tuple $b $a} {Tuple $a $b}`),
+3. The seed value places the _smaller_ number into the 2nd tuple element
+   (`if {\$a|< $b} {Tuple $b $a} {Tuple $a $b}`),
 4. Continue iterating whilst `get t1 | != 0`, that is, while the Tuple's 2nd element has
    not reached zero,
 5. Do the reduction math; inputs `$acc`, calculates the mod between the 1st and 2nd

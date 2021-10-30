@@ -10,14 +10,14 @@ efficiently work with tabular data.
 
 ![](./docs/assets/common-cmds.filter.gif?raw=true)
 
-# Getting Started
+## Getting Started
 
 - [📥 Installation](https://daedalus.report/d/docs/Ogma.book/02%20getting%20started/2.1%20installation.md?pwd-raw=docs)
 - [📖 Documentation](https://daedalus.report/d/docs/Ogma.book/01%20Introduction.md?pwd-raw=docs)
 - [❓ Forum](https://forum.daedalus.report/)
 - [❤️ Support us!](https://github.com/sponsors/kdr-aus)
 
-# Language Characteristics
+## Language Characteristics
 
 ogma takes inspiration from multiple sources.
 For the _semantics_, programming languages Rust, Haskell, ML, and Elm have
@@ -29,7 +29,7 @@ smatterings from other languages). Some major characteristics of ogma are:
 - it is **strictly typed**,
 - can be extended with **user-defined** implementations _and_ types.
 
-# Development and Support
+## Development and Support
 
 The ogma project needs development and financial support to help keep the project growing.
 Financial support in the form of sponsorship is greatly appreciated, helping us spend more time on
@@ -39,7 +39,7 @@ features but important aspects such as bug fixes and documentation.
 There is also a forum in which to ask and answer questions. The forum is a great way to cultivate a
 community around the project and it is encouraged to participate.
 
-## Contributions
+### Contributions
 
 Pull requests are appreciated and encouraged! The request will be subject to a review and will
 need to pass the CI before being merged in. Please ensure:
@@ -52,14 +52,14 @@ need to pass the CI before being merged in. Please ensure:
 
 Happy coding!
 
-# Release Process
+## Release Process
 
 When a release is ready, simply create a release tag and push it to Github.
 The release workflow will take care of the build and release creation.
 **The release body uses [RELEASE.md](./RELEASE.md) as the release notes.
 Be sure to update this before the tag push!**
 
-```
+```sh
 # Update RELEASE.md
 git push
 git tag v#.#

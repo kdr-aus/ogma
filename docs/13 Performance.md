@@ -33,9 +33,11 @@ filter by the cut `Ideal`, and then take the top 10. Alternatively, you could fi
 the cut first, then do the rest of the transformations.
 
 - Method #1 -- Sort first:
-  `open diamonds.csv | append --ppc / #i.price #i.carat | sort ppc | rev | filter cut --Str = Fair | take 10`
+  `open diamonds.csv | append --ppc / #i.price #i.carat | sort ppc |
+  rev | filter cut --Str = Fair | take 10`
 - Method #2 -- Filter first:
-  `open diamonds.csv | filter cut --Str = Fair | append --ppc / #i.price #i.carat | sort ppc | rev | take 10`
+  `open diamonds.csv | filter cut --Str = Fair | append --ppc / #i.price #i.carat
+  | sort ppc | rev | take 10`
 
 We can time both these expressions using the `benchmark` command. The 2nd method ends up being
 about twice as fast.
@@ -47,7 +49,10 @@ about twice as fast.
 Although ogma uses Clone-On-Write data structures, it is still possible to incur large cloning
 penalties if clones occur in hot code.
 This usually occurs in `fold`s which are constructing a data structure, such as a table, and is
-having to clone the table each time. As a contrived example, the expression `range 0 1e4 | fold {Table} { let $t | append-row 'a' }` is _similar_ to `range 0 1e4 | fold {Table} { append-row 'a' }`. They both create a table column full of 'a' characters. **However**, the first expression
+having to clone the table each time.
+As a contrived example, the expression `range 0 1e4 | fold {Table} { let $t | append-row 'a' }`
+is _similar_ to `range 0 1e4 | fold {Table} { append-row 'a' }`.
+They both create a table column full of 'a' characters. **However**, the first expression
 assigns the `fold` input to the variable `$t`. Since `append-row` now has to clone the table to be
 able to mutate it, the first expression now takes **much** longer. The animation below highlights
 this point, the speed improvement if ~150x.

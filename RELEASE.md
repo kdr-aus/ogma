@@ -1,3 +1,3 @@
-**🐛 Bug Fixes**
+# 🐛 Bug Fixes
 
-- Handle BOM: https://github.com/kdr-aus/ogma/pull/12
+- Handle BOM: [#12](https://github.com/kdr-aus/ogma/pull/12>)
