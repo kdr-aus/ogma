@@ -26,6 +26,7 @@ let {get price} $price {get carat} $ct | / $price $ct }
 
 A more idiomatic way of achieving the same result without the use of variables is to use the dot
 (`.`) operator:
+
 ```plaintext
 open diamonds.csv | append --'Price per Carat' / #i.price #i.carat
 ```

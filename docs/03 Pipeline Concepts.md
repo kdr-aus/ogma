@@ -10,6 +10,7 @@ more structured and has a definitive _type_ when passing through a pipe.
 
 The example below is a set of blocks, composed together producing a boolean value.
 It does the following:
+
 1. Sets the input to "Hello",
 2. Appends ", world!" to "Hello",
 3. Gets the length of "Hello, world!",
@@ -45,7 +46,7 @@ subgraph d["= 13"]
     z["13"]:::input -- input --> block4("= 13") -- output --> out4["true:Bool"]:::output
 end
 
-gg1["():Nil"]:::input -- "()" --> a 
+gg1["():Nil"]:::input -- "()" --> a
 a -- "Hello" --> b
 b -- "Hello, world!" --> c
 c -- "13" --> d

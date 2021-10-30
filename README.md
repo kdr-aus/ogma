@@ -1,7 +1,7 @@
 # ogma
 
 Welcome to the `ogma` project!
-`ogma` is a scripting language focused on _ergonomically_ and _efficiently_ 
+`ogma` is a scripting language focused on _ergonomically_ and _efficiently_
 processing tabular data, with _batteries included_.
 Mixing aspects of terminal shells and functional programming, the ogma project lets one interact
 with data in a refreshing way.
@@ -19,15 +19,15 @@ efficiently work with tabular data.
 
 # Language Characteristics
 
-ogma takes inspiration from multiple sources. 
+ogma takes inspiration from multiple sources.
 For the _semantics_, programming languages Rust, Haskell, ML, and Elm have
 all been an influence, while the _syntax_ is derived primarily from terminal shells (with
 smatterings from other languages). Some major characteristics of ogma are:
+
 - small language with few keywords and opting for a **prefix** notation,
 - uses **pipelines** to _chain_ together commands, composing their effects,
 - it is **strictly typed**,
 - can be extended with **user-defined** implementations _and_ types.
-
 
 # Development and Support
 
@@ -40,8 +40,10 @@ There is also a forum in which to ask and answer questions. The forum is a great
 community around the project and it is encouraged to participate.
 
 ## Contributions
-Pull requests are appreciated and encouraged! The request will be subject to a review and will 
+
+Pull requests are appreciated and encouraged! The request will be subject to a review and will
 need to pass the CI before being merged in. Please ensure:
+
 - Tests are added where necessary,
 - `cargo fmt -- --check` passes,
 - `cargo clippy -- -D warnings` passes,

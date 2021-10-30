@@ -4,6 +4,7 @@
 
 A batch file is one with the `ogma` extension. It defines implementations, types, and expressions.
 Below is an example of a batch file:
+
 ```plaintext
 # First expression
 \ 5 | + 5
@@ -16,20 +17,26 @@ def add-2 () { + 2 }
 ```
 
 ## Syntax
+
 ---
+
 Each item is demarcated by **a blank line**. This chunks the file into separate items, and
 classifies each item. Multiline comments are supported _before_ an item, prefixed with the pound
 (`#`) character.
 
 ## Directives
+
 ---
+
 Batch files support directives to alter the processing methodology.
 Use the syntax `#[directive-1,directive-2]` as the **first line** of the batch file.
 For example, to _disable_ parallel processing and to _enable_ fast fail the first line of a batch
 file would contain: `#[no-parallelise,fail-fast]`
 
 ## Processing
+
 ---
+
 A batch file is run in its own context. This means definitions made in one batch file will not leak
 into another batch file. The working directory that feeds into IO commands is the current working
 directory of where the batch file is invoked.
