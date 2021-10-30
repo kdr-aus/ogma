@@ -2,7 +2,7 @@ name: Markdown linting
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, fix-markdown ]
   pull_request:
     branches: [ main ]
 
