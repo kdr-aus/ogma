@@ -6,7 +6,7 @@ edition = "2018"
 
 [[bin]]
 path = "main.rs"
-name = "ogma-bin"
+name = "ogma"
 
 [dependencies]
 # workspace
