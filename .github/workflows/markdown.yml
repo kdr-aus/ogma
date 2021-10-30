@@ -16,7 +16,4 @@ jobs:
       
       - name: MarkdownLint mdl Action
         uses: actionshub/markdownlint@main
-        
-      - name: markdown-link-check
-        uses: gaurav-nelson/github-action-markdown-link-check@1.0.13
     
