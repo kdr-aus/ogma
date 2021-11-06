@@ -35,11 +35,11 @@ fn get_completions(wsp: &Wsp, url: &Url, position: Position) -> Option<Vec<Compl
 fn def_to_cmpl_item(def: Def) -> CompletionItem {
     use Kind::*;
     let kind = Some(match def.kind {
-        Impl => CompletionItemKind::Function,
-        Type => CompletionItemKind::Class,
-        Dir => CompletionItemKind::Folder,
-        File => CompletionItemKind::File,
-        Lit => CompletionItemKind::Constant,
+        Impl => CompletionItemKind::FUNCTION,
+        Type => CompletionItemKind::CLASS,
+        Dir => CompletionItemKind::FOLDER,
+        File => CompletionItemKind::FILE,
+        Lit => CompletionItemKind::CONSTANT,
     });
 
     CompletionItem {

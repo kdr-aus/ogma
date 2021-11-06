@@ -17,7 +17,7 @@ impl LsMethod<InitializeParams> for Initialize {
                 ..Default::default()
             }),
             capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncKind::Incremental.into()),
+                text_document_sync: Some(TextDocumentSyncKind::INCREMENTAL.into()),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![" ".into(), "/".into(), "\\".into()]),
                     ..Default::default()
