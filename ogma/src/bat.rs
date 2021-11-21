@@ -224,11 +224,12 @@ pub fn parse_file(f: impl AsRef<Path>) -> io::Result<Batch> {
 }
 
 fn directive(code: &str, directive: &str) -> bool {
-    let line = code.lines().next().expect("lines always has one");
-    match line.strip_prefix("#[").and_then(|x| x.strip_suffix(']')) {
-        Some(i) => i.split(',').any(|x| x.trim() == directive),
-        None => false,
-    }
+    code.lines()
+        .next()
+        .and_then(|line| line.trim().strip_prefix("#["))
+        .and_then(|x| x.strip_suffix(']'))
+        .map(|i| i.split(',').any(|x| x.trim() == directive))
+        .unwrap_or(false)
 }
 
 // ------ Processing -----------------------------------------------------------
@@ -469,5 +470,7 @@ def-ty Zog { x:Num }";
         assert!(!d("#[hello,world", "world"));
         assert!(!d("#hello,world]", "world"));
         assert!(!d("[hello,world]", "world"));
+        assert!(!d("", ""));
+        assert!(!d("", "hello"));
     }
 }

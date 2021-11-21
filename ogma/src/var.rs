@@ -64,7 +64,6 @@ impl Variable {
 }
 
 // ###### LOCALS ###############################################################
-#[allow(dead_code)]
 #[derive(Debug)]
 struct LocalEntry {
     defined_depth: u32,
