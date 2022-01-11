@@ -5,3 +5,4 @@
 
 **✨ Other Updates**
 - Track `Cargo.lock` file: <https://github.com/kdr-aus/ogma/pull/21>
+- Aggressive crate restructure: <https://github.com/kdr-aus/ogma/pull/25>
