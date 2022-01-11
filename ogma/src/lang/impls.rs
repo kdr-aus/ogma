@@ -573,7 +573,7 @@ impl<T> BinaryOp<T> {
                         "`{}` implementation not suitable for `{}` with `{}`",
                         cmd, caller, ty
                     ),
-                    traces: vec![err::ErrorTrace::from_tag(
+                    traces: vec![err::Trace::from_tag(
                         errtag,
                         format!("this returns `{}`", ty),
                     )],
@@ -586,7 +586,7 @@ impl<T> BinaryOp<T> {
 
         if evaluator.ty() != out_ty {
             let mut err = Error::unexp_arg_ty(out_ty, evaluator.ty(), evaluator.tag());
-            err.traces.push(err::ErrorTrace::from_tag(
+            err.traces.push(err::Trace::from_tag(
                 errtag,
                 format!("`{}`'s {} impl returns `{}`", ty, cmd, evaluator.ty()),
             ));

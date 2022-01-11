@@ -34,7 +34,7 @@ macro_rules! colourln {
     }};
 }
 
-/// Processing error.
+/// Ubiquitous error.
 ///
 /// Errors are printed like so:
 /// ```shell
@@ -51,14 +51,13 @@ pub struct Error {
     /// Error description.
     pub desc: String,
     /// Error backtrace.
-    pub traces: Vec<ErrorTrace>,
+    pub traces: Vec<Trace>,
     /// Optional help message.
     pub help_msg: Option<String>,
 }
 
-// TODO rename to Trace
 #[derive(Debug, PartialEq)]
-pub struct ErrorTrace {
+pub struct Trace {
     pub loc: Location,
     pub source: String,
     pub desc: Option<String>,
@@ -106,7 +105,7 @@ pub fn help_as_error(msg: &HelpMessage) -> Error {
         cat: Category::Help,
         desc: format!("`{}`", cmd),
         help_msg: None,
-        traces: vec![ErrorTrace {
+        traces: vec![Trace {
             source,
             ..Default::default()
         }],
@@ -114,14 +113,14 @@ pub fn help_as_error(msg: &HelpMessage) -> Error {
 }
 
 // ###### ERROR ################################################################
-fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<ErrorTrace> {
-    vec![ErrorTrace::from_tag(tag, desc)]
+fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
+    vec![Trace::from_tag(tag, desc)]
 }
 
 impl Error {
     pub(crate) fn add_trace(mut self, tag: &Tag) -> Self {
         self.traces
-            .push(ErrorTrace::from_tag(tag, "invoked here".to_string()));
+            .push(Trace::from_tag(tag, "invoked here".to_string()));
         self
     }
 
@@ -421,7 +420,7 @@ impl error::Error for Error {}
 
 // ###### TRACE ################################################################
 /// Returns a _blank_ trace. Intended for assistance with initialising.
-impl Default for ErrorTrace {
+impl Default for Trace {
     fn default() -> Self {
         Self {
             loc: Location::Shell,
@@ -433,7 +432,7 @@ impl Default for ErrorTrace {
     }
 }
 
-impl ErrorTrace {
+impl Trace {
     pub fn from_tag<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Self {
         Self {
             loc: tag.anchor.clone(),
@@ -551,7 +550,7 @@ pub enum Category {
 mod tests {
     use super::*;
 
-    fn print(err_trace: &ErrorTrace) -> String {
+    fn print(err_trace: &Trace) -> String {
         let mut s = Vec::new();
         err_trace.print(false, &mut s).unwrap();
         String::from_utf8(s).unwrap()
@@ -578,7 +577,7 @@ mod tests {
 
     #[test]
     fn printing_error_traces_basic() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "Hello".into(),
             start: 3,
             len: 2,
@@ -598,7 +597,7 @@ mod tests {
 
     #[test]
     fn printing_error_traces_mutliline_single_span() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "Hello
 World
 This is
@@ -619,7 +618,7 @@ A multiline"
 "
         );
 
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "Hello
 World
     This is
@@ -645,7 +644,7 @@ World
 
     #[test]
     fn printing_error_traces_mutliline_multi_span() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "if { foo {
     bar zog |
     43 |
@@ -671,7 +670,7 @@ World
 
     #[test]
     fn single_mark_cmd() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "in | ".into(),
             start: 5,
             len: 1,

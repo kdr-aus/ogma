@@ -325,7 +325,7 @@ impl Types {
             Err(Error {
                 cat: err::Category::Semantics,
                 desc: format!("can not redefine type `{}`", name),
-                traces: vec![err::ErrorTrace::from_tag(
+                traces: vec![err::Trace::from_tag(
                     name,
                     format!("`{}` already defined", name),
                 )],

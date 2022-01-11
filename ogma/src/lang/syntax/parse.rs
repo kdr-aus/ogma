@@ -198,7 +198,7 @@ fn convert_parse_error<'a>(
     let err = Error {
         cat: Category::Parsing,
         desc: "could not parse input line".into(),
-        traces: vec![err::ErrorTrace {
+        traces: vec![err::Trace {
             loc,
             source: source.into(),
             desc: Some(cx.to_string()),
@@ -799,7 +799,7 @@ mod tests {
             err::Error {
                 cat: err::Category::Parsing,
                 desc: "could not parse input line".into(),
-                traces: vec![err::ErrorTrace {
+                traces: vec![err::Trace {
                     loc: Location::Shell,
                     source: source.into(),
                     desc: Some(cx.into()),

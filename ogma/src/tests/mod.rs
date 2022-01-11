@@ -667,7 +667,7 @@ fn inner_definition_error() {
         Err(Error {
             cat: Category::Evaluation,
             desc: "header `not-a-header` not found in table".into(),
-            traces: vec![ErrorTrace {
+            traces: vec![Trace {
                 loc: Location::file("some/file", 12),
                 source: "def gt10 (n) { get $n | > 10 }".into(),
                 desc: Some("`n` resolves to `not-a-header`".into()),

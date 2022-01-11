@@ -2,7 +2,7 @@
 use crate::prelude::*;
 use ::libs::divvy::Str;
 use ast::*;
-use err::ErrorTrace;
+use err::Trace;
 use lang::help::*;
 
 /// The working set of `ogma` definitions.
@@ -248,7 +248,7 @@ fn add_derived_impl(
 /// Recognise a string which defines an implementation or type.
 ///
 /// ```rust
-/// # use ogma::lang::defs::recognise_definition;
+/// # use ogma::lang::recognise_definition;
 /// assert!(recognise_definition("def foo-bar { }"));
 /// assert!(recognise_definition("def-ty Point { x:Num y:Num }"));
 /// assert!(!recognise_definition("foo-bar zog"));
@@ -283,7 +283,7 @@ pub fn process_definition<'a>(
         Err(Error {
             cat: err::Category::Parsing,
             desc: "a definition must start with `def` or `def-ty`".into(),
-            traces: vec![ErrorTrace {
+            traces: vec![Trace {
                 loc,
                 source: def.to_string(),
                 len: def.len(),
