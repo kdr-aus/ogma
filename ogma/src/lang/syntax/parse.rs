@@ -793,7 +793,7 @@ mod tests {
         len: usize,
     ) -> Result<T, ParseFail> {
         Err((
-            Error {
+            err::Error {
                 cat: err::Category::Parsing,
                 desc: "could not parse input line".into(),
                 traces: vec![err::ErrorTrace {

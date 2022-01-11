@@ -1,13 +1,13 @@
 //! Table expression system.
 #![warn(missing_docs)]
 
-mod common;
+pub mod common;
 #[cfg(test)]
 mod tests;
-mod lang;
-mod eng;
+pub mod lang;
+pub mod eng;
 pub mod rt;
-mod output;
+pub mod output;
 
 type HashMap<K, V> = libs::fxhash::FxHashMap<K, V>;
 type HashSet<T> = libs::fxhash::FxHashSet<T>;
@@ -24,8 +24,8 @@ mod prelude {
         types::{self, TableRow, Table, OgmaData, AsType, Value, Type, Tuple, Types},
         var::{self, Variable, Local},
     };
-    pub(crate) use super::common::err::{self, Error};
-    pub(crate) use super::output::print;
+    pub(crate) use super::common::{self, err::{self, Error}};
+    pub(crate) use super::output::{self, print};
     pub(crate) use super::eng;
     pub(crate) use super::rt;
 

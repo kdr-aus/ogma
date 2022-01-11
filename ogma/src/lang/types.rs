@@ -1035,7 +1035,7 @@ mod tests {
 
     #[test]
     fn tuple_parse_name_testing() {
-        let tys = crate::defs::Definitions::new();
+        let tys = crate::prelude::Definitions::new();
         assert_eq!(
             Some(Type::Def(Arc::new(Tuple::ty(vec![
                 Type::Nil,

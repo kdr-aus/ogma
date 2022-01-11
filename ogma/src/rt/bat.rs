@@ -120,7 +120,7 @@ fn work_out_type(code: &str) -> ItemType {
 ///
 /// # Example
 /// ```rust
-/// # use ogma::bat::*;
+/// # use ogma::rt::bat::*;
 /// let src = "#[no-fail-fast]
 ///
 /// def foo () { bar }

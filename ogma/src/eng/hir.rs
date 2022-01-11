@@ -673,8 +673,8 @@ supplied input type: {}",
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parsing::expression;
-    use crate::Location;
+    use lang::syntax::parse::expression;
+    use ast::Location;
 
     #[test]
     fn no_cmd_defined() {

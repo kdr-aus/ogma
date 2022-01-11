@@ -248,7 +248,7 @@ fn add_derived_impl(
 /// Recognise a string which defines an implementation or type.
 ///
 /// ```rust
-/// # use ogma::recognise_definition;
+/// # use ogma::lang::defs::recognise_definition;
 /// assert!(recognise_definition("def foo-bar { }"));
 /// assert!(recognise_definition("def-ty Point { x:Num y:Num }"));
 /// assert!(!recognise_definition("foo-bar zog"));
