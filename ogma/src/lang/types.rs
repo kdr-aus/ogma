@@ -1,7 +1,11 @@
-use super::{
-    ast::{self, DefinitionType, Location, Tag},
-    err, impls, parsing, Error, ErrorTrace, HashMap, HelpMessage, Mutex, Result,
-};
+use crate::{
+    HashMap, Mutex,
+    Result};
+    use crate:: lang::{
+        impls,
+        help::HelpMessage, syntax::{
+            parse, ast::{self, *}}};
+    use crate::common::err::{self, Error, ErrorTrace};
 use ::kserd::{Kserd, Number, ToKserd, ToKserdErr, Value as KValue};
 use ::libs::{
     divvy::Str,
@@ -180,7 +184,7 @@ impl AsType for $type {
     }
 }
 impl TryFrom<Value> for $type {
-    type Error = crate::Error;
+    type Error = Error;
     fn try_from(v: Value) -> Result<Self> {
         match v {
             Value::$var(x) => Ok(x),
@@ -189,7 +193,7 @@ impl TryFrom<Value> for $type {
     }
 }
 impl<'a> TryFrom<&'a Value> for &'a $type {
-    type Error = crate::Error;
+    type Error = Error;
     fn try_from(v: &'a Value) -> Result<Self> {
         match v {
             Value::$var(x) => Ok(x),
@@ -215,7 +219,7 @@ impl AsType for () {
     }
 }
 impl TryFrom<Value> for () {
-    type Error = crate::Error;
+    type Error = Error;
     fn try_from(v: Value) -> Result<Self> {
         match v {
             Value::Nil => Ok(()),
@@ -224,12 +228,12 @@ impl TryFrom<Value> for () {
     }
 }
 impl TryFrom<Value> for OgmaData {
-    type Error = crate::Error;
+    type Error = Error;
     fn try_from(v: Value) -> Result<Self> {
         match v {
             Value::Ogma(x) => Ok(x),
             x => Err(Error {
-                cat: crate::err::Category::Evaluation,
+                cat: err::Category::Evaluation,
                 desc: format!(
                     "converting value into `OgmaData` failed, value has type `{}`",
                     x.ty()
@@ -312,7 +316,7 @@ impl Types {
         help: Option<String>,
         impls: &mut impls::Implementations,
     ) -> Result<()> {
-        let def = parsing::definition_type(def, loc).map_err(|e| e.0)?;
+        let def = parse::definition_type(def, loc).map_err(|e| e.0)?;
         let ty = TypeDef::from_parsed_def(def, help, self)?;
         if self.contains_type(ty.name().str()) {
             // TODO allow overwriting type definitions. It will require:

@@ -1,10 +1,7 @@
-use super::{
-    ast::{Argument, Tag},
-    types::{Type, Value},
-    HashMap,
-};
 use ::libs::divvy::Str;
 use std::{cell::*, rc::Rc, sync::Arc};
+use crate::prelude::*;
+use ast::Argument;
 
 // ###### VARIABLE #############################################################
 #[derive(Debug, Clone)]

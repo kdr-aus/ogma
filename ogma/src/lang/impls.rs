@@ -1,14 +1,12 @@
-use super::{
-    ast::{DefinitionImpl, DotOperatorBlock, Tag},
-    hir::{Block, Context, Step},
-    types::{Type as Ty, *},
-    *,
-};
 use ::kserd::Number;
 use ::libs::{divvy::Str, fastrand, rayon::prelude::*};
 use ::table::Entry;
 use std::{
+    iter::*,
+    io::{self, Write},
     cell::RefCell,
+    fmt,
+    path,
     cmp,
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
@@ -16,6 +14,12 @@ use std::{
     rc::Rc,
     time::Instant,
 };
+use crate::prelude::*;
+use lang::help::*;
+use eng::{Context, Block, Step};
+use ast::{Tag, Location};
+use rt::fscache::FSCACHE;
+use Type as Ty;
 
 #[derive(Clone)]
 pub enum Implementation {
@@ -23,7 +27,7 @@ pub enum Implementation {
         loc: Location,
         f: Arc<dyn Fn(Block) -> Result<Step> + Send + Sync>,
     },
-    Definition(Box<DefinitionImpl>),
+    Definition(Box<ast::DefinitionImpl>),
 }
 
 impl Implementation {
@@ -145,9 +149,9 @@ impl Default for Implementations {
         add!(get, Pipeline);
         add!(
             ".",
-            DotOperatorBlock::instrinsic,
+            ast::DotOperatorBlock::instrinsic,
             Pipeline,
-            DotOperatorBlock::help
+            ast::DotOperatorBlock::help
         );
         add!("\\", in, Pipeline);
         add!(len, Pipeline);
@@ -229,7 +233,7 @@ impl Implementations {
     pub fn insert_impl<I>(
         &mut self,
         in_ty: I,
-        def: DefinitionImpl,
+        def: ast::DefinitionImpl,
         cat: OperationCategory,
         help: HelpMessage,
     ) -> Result<()>
@@ -297,7 +301,7 @@ type InnerTable = ::table::Table<Value>;
 fn variadic_intrinsic<T, F>(mut blk: Block, aggfn: F) -> Result<Step>
 where
     T: AsType + Into<Value> + 'static,
-    T: TryFrom<Value, Error = crate::Error>,
+    T: TryFrom<Value, Error = Error>,
     F: Fn(Option<T>, T) -> (T, bool) + Sync + 'static,
 {
     let len = blk.args_len();
@@ -405,10 +409,10 @@ where
     F: Fn(&mut T, &mut Context, TableRow) -> Result<()> + Sync,
     T: Send,
 {
-    let err = Mutex::new(None);
+    let err = crate::Mutex::new(None);
     buf.par_iter_mut().enumerate().skip(1).for_each_init(
         || (Default::default(), cx.clone()),
-        |(colmap, cx): &mut (TableRowColMap, _), (row, x)| {
+        |(colmap, cx): &mut (types::TableRowColMap, _), (row, x)| {
             let trow = TableRow::new(table.clone(), colmap.clone(), row);
             if let Err(e) = f(x, cx, trow) {
                 *err.lock() = Some(e);
@@ -424,7 +428,7 @@ where
 /// Create an argument list where each argument expects Nil input and resolves to a Str.
 /// This is intended for cmds that take a variadic column names.
 struct ColNameArgs {
-    names: Vec<hir::Argument>,
+    names: Vec<eng::Argument>,
 }
 
 impl ColNameArgs {
@@ -510,7 +514,7 @@ fn cnv_num_to_uint<T: TryFrom<u128>>(val: Value, tag: &Tag) -> Result<T> {
 /// Applies the expression to each row in the table (in parallel).
 /// The vector is indexed to the table **(including the header)**.
 /// **Uses TableRow as input**.
-fn resolve_trow_expr_par(table: &Table, expr: &hir::Argument, cx: &Context) -> Result<Vec<Value>> {
+fn resolve_trow_expr_par(table: &Table, expr: &eng::Argument, cx: &Context) -> Result<Vec<Value>> {
     let mut values: Vec<_> = repeat(Value::Nil).take(table.rows_len()).collect();
     par_over_tablerows(&mut values, table, cx, |v, cx, trow| {
         *v = expr.resolve(|| trow.into(), cx)?;
@@ -526,7 +530,7 @@ fn resolve_trow_expr_par(table: &Table, expr: &hir::Argument, cx: &Context) -> R
 struct BinaryOp<T> {
     env: var::Environment,
     rhs: var::Variable,
-    evaluator: hir::ExprEvaluator,
+    evaluator: eng::ExprEvaluator,
     transformation: T,
 }
 
@@ -563,14 +567,14 @@ impl<T> BinaryOp<T> {
         // this uses the pseudo-env and the expr we construct, with an input of the type.
         // if the impl of <cmd> on type does not conform to expectations an error will occur
         let evaluator =
-            hir::construct_evaluator(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
+            eng::construct_evaluator(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
                 Error {
                     cat: err::Category::Semantics,
                     desc: format!(
                         "`{}` implementation not suitable for `{}` with `{}`",
                         cmd, caller, ty
                     ),
-                    traces: vec![ErrorTrace::from_tag(
+                    traces: vec![err::ErrorTrace::from_tag(
                         errtag,
                         format!("this returns `{}`", ty),
                     )],
@@ -583,7 +587,7 @@ impl<T> BinaryOp<T> {
 
         if evaluator.ty() != out_ty {
             let mut err = Error::unexp_arg_ty(out_ty, evaluator.ty(), evaluator.tag());
-            err.traces.push(ErrorTrace::from_tag(
+            err.traces.push(err::ErrorTrace::from_tag(
                 errtag,
                 format!("`{}`'s {} impl returns `{}`", ty, cmd, evaluator.ty()),
             ));
@@ -670,7 +674,7 @@ fn cnv_value_to_ord(v: Value) -> cmp::Ordering {
 }
 
 // ------ Expr Impl ------------------------------------------------------------
-pub fn usr_impl_help(def: &DefinitionImpl) -> HelpMessage {
+pub fn usr_impl_help(def: &ast::DefinitionImpl) -> HelpMessage {
     let desc: Str = format!("user defined implementation in {}\n`{}`", def.loc, def.src).into();
 
     let params = def
@@ -694,14 +698,14 @@ pub fn usr_impl_help(def: &DefinitionImpl) -> HelpMessage {
 }
 
 // ------ TypeDef Init ---------------------------------------------------------
-pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<TypeDef>) {
+pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<types::TypeDef>) {
     fn insert_intrinsic(
         impls: &mut Implementations,
         op: Str,
         loc: Location,
-        tydef: Arc<TypeDef>,
+        tydef: Arc<types::TypeDef>,
         variant_idx: usize,
-        fields: Vec<Field>,
+        fields: Vec<types::Field>,
         help: HelpMessage,
     ) {
         impls.insert_intrinsic(
@@ -719,7 +723,7 @@ pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<TypeDef>) 
     // This needs to happen.
 
     match tydef.structure() {
-        TypeVariant::Sum(variants) => {
+        types::TypeVariant::Sum(variants) => {
             for (idx, variant) in variants.iter().enumerate() {
                 let help = typedef_init_help(&tydef);
                 let op = format!("{}::{}", tydef.name(), variant.name).into();
@@ -728,7 +732,7 @@ pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<TypeDef>) 
                 insert_intrinsic(impls, op, loc, tydef.clone(), idx, fields, help);
             }
         }
-        TypeVariant::Product(fields) => {
+        types::TypeVariant::Product(fields) => {
             let help = typedef_init_help(&tydef);
             let fields = fields.clone();
             let loc = tydef.loc.clone();
@@ -739,9 +743,9 @@ pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<TypeDef>) 
 
 fn typedef_init(
     mut blk: Block,
-    tydef: Arc<TypeDef>,
+    tydef: Arc<types::TypeDef>,
     variant_idx: usize,
-    fields: &[Field],
+    fields: &[types::Field],
 ) -> Result<Step> {
     let mut value_places = Vec::with_capacity(fields.len());
     for field in fields {
@@ -758,17 +762,17 @@ fn typedef_init(
     })
 }
 
-fn typedef_init_help(ty: &TypeDef) -> HelpMessage {
+fn typedef_init_help(ty: &types::TypeDef) -> HelpMessage {
     let desc = format!("initialise a `{}`", ty.name()).into();
-    let map_field = |f: &Field| HelpParameter::Required(format!("{}:{}", f.name(), f.ty()).into());
+    let map_field = |f: &types::Field| HelpParameter::Required(format!("{}:{}", f.name(), f.ty()).into());
 
     match ty.structure() {
-        TypeVariant::Product(fields) => HelpMessage {
+        types::TypeVariant::Product(fields) => HelpMessage {
             desc,
             params: fields.iter().map(map_field).collect(),
             ..HelpMessage::new(Str::new(ty.name()))
         },
-        TypeVariant::Sum(variants) => {
+        types::TypeVariant::Sum(variants) => {
             let mut params = Vec::new();
             for variant in variants {
                 params.push(HelpParameter::Custom(format!("::{}", variant.name).into()));
@@ -991,7 +995,7 @@ fn append_intrinsic(mut blk: Block) -> Result<Step> {
     })
 }
 
-fn append_table(mut table: Table, cx: &Context, with: &[(hir::Argument, Str)]) -> Result<Table> {
+fn append_table(mut table: Table, cx: &Context, with: &[(eng::Argument, Str)]) -> Result<Table> {
     let rows = table.rows_len();
     // seed column buffers
     let mut to_append = with
@@ -1008,7 +1012,7 @@ fn append_table(mut table: Table, cx: &Context, with: &[(hir::Argument, Str)]) -
 
     // calculate appending values
     // parallelised over the expressions _and_ the rows
-    let err = Mutex::new(None);
+    let err = crate::Mutex::new(None);
     to_append
         .par_iter_mut()
         .enumerate()
@@ -1193,7 +1197,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         Ty::Def(x) if x.as_ref() == "Ord" => {
-            let ordty = Type::Def(ORD.get());
+            let ordty = Type::Def(types::ORD.get());
             let rhs = blk.next_arg(None)?.returns(&ordty)?;
             // cmp Ord to Ord returns another Ord
             blk.eval_o(move |lhs, cx| {
@@ -1204,15 +1208,15 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
         }
         Ty::Def(x) if x.name().str().starts_with("U_") => {
             let els = match x.structure() {
-                TypeVariant::Product(x) => x.len(),
+                types::TypeVariant::Product(x) => x.len(),
                 _ => 0,
             };
             blk.next_arg_do_not_remove(None)?.returns(blk.in_ty())?; // this checks same lhs=rhs type
             let def =
-                &parsing::definition_impl(build_tuple_cmp_def_str(els), Location::Ogma, blk.defs)
+                &lang::syntax::parse::definition_impl(build_tuple_cmp_def_str(els), Location::Ogma, blk.defs)
                     .map_err(|(e, _)| e)?;
-            let ordty = Ty::Def(ORD.get());
-            let evaltr = hir::DefImplEvaluator::build(&mut blk, def)?.returns(&ordty)?;
+            let ordty = Ty::Def(types::ORD.get());
+            let evaltr = eng::DefImplEvaluator::build(&mut blk, def)?.returns(&ordty)?;
             blk.eval(ordty, move |input, cx| {
                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
             })
@@ -1344,7 +1348,7 @@ fn div_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Dot Op ---------------------------------------------------------------
-impl DotOperatorBlock {
+impl ast::DotOperatorBlock {
     fn help() -> HelpMessage {
         HelpMessage {
             desc: "extract a value out of a structure using infix operator".into(),
@@ -1439,7 +1443,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         Ty::Def(x) if x.as_ref() == "Ord" => {
-            let ordty = Type::Def(ORD.get());
+            let ordty = Type::Def(types::ORD.get());
             let rhs = blk.next_arg(None)?.returns(&ordty)?;
             blk.eval_o(move |lhs, cx| {
                 let lhs_variant = lhs.variant_idx().expect("Ord type");
@@ -1449,14 +1453,14 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
         }
         Ty::Def(x) if x.name().str().starts_with("U_") => {
             let els = match x.structure() {
-                TypeVariant::Product(x) => x.len(),
+                types::TypeVariant::Product(x) => x.len(),
                 _ => 0,
             };
             blk.next_arg_do_not_remove(None)?.returns(blk.in_ty())?; // this checks same lhs=rhs type
             let def =
-                &parsing::definition_impl(build_tuple_eq_def_str(els), Location::Ogma, blk.defs)
+                &lang::syntax::parse::definition_impl(build_tuple_eq_def_str(els), Location::Ogma, blk.defs)
                     .map_err(|(e, _)| e)?;
-            let evaltr = hir::DefImplEvaluator::build(&mut blk, def)?.returns(&Ty::Bool)?;
+            let evaltr = eng::DefImplEvaluator::build(&mut blk, def)?.returns(&Ty::Bool)?;
             blk.eval(Ty::Bool, move |input, cx| {
                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
             })
@@ -1533,8 +1537,8 @@ fn filter_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 struct FilterTable {
-    expr_predicate: hir::Argument,
-    col: Option<hir::Argument>,
+    expr_predicate: eng::Argument,
+    col: Option<eng::Argument>,
     exp_ty: Type,
 }
 
@@ -1719,7 +1723,7 @@ fn fold_intrinsic(mut blk: Block) -> Result<Step> {
 
             blk.eval(out_ty, move |table, mut cx| {
                 let table: Table = table.try_into()?;
-                let colmap = TableRowColMap::default();
+                let colmap = types::TableRowColMap::default();
                 let mut x = seed.resolve(|| Value::Nil, &cx)?;
                 for idx in 1..table.rows_len() {
                     let trow = TableRow::new(table.clone(), colmap.clone(), idx);
@@ -1766,7 +1770,7 @@ fn fold_while_intrinsic(mut blk: Block) -> Result<Step> {
 
             blk.eval(out_ty, move |table, mut cx| {
                 let table: Table = table.try_into()?;
-                let colmap = TableRowColMap::default();
+                let colmap = types::TableRowColMap::default();
                 let mut x = seed.resolve(|| Value::Nil, &cx)?;
                 for idx in 1..table.rows_len() {
                     let met = acc_predicate
@@ -1849,7 +1853,7 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 enum TableGetType {
-    Default(hir::Argument),
+    Default(eng::Argument),
     Flag(Type),
 }
 
@@ -1864,7 +1868,7 @@ impl TableGetType {
 
 fn table_row_get(
     trow: &TableRow,
-    colarg: &hir::Argument,
+    colarg: &eng::Argument,
     ty: &TableGetType,
     cx: Context,
 ) -> Result<(Value, var::Environment)> {
@@ -1891,19 +1895,19 @@ struct FieldAccessor(usize);
 impl FieldAccessor {
     /// Construct a field accessor for the type `ty`. Returns the accessor and the return type of
     /// the field.
-    fn construct(ty: &Type, field_arg: &hir::Argument, err_tag: &Tag) -> Result<(Self, Type)> {
+    fn construct(ty: &Type, field_arg: &eng::Argument, err_tag: &Tag) -> Result<(Self, Type)> {
         match ty {
             Ty::Def(tydef) => {
                 // TypeDefs can use `get` to access a field, so only works for product types.
                 // The field is checked, then the accessor index is passed through for the eval Step
-                if !matches!(tydef.structure(), TypeVariant::Product(_)) {
+                if !matches!(tydef.structure(), types::TypeVariant::Product(_)) {
                     let mut err = Error::wrong_input_type(ty, err_tag);
                     err.help_msg = Some("types with `sum` structure cannot be queried into".into());
                     return Err(err);
                 }
 
                 let fields = match tydef.structure() {
-                    TypeVariant::Product(fields) => fields,
+                    types::TypeVariant::Product(fields) => fields,
                     _ => unreachable!("just checked that we are on Product type"),
                 };
 
@@ -1982,7 +1986,7 @@ fn grp_intrinsic(mut blk: Block) -> Result<Step> {
                     if !k.is_empty() {
                         k.push('-');
                     }
-                    k.push_str(&super::fmt_cell(e, fmtr));
+                    k.push_str(&print::fmt_cell(e, fmtr));
                     k
                 });
             let t = map.entry(key).or_insert_with(|| {
@@ -2043,7 +2047,7 @@ fn grpby_intrinsic(mut blk: Block) -> Result<Step> {
 
     // the expression which will be grouped on
     let key = blk.next_arg(Ty::TabRow)?;
-    let ordty = Ty::Def(ORD.get());
+    let ordty = Ty::Def(types::ORD.get());
     let cmpr = BinaryOp::new(
         "cmp",
         key.out_ty(),
@@ -2165,8 +2169,8 @@ fn if_intrinsic(mut blk: Block) -> Result<Step> {
     }
 
     struct Cond {
-        pred: hir::Argument,
-        expr: hir::Argument,
+        pred: eng::Argument,
+        expr: eng::Argument,
     }
 
     let mut args = Vec::with_capacity(args / 2);
@@ -2346,7 +2350,7 @@ variables are scoped to within the expression they are defined"
 }
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
-    type Binding = (var::Variable, hir::Argument);
+    type Binding = (var::Variable, eng::Argument);
     let mut bindings = Vec::with_capacity(blk.args_len() / 2);
 
     while blk.args_len() > 1 {
@@ -2445,7 +2449,7 @@ fn ls_intrinsic(mut blk: Block) -> Result<Step> {
     }
 }
 
-fn make_dir_table<P: AsRef<Path>>(dir: P, blk_tag: &Tag) -> Result<Table> {
+fn make_dir_table<P: AsRef<std::path::Path>>(dir: P, blk_tag: &Tag) -> Result<Table> {
     use std::iter::*;
     use Entry::*;
 
@@ -2544,8 +2548,8 @@ fn map_intrinsic(blk: Block) -> Result<Step> {
 
 struct MapTable {
     /// Expecting TableRow.
-    transformation: hir::Argument,
-    colarg: hir::Argument,
+    transformation: eng::Argument,
+    colarg: eng::Argument,
     colty: Option<Type>,
     row_var: var::Variable,
 }
@@ -2861,7 +2865,7 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 /// Read a file to a String, but not necessarily from UTF-8
-fn read_file(path: impl AsRef<Path>) -> io::Result<String> {
+fn read_file(path: impl AsRef<std::path::Path>) -> io::Result<String> {
     use ::encoding::{all::UTF_8, decode, DecoderTrap};
 
     decode(&std::fs::read(path)?, DecoderTrap::Strict, UTF_8)
@@ -3001,7 +3005,7 @@ fn rand_intrinsic(mut blk: Block) -> Result<Step> {
         _ => (None, None, None),
     };
 
-    fn bnd(arg: Option<&hir::Argument>, i: &mut Value, cx: &Context, def: f64) -> Result<f64> {
+    fn bnd(arg: Option<&eng::Argument>, i: &mut Value, cx: &Context, def: f64) -> Result<f64> {
         match arg {
             Some(x) => Ok(Number::try_from(x.resolve(|| i.clone(), cx)?)?.as_f64()),
             None => Ok(def),
@@ -3136,8 +3140,8 @@ each binding takes the form `<col-ref> <name>`
 
 fn ren_intrinsic(mut blk: Block) -> Result<Step> {
     enum Ref {
-        Name(hir::Argument),
-        Idx(hir::Argument),
+        Name(eng::Argument),
+        Idx(eng::Argument),
     }
     // hdrs and names take Nil input.
     let mut hdrs: Vec<Ref> = Vec::with_capacity(blk.args_len() / 2);
@@ -3419,7 +3423,7 @@ fn save_intrinsic(mut blk: Block) -> Result<Step> {
     })
 }
 
-fn mkdirs<P: AsRef<Path>>(p: P) -> io::Result<()> {
+fn mkdirs<P: AsRef<std::path::Path>>(p: P) -> io::Result<()> {
     let p = p.as_ref();
     if let Some(p) = p.parent() {
         if !p.exists() {
@@ -3439,7 +3443,7 @@ fn write_file<W: Write>(file: &mut W, value: Value) -> io::Result<()> {
         match entry {
             Entry::Obj(Value::Nil) | Entry::Nil => Ok(()), // don't write anything
             e => {
-                let s = super::fmt_cell(e, fmtr);
+                let s = print::fmt_cell(e, fmtr);
                 // if s contains commas or new lines need to escape it.
                 if s.contains(&[',', '"', '\r', '\n'] as &[_]) {
                     write!(wtr, "\"{}\"", s.escape_debug())
@@ -3470,7 +3474,7 @@ fn write_file<W: Write>(file: &mut W, value: Value) -> io::Result<()> {
             }
         }
         x => {
-            let x = super::fmt_cell(&Entry::from(x), fmtr);
+            let x = print::fmt_cell(&Entry::from(x), fmtr);
             write!(file, "{}", x)?;
         }
     }
@@ -3658,7 +3662,7 @@ fn sortby_intrinsic(mut blk: Block) -> Result<Step> {
     // the expression which will be sorted on
     let key = blk.next_arg(Ty::TabRow)?;
 
-    let ordty = Ty::Def(ORD.get());
+    let ordty = Ty::Def(types::ORD.get());
     let cmpr = BinaryOp::new(
         "cmp",
         key.out_ty(),
@@ -3862,7 +3866,7 @@ fn to_str_help() -> HelpMessage {
 
 fn to_str_intrinsic(blk: Block) -> Result<Step> {
     blk.eval_o(|v, cx| {
-        cx.done_o(super::fmt_cell(
+        cx.done_o(print::fmt_cell(
             &Entry::from(v),
             &mut numfmt::Formatter::default(),
         ))

@@ -1,7 +1,7 @@
-use super::{
-    ast::*,
+use crate::lang::{
+    help::*,
     types::{Type, TypeDef},
-    Error, ErrorTrace,
+    syntax::ast::*,
 };
 use ::libs::colored::*;
 use std::{
@@ -32,6 +32,82 @@ macro_rules! colourln {
             writeln!($wtr, "{}", format!($s, $($tokens)*))
         }
     }};
+}
+
+
+/// Processing error.
+///
+/// Errors are printed like so:
+/// ```shell
+/// Category: description
+/// --> location:column-num
+///  | source line { }
+///  |        ^^^^ short description
+/// --> help: help message
+/// ```
+#[derive(Debug, PartialEq)]
+pub struct Error {
+    pub cat: Category,
+    pub desc: String,
+    pub traces: Vec<ErrorTrace>,
+    pub help_msg: Option<String>,
+}
+
+// TODO rename to Trace
+#[derive(Debug, PartialEq)]
+pub struct ErrorTrace {
+    pub loc: Location,
+    pub source: String,
+    pub desc: Option<String>,
+    pub start: usize,
+    pub len: usize,
+}
+
+pub fn help_as_error(msg: &HelpMessage) -> Error {
+    use fmt::Write;
+
+    let cmd = msg.cmd.as_str();
+    let mut source = format!("{}\n\nUsage:\n => {}", msg.desc, cmd);
+
+    for param in &msg.params {
+        let brk = matches!(param, HelpParameter::Break);
+        if brk {
+            write!(source, "\n => {}", cmd).ok();
+        }
+        if !msg.no_space {
+            source.push(' ');
+        }
+        if !brk {
+            param.write(&mut source);
+        }
+    }
+
+    if !msg.flags.is_empty() {
+        source.push_str("\n\nFlags:");
+        for (name, desc) in &msg.flags {
+            source.push_str("\n --");
+            source.push_str(name);
+            source.push_str(": ");
+            source.push_str(desc);
+        }
+    }
+
+    if !msg.examples.is_empty() {
+        source.push_str("\n\nExamples:");
+        for example in &msg.examples {
+            write!(source, "\n {}\n => {}\n", example.desc, example.code).ok();
+        }
+    }
+
+    Error {
+        cat: Category::Help,
+        desc: format!("`{}`", cmd),
+        help_msg: None,
+        traces: vec![ErrorTrace {
+            source,
+            ..Default::default()
+        }],
+    }
 }
 
 // ###### ERROR ################################################################
@@ -271,7 +347,7 @@ expected `{}`, found `{}`",
 
     pub(crate) fn conversion_failed(exp: &Type, found: &Type) -> Self {
         Error {
-            cat: crate::err::Category::Evaluation,
+            cat: Category::Evaluation,
             desc: format!(
                 "converting value into `{}` failed, value has type `{}`",
                 exp, found
