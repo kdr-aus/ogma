@@ -1,18 +1,12 @@
-use crate::common::err::{self, Error, ErrorTrace};
-use crate::lang::{
-    help::HelpMessage,
-    impls,
-    syntax::{
-        ast::{self, *},
-        parse,
-    },
-};
-use crate::{HashMap, Mutex, Result};
+use crate::prelude::*;
+use crate::Mutex;
 use ::kserd::{Kserd, Number, ToKserd, ToKserdErr, Value as KValue};
 use ::libs::{
     divvy::Str,
     parking_lot::{const_rwlock, RwLock},
 };
+use ast::Location;
+use lang::help::HelpMessage;
 use std::{convert::TryFrom, fmt, hash, ops, sync::Arc};
 use table::Entry;
 
@@ -264,7 +258,7 @@ pub struct Types {
 }
 
 impl Types {
-    pub fn init(impls: &mut impls::Implementations) -> Self {
+    pub fn init(impls: &mut Implementations) -> Self {
         let mut map = HashMap::default();
 
         map.insert(Str::from("Nil"), Type::Nil);
@@ -316,9 +310,9 @@ impl Types {
         def: &str,
         loc: Location,
         help: Option<String>,
-        impls: &mut impls::Implementations,
+        impls: &mut Implementations,
     ) -> Result<()> {
-        let def = parse::definition_type(def, loc).map_err(|e| e.0)?;
+        let def = lang::syntax::parse::definition_type(def, loc).map_err(|e| e.0)?;
         let ty = TypeDef::from_parsed_def(def, help, self)?;
         if self.contains_type(ty.name().str()) {
             // TODO allow overwriting type definitions. It will require:
@@ -331,7 +325,7 @@ impl Types {
             Err(Error {
                 cat: err::Category::Semantics,
                 desc: format!("can not redefine type `{}`", name),
-                traces: vec![ErrorTrace::from_tag(
+                traces: vec![err::ErrorTrace::from_tag(
                     name,
                     format!("`{}` already defined", name),
                 )],
@@ -340,7 +334,7 @@ impl Types {
         } else {
             let ty = Arc::new(ty);
             self.insert_inner(ty.clone());
-            impls::add_typedef_init_impls(impls, ty);
+            lang::impls::add_typedef_init_impls(impls, ty);
             Ok(())
         }
     }
@@ -400,11 +394,11 @@ pub struct Field {
 
 impl TypeDef {
     pub fn from_parsed_def(
-        def: DefinitionType,
+        def: ast::DefinitionType,
         help: Option<String>,
         types: &Types,
     ) -> Result<Self> {
-        let DefinitionType { loc, src, name, ty } = def;
+        let ast::DefinitionType { loc, src, name, ty } = def;
         let ty: TypeVariant = match ty {
             ast::TypeVariant::Sum(variants) => {
                 let mut v = Vec::with_capacity(variants.len());
@@ -895,6 +889,7 @@ impl<'a> Split<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lang::types::Field;
     use Type::*;
 
     #[test]

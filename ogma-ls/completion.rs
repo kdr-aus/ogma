@@ -1,7 +1,7 @@
 //! Ogma completions handling.
 
 use crate::Workspace as Wsp;
-use ogma::ast::Tag;
+use ogma::lang::syntax::ast::{self, Tag};
 use std::path::Path;
 
 // ###### DEF ##################################################################
@@ -81,7 +81,7 @@ fn incomplete_completions(
     working_dir: Option<&Path>,
     incomplete: Incomplete,
 ) -> Option<Vec<Def>> {
-    use ogma::Expecting as Exp;
+    use ogma::lang::syntax::parse::Expecting as Exp;
 
     match incomplete.exp {
         Exp::Impl => Some(cmpls(wsp, line, working_dir, Items::IMPLS)),
@@ -218,7 +218,7 @@ pub struct Incomplete {
     /// The `ogma` error that was returned.
     pub err: ogma::Error,
     /// The expectation of the node if parsing failed.
-    pub exp: ogma::Expecting,
+    pub exp: ogma::lang::syntax::parse::Expecting,
 }
 
 /// A rudimentary AST node.
@@ -293,7 +293,7 @@ fn is_node(tag: &Tag, pos: usize, ty: NodeType) -> Option<Node> {
 
 use NodeType as NT;
 
-impl Complete for ogma::ast::DefinitionImpl {
+impl Complete for ast::DefinitionImpl {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
         if pos < self.name.start {
             // use the previous tag to the `def` command
@@ -334,9 +334,9 @@ impl Complete for ogma::ast::DefinitionImpl {
     }
 }
 
-impl Complete for ogma::ast::DefinitionType {
+impl Complete for ast::DefinitionType {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
-        use ogma::ast::TypeVariant::*;
+        use ast::TypeVariant::*;
 
         if pos < self.name.start {
             // use the previous tag to the `def-ty` command
@@ -353,7 +353,7 @@ impl Complete for ogma::ast::DefinitionType {
     }
 
     fn append_leaves(&self, mut buf: Vec<Node>) -> Vec<Node> {
-        use ogma::ast::TypeVariant::*;
+        use ast::TypeVariant::*;
 
         buf.push(Node::new(
             {
@@ -384,7 +384,7 @@ impl Complete for ogma::ast::DefinitionType {
     }
 }
 
-impl Complete for ogma::ast::Expression {
+impl Complete for ast::Expression {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
         if !self.tag.range().contains(&pos) {
             None
@@ -401,7 +401,7 @@ impl Complete for ogma::ast::Expression {
     }
 }
 
-impl Complete for ogma::ast::Block {
+impl Complete for ast::Block {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
         if !self.block_tag().range().contains(&pos) {
             return None;
@@ -420,9 +420,9 @@ impl Complete for ogma::ast::Block {
     }
 }
 
-impl Complete for ogma::ast::Term {
+impl Complete for ast::Term {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
-        use ogma::ast::Term::*;
+        use ast::Term::*;
         match self {
             Arg(arg) => arg.node_at_pos(pos),
             Flag(tag) => is_node(tag, pos, NT::Flag),
@@ -430,7 +430,7 @@ impl Complete for ogma::ast::Term {
     }
 
     fn append_leaves(&self, mut buf: Vec<Node>) -> Vec<Node> {
-        use ogma::ast::Term::*;
+        use ast::Term::*;
         match self {
             Arg(arg) => arg.append_leaves(buf),
             Flag(tag) => {
@@ -441,9 +441,9 @@ impl Complete for ogma::ast::Term {
     }
 }
 
-impl Complete for ogma::ast::Argument {
+impl Complete for ast::Argument {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
-        use ogma::ast::Argument::*;
+        use ast::Argument::*;
         match self {
             Ident(t) => is_node(t, pos, NT::Ident),
             Num(_, t) => is_node(t, pos, NT::Num),
@@ -454,7 +454,7 @@ impl Complete for ogma::ast::Argument {
     }
 
     fn append_leaves(&self, mut buf: Vec<Node>) -> Vec<Node> {
-        use ogma::ast::Argument::*;
+        use ast::Argument::*;
         let (t, nt) = match self {
             Ident(t) => (t, NT::Ident),
             Num(_, t) => (t, NT::Num),
@@ -467,7 +467,7 @@ impl Complete for ogma::ast::Argument {
     }
 }
 
-impl Complete for ogma::ast::Parameter {
+impl Complete for ast::Parameter {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
         is_node(&self.ident, pos, NT::Parameter)
     }
@@ -478,7 +478,7 @@ impl Complete for ogma::ast::Parameter {
     }
 }
 
-impl Complete for ogma::ast::Field {
+impl Complete for ast::Field {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
         is_node(&self.name, pos, NT::Field)
             .or_else(|| is_node(&self.ty, pos, NT::Type))
@@ -499,7 +499,7 @@ impl Complete for ogma::ast::Field {
     }
 }
 
-impl Complete for ogma::ast::Variant {
+impl Complete for ast::Variant {
     fn node_at_pos(&self, pos: usize) -> Option<Node> {
         is_node(&self.name, pos, NT::Variant).or_else(|| {
             self.fields

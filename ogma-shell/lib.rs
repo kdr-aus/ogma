@@ -1,7 +1,10 @@
 //! A terminal interface for `ogma`.
 #![warn(missing_docs)]
 use ::libs::{colored::*, divvy::*, fxhash::FxHashMap as HashMap};
-use ogma::bat::Batch;
+use ogma::{
+    lang::{syntax::ast::Location, Value},
+    rt::bat::Batch,
+};
 use ogma_ls::{completion::Node, Workspace};
 use std::{
     fmt::Write as _,
@@ -157,14 +160,14 @@ impl RunState {
                 Ok(b) => self.process_batch(tabid, cancelled, buf, b),
                 Err(e) => (writeln!(buf, "{}", e.to_string().bright_red()).ok(), ()).1,
             }
-        } else if ogma::recognise_definition(&input) {
+        } else if ogma::lang::defs::recognise_definition(&input) {
             if input.contains(" --load") {
                 // load defs from the paths defined
                 self.load_defs_files(buf);
             } else {
                 let r = {
                     let defs = &mut self.wsp.defs.write();
-                    ogma::process_definition(&input, ogma::Location::Shell, None, defs)
+                    ogma::lang::defs::process_definition(&input, Location::Shell, None, defs)
                 };
                 match r {
                     Ok((input, Some(code))) => {
@@ -242,7 +245,7 @@ impl RunState {
                     path.display(),
                     format!("parsed in {} definitions", n).bright_green()
                 ),
-                Err(e) => ogma::print_error(&e, &mut buf),
+                Err(e) => ogma::output::print::print_error(&e, &mut buf),
             }
             .ok();
         }
@@ -292,14 +295,14 @@ impl RunState {
         cancelled: Switch,
         buf: W,
         expr: String,
-        input: ::ogma::Value,
+        input: ::ogma::lang::Value,
     ) {
-        use ::ogma::{process_expression as proc, Value::*};
+        use ::ogma::{lang::Value::*, rt::process_expression as proc};
         let wsp = self.wsp.clone();
         self.process_seq(tab_id, cancelled, buf, move |cx| {
             let d = &wsp.defs.read();
             let e = expr;
-            let l = ogma::Location::Shell;
+            let l = Location::Shell;
             let root = cx.root;
             let wd = cx.wd;
             let r = match input {
@@ -333,7 +336,7 @@ impl RunState {
             (r, None)
         };
         self.validate_path(tab_id, r)
-            .and_then(ogma::bat::parse_file)
+            .and_then(ogma::rt::bat::parse_file)
             .map(|mut batch| {
                 if let Some(x) = parallelise {
                     batch.parallelise = x;
@@ -346,14 +349,14 @@ impl RunState {
     }
 
     fn process_batch<W: Write>(&mut self, tab_id: TabId, cancelled: Switch, buf: W, batch: Batch) {
-        use ogma::bat::Outcome::*;
+        use ogma::rt::bat::Outcome::*;
         let defs = self.wsp.defs.read().clone();
         self.process_seq(tab_id, cancelled, buf, move |cx| {
             let report = || batch.items.iter().map(|i| (i.line, i.ty()));
             let root = cx.root;
             let wd = cx.wd;
             let prg = cx.progress;
-            let outcomes = ogma::bat::process(&batch, root, wd, prg, defs);
+            let outcomes = ogma::rt::bat::process(&batch, root, wd, prg, defs);
 
             let mut buffer = Vec::new();
             let buf = &mut buffer;
@@ -376,15 +379,19 @@ impl RunState {
                 })
             {
                 writeln!(buf, "--- Error line {} :: {:?} ---", line, ty).ok();
-                ogma::print_error(&err, buf).ok();
+                ogma::output::print::print_error(&err, buf).ok();
             }
             String::from_utf8(buffer).expect("all written output should be utf8")
         })
     }
 }
 
-fn write_result<W: Write>(res: Result<ogma::Value, ogma::Error>, wsp: &Workspace, mut wtr: W) {
-    use ogma::*;
+fn write_result<W: Write>(
+    res: Result<ogma::lang::Value, ogma::Error>,
+    wsp: &Workspace,
+    mut wtr: W,
+) {
+    use ogma::output::print::*;
     match res {
         Ok(output) => match output {
             Value::Nil => write!(wtr, "()"),
