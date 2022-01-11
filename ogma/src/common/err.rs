@@ -46,9 +46,13 @@ macro_rules! colourln {
 /// ```
 #[derive(Debug, PartialEq)]
 pub struct Error {
+    /// Category of error.
     pub cat: Category,
+    /// Error description.
     pub desc: String,
+    /// Error backtrace.
     pub traces: Vec<ErrorTrace>,
+    /// Optional help message.
     pub help_msg: Option<String>,
 }
 

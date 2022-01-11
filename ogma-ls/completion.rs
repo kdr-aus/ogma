@@ -1,7 +1,7 @@
 //! Ogma completions handling.
 
 use crate::Workspace as Wsp;
-use ogma::lang::syntax::ast::{self, Tag};
+use ogma::lang::ast::{self, Tag};
 use std::path::Path;
 
 // ###### DEF ##################################################################
@@ -81,7 +81,7 @@ fn incomplete_completions(
     working_dir: Option<&Path>,
     incomplete: Incomplete,
 ) -> Option<Vec<Def>> {
-    use ogma::lang::syntax::parse::Expecting as Exp;
+    use ogma::lang::parse::Expecting as Exp;
 
     match incomplete.exp {
         Exp::Impl => Some(cmpls(wsp, line, working_dir, Items::IMPLS)),
@@ -218,7 +218,7 @@ pub struct Incomplete {
     /// The `ogma` error that was returned.
     pub err: ogma::Error,
     /// The expectation of the node if parsing failed.
-    pub exp: ogma::lang::syntax::parse::Expecting,
+    pub exp: ogma::lang::parse::Expecting,
 }
 
 /// A rudimentary AST node.

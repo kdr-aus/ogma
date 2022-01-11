@@ -1,7 +1,7 @@
 use super::{completion::*, *};
 use ::libs::{fxhash::FxHashMap as HashMap, parking_lot::RwLock};
 use lsp_types::{TextDocumentContentChangeEvent, Url};
-use ogma::lang::{syntax::ast::Tag, Definitions};
+use ogma::lang::{ast::Tag, Definitions};
 use std::{collections::VecDeque, sync::Arc};
 
 type Version = i32;
@@ -88,8 +88,8 @@ impl Workspace {
     /// of expression. If it cannot parse, [`Incomplete`] is returned, which can still provide some
     /// information as to what is expected.
     pub fn parse(&self, input: &str) -> Result<Box<dyn Complete>, Incomplete> {
-        use ogma::lang::syntax::parse::ParseSuccess::*;
-        ogma::lang::parse(input, &self.defs.read())
+        use ogma::lang::parse::ParseSuccess::*;
+        ogma::lang::parse::parse(input, &self.defs.read())
             .map(|x| match x {
                 Impl(x) => Box::new(x) as Box<_>,
                 Ty(x) => Box::new(x) as Box<_>,

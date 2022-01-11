@@ -52,6 +52,7 @@ pub fn parse(input: &str, defs: &Definitions) -> std::result::Result<ParseSucces
     }
 }
 
+/// Parse an expression.
 pub fn expression<S: Into<Arc<str>>>(
     expr: S,
     location: Location,
@@ -74,6 +75,7 @@ pub fn expression<S: Into<Arc<str>>>(
     x
 }
 
+/// Parse a definition implementation (`def`).
 pub fn definition_impl<S: Into<Arc<str>>>(
     def: S,
     location: Location,
@@ -88,6 +90,7 @@ pub fn definition_impl<S: Into<Arc<str>>>(
         .map_err(|e| convert_parse_error(e, &line.line, location))
 }
 
+/// Parse a definition type (`def-ty`).
 pub fn definition_type<S: Into<Arc<str>>>(
     def: S,
     location: Location,

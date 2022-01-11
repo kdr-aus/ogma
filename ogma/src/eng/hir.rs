@@ -2,7 +2,6 @@ use crate::lang::var::{Environment, Locals};
 use crate::prelude::*;
 use ast::{DefinitionImpl, Expression, Tag, Term};
 use std::{convert::TryInto, fmt};
-use Type as Ty;
 
 type StepR = Result<(Value, Environment)>;
 

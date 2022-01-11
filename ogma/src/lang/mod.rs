@@ -1,12 +1,14 @@
-pub mod defs;
-pub mod help;
-pub mod impls;
-pub mod syntax;
-pub mod types;
-pub mod var;
+//! Language characteristics.
 
-// Commonly used items
+pub(crate) mod defs;
+pub(crate) mod help;
+pub(crate) mod impls;
+pub(crate) mod syntax;
+pub(crate) mod types;
+pub(crate) mod var;
 
-pub use defs::Definitions;
-pub use syntax::parse::parse;
+// Public API
+
+pub use defs::{process_definition, recognise_definition, Definitions};
+pub use syntax::{ast, parse};
 pub use types::Value;

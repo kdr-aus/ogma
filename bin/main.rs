@@ -166,7 +166,7 @@ fn process_and_print_batch(
     {
         errors = true;
         writeln!(buf, "--- Error line {} :: {:?} ---", line, ty).ok();
-        ogma::output::print::print_error(&err, buf).ok();
+        ogma::output::print_error(&err, buf).ok();
     }
 
     let p = String::from_utf8(buffer).expect("all written output should be utf8");

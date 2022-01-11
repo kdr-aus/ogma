@@ -14,7 +14,7 @@ use std::{
     fmt,
     io::{self, Write},
     iter::*,
-    mem, path,
+    mem,
     rc::Rc,
     time::Instant,
 };

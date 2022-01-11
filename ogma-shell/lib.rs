@@ -2,7 +2,7 @@
 #![warn(missing_docs)]
 use ::libs::{colored::*, divvy::*, fxhash::FxHashMap as HashMap};
 use ogma::{
-    lang::{syntax::ast::Location, Value},
+    lang::{ast::Location, Value},
     rt::bat::Batch,
 };
 use ogma_ls::{completion::Node, Workspace};
@@ -160,14 +160,14 @@ impl RunState {
                 Ok(b) => self.process_batch(tabid, cancelled, buf, b),
                 Err(e) => (writeln!(buf, "{}", e.to_string().bright_red()).ok(), ()).1,
             }
-        } else if ogma::lang::defs::recognise_definition(&input) {
+        } else if ogma::lang::recognise_definition(&input) {
             if input.contains(" --load") {
                 // load defs from the paths defined
                 self.load_defs_files(buf);
             } else {
                 let r = {
                     let defs = &mut self.wsp.defs.write();
-                    ogma::lang::defs::process_definition(&input, Location::Shell, None, defs)
+                    ogma::lang::process_definition(&input, Location::Shell, None, defs)
                 };
                 match r {
                     Ok((input, Some(code))) => {
@@ -245,7 +245,7 @@ impl RunState {
                     path.display(),
                     format!("parsed in {} definitions", n).bright_green()
                 ),
-                Err(e) => ogma::output::print::print_error(&e, &mut buf),
+                Err(e) => ogma::output::print_error(&e, &mut buf),
             }
             .ok();
         }
@@ -379,7 +379,7 @@ impl RunState {
                 })
             {
                 writeln!(buf, "--- Error line {} :: {:?} ---", line, ty).ok();
-                ogma::output::print::print_error(&err, buf).ok();
+                ogma::output::print_error(&err, buf).ok();
             }
             String::from_utf8(buffer).expect("all written output should be utf8")
         })
@@ -391,7 +391,8 @@ fn write_result<W: Write>(
     wsp: &Workspace,
     mut wtr: W,
 ) {
-    use ogma::output::print::*;
+    use ogma::output::*;
+
     match res {
         Ok(output) => match output {
             Value::Nil => write!(wtr, "()"),
