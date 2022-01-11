@@ -1,10 +1,6 @@
-use super::{
-    ast::{self, DefinitionImpl, Expression, Tag, Term},
-    impls::Implementation,
-    types::*,
-    var::*,
-    Definitions, Error, Result, Str,
-};
+use crate::lang::var::{Environment, Locals};
+use crate::prelude::*;
+use ast::{DefinitionImpl, Expression, Tag, Term};
 use std::{convert::TryInto, fmt};
 
 type StepR = Result<(Value, Environment)>;
@@ -18,7 +14,7 @@ pub fn handle_help(expr: &Expression, definitions: &Definitions) -> Result<()> {
             .iter()
             .any(|x| matches!(x, Term::Flag(f) if f.str() == "help"))
         {
-            Err(super::help_as_error(help))
+            Err(err::help_as_error(help))
         } else {
             Ok(())
         }
@@ -27,7 +23,7 @@ pub fn handle_help(expr: &Expression, definitions: &Definitions) -> Result<()> {
     }
 }
 
-pub(crate) fn construct_evaluator(
+pub fn construct_evaluator(
     in_ty: Type,
     expr: Expression,
     defs: &Definitions,
@@ -676,8 +672,8 @@ supplied input type: {}",
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parsing::expression;
-    use crate::Location;
+    use ast::Location;
+    use lang::syntax::parse::expression;
 
     #[test]
     fn no_cmd_defined() {

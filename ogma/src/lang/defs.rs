@@ -1,6 +1,9 @@
 //! This handles definitions (fns, structs, enums)
-use crate::{ast::Location, impls::*, types::Types, *};
+use crate::prelude::*;
 use ::libs::divvy::Str;
+use ast::*;
+use err::Trace;
+use lang::help::*;
 
 /// The working set of `ogma` definitions.
 ///
@@ -8,7 +11,7 @@ use ::libs::divvy::Str;
 /// session.
 #[derive(Clone)]
 pub struct Definitions {
-    impls: impls::Implementations,
+    impls: lang::impls::Implementations,
     types: types::Types,
 }
 
@@ -24,11 +27,13 @@ impl Definitions {
         // take the default impls first, these do not have the derive impls
         let mut impls = Default::default();
         // build the std types off this
-        let types = Types::init(&mut impls);
+        let types = types::Types::init(&mut impls);
 
         let mut definitions = Self { impls, types };
 
         let defs = &mut definitions;
+
+        use lang::impls::OperationCategory;
 
         // progressively add in derived impls (such as >,<,!= etc)
         add_derived_impl(
@@ -175,15 +180,15 @@ the row is assumed to be populated with strings, if not an error occurs",
     }
 
     /// Add definitions by reading a file.
-    pub fn add_from_file<P: AsRef<Path>>(&mut self, file: P) -> Result<usize> {
+    pub fn add_from_file<P: AsRef<std::path::Path>>(&mut self, file: P) -> Result<usize> {
         let file = file.as_ref();
         let s = std::fs::read_to_string(file).map_err(|e| Error::io(&ast::Tag::default(), e))?;
         self.add_from_str(&s, file)
     }
 
     /// Add definitions from a string.
-    pub fn add_from_str(&mut self, s: &str, file: &Path) -> Result<usize> {
-        let items = bat::parse_str(s);
+    pub fn add_from_str(&mut self, s: &str, file: &std::path::Path) -> Result<usize> {
+        let items = rt::bat::parse_str(s);
         let file = Arc::from(file);
         // parse and add each def
         let mut count = 0;
@@ -214,7 +219,7 @@ the row is assumed to be populated with strings, if not an error occurs",
     }
 
     /// Provide access to the defined types.
-    pub fn types(&self) -> &Types {
+    pub fn types(&self) -> &types::Types {
         &self.types
     }
 }
@@ -222,17 +227,17 @@ the row is assumed to be populated with strings, if not an error occurs",
 fn add_derived_impl(
     defs: &mut Definitions,
     s: &str,
-    opcat: OperationCategory,
+    opcat: lang::impls::OperationCategory,
     desc: &str,
     eg: Vec<HelpExample>,
 ) {
-    let im = parsing::definition_impl(s, Location::Ogma, defs).unwrap();
+    let im = lang::syntax::parse::definition_impl(s, Location::Ogma, defs).unwrap();
     let in_ty = if let Some(in_ty) = &im.in_ty {
         Some(defs.types.get_using_tag(in_ty).unwrap().clone())
     } else {
         None
     };
-    let mut help = impls::usr_impl_help(&im);
+    let mut help = lang::impls::usr_impl_help(&im);
     let d = help.desc.to_mut();
     d.push('\n');
     d.push_str(desc);
@@ -243,7 +248,7 @@ fn add_derived_impl(
 /// Recognise a string which defines an implementation or type.
 ///
 /// ```rust
-/// # use ogma::recognise_definition;
+/// # use ogma::lang::recognise_definition;
 /// assert!(recognise_definition("def foo-bar { }"));
 /// assert!(recognise_definition("def-ty Point { x:Num y:Num }"));
 /// assert!(!recognise_definition("foo-bar zog"));
@@ -278,7 +283,7 @@ pub fn process_definition<'a>(
         Err(Error {
             cat: err::Category::Parsing,
             desc: "a definition must start with `def` or `def-ty`".into(),
-            traces: vec![ErrorTrace {
+            traces: vec![Trace {
                 loc,
                 source: def.to_string(),
                 len: def.len(),
@@ -331,7 +336,7 @@ def has specialised syntax which takes variable params: ( )"
             ],
             ..HelpMessage::new("def")
         };
-        Err(help_as_error(&help))
+        Err(err::help_as_error(&help))
     } else if s.contains(" --list") {
         let post = s.split_once(" | ").map(|x| x.1);
         Ok((Value::Tab(construct_def_table(defs)), post))
@@ -339,7 +344,7 @@ def has specialised syntax which takes variable params: ( )"
         defs.clear(false);
         Ok((Value::Nil, None))
     } else {
-        let def = parsing::definition_impl(s, loc, defs).map_err(|e| e.0)?;
+        let def = lang::syntax::parse::definition_impl(s, loc, defs).map_err(|e| e.0)?;
 
         assert_all_ops_defined(&def, defs.impls())?;
 
@@ -349,13 +354,17 @@ def has specialised syntax which takes variable params: ( )"
             None
         };
 
-        let mut helpmsg = impls::usr_impl_help(&def);
+        let mut helpmsg = lang::impls::usr_impl_help(&def);
         if let Some(help) = help {
             helpmsg.desc = format!("{}\n\n{}", helpmsg.desc, help).into();
         }
 
-        defs.impls
-            .insert_impl(in_ty, def, OperationCategory::UserDefined, helpmsg)?;
+        defs.impls.insert_impl(
+            in_ty,
+            def,
+            lang::impls::OperationCategory::UserDefined,
+            helpmsg,
+        )?;
         Ok((Value::Nil, None))
     }
 }

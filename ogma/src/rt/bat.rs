@@ -2,15 +2,15 @@
 //!
 //! This module provides some structure around batch processing, supplying reporting structures
 //! and evaluation semantics.
-use crate::{
-    process_definition, process_expression, recognise_definition, Error, Location, Mutex, Result,
-};
+use crate::prelude::*;
+use crate::Mutex;
 use ::libs::{
     divvy::*,
     rayon::prelude::*,
     serde::{Deserialize, Serialize},
     serde_json,
 };
+use ast::Location;
 use std::{
     fs, io,
     iter::*,
@@ -101,7 +101,7 @@ pub enum ItemType {
 
 fn work_out_type(code: &str) -> ItemType {
     let c = code.trim_start();
-    if recognise_definition(c) {
+    if lang::defs::recognise_definition(c) {
         if c.starts_with("def-ty") {
             ItemType::Type
         } else {
@@ -120,7 +120,7 @@ fn work_out_type(code: &str) -> ItemType {
 ///
 /// # Example
 /// ```rust
-/// # use ogma::bat::*;
+/// # use ogma::rt::bat::*;
 /// let src = "#[no-fail-fast]
 ///
 /// def foo () { bar }
@@ -261,7 +261,7 @@ pub fn process(
     root: &Path,
     wd: &Path,
     progress: &ProgressTx,
-    mut definitions: crate::Definitions,
+    mut definitions: Definitions,
 ) -> Vec<(Outcome, Duration)> {
     let ff = batch.fail_fast;
     let parallelise = batch.parallelise;
@@ -316,7 +316,9 @@ pub fn process(
 
         let instant = Instant::now();
         let loc = Location::File(def.file.clone(), def.line as usize);
-        let r = process_definition(&def.code, loc, def.comment.clone(), &mut definitions).into();
+        let r =
+            lang::defs::process_definition(&def.code, loc, def.comment.clone(), &mut definitions)
+                .into();
         report_progress(prog, &reporter, idx, &r);
         sw_if_fail(&r);
         results[idx] = (r, instant.elapsed());
@@ -338,7 +340,7 @@ pub fn process(
         }
 
         let loc = Location::File(expr.file.clone(), expr.line as usize);
-        let r = process_expression((), expr.code.as_str(), loc, &definitions, root, wd).into();
+        let r = rt::process_expression((), expr.code.as_str(), loc, &definitions, root, wd).into();
         report_progress(prog, &reporter, idx, &r);
         sw_if_fail(&r);
         (idx, r, instant.elapsed())

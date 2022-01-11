@@ -1,9 +1,6 @@
 //! Parsing source into a AST.
 
-use super::{
-    ast::{self, *},
-    Definitions, Error, ErrorTrace, HashSet,
-};
+use crate::prelude::{ast::*, err, Definitions, HashSet};
 use ::kserd::Number;
 use ::libs::divvy::Str;
 use nom::{
@@ -31,6 +28,31 @@ impl Line {
 }
 
 // ------ Entry and Error ------------------------------------------------------
+/// Successful parse result.
+pub enum ParseSuccess {
+    /// Parsed as a `def`inition.
+    Impl(DefinitionImpl),
+    /// Parsed as a type definition (`def-ty`).
+    Ty(DefinitionType),
+    /// Parsed as an expression.
+    Expr(Expression),
+}
+
+/// Parse the `input` as a valid `ogma` expression or definition.
+///
+/// Uses `Location::Shell`.
+pub fn parse(input: &str, defs: &Definitions) -> std::result::Result<ParseSuccess, ParseFail> {
+    let loc = Location::Shell;
+    if input.starts_with("def ") {
+        definition_impl(input, loc, defs).map(ParseSuccess::Impl)
+    } else if input.starts_with("def-ty ") {
+        definition_type(input, loc).map(ParseSuccess::Ty)
+    } else {
+        expression(input, loc, defs).map(ParseSuccess::Expr)
+    }
+}
+
+/// Parse an expression.
 pub fn expression<S: Into<Arc<str>>>(
     expr: S,
     location: Location,
@@ -53,6 +75,7 @@ pub fn expression<S: Into<Arc<str>>>(
     x
 }
 
+/// Parse a definition implementation (`def`).
 pub fn definition_impl<S: Into<Arc<str>>>(
     def: S,
     location: Location,
@@ -67,6 +90,7 @@ pub fn definition_impl<S: Into<Arc<str>>>(
         .map_err(|e| convert_parse_error(e, &line.line, location))
 }
 
+/// Parse a definition type (`def-ty`).
 pub fn definition_type<S: Into<Arc<str>>>(
     def: S,
     location: Location,
@@ -81,7 +105,7 @@ pub fn definition_type<S: Into<Arc<str>>>(
 }
 
 /// Failure to parse results in the parse [`Error`], and an expecting AST node.
-pub type ParseFail = (Error, Expecting);
+pub type ParseFail = (err::Error, Expecting);
 
 /// An indication of expected AST node type if parsing fails.
 ///
@@ -153,7 +177,7 @@ fn convert_parse_error<'a>(
     source: &'a str,
     loc: Location,
 ) -> ParseFail {
-    use crate::err::*;
+    use err::*;
     let ParsingError {
         input,
         cx,
@@ -174,7 +198,7 @@ fn convert_parse_error<'a>(
     let err = Error {
         cat: Category::Parsing,
         desc: "could not parse input line".into(),
-        traces: vec![ErrorTrace {
+        traces: vec![err::Trace {
             loc,
             source: source.into(),
             desc: Some(cx.to_string()),
@@ -280,11 +304,11 @@ fn expr<'f>(
 fn block<'f>(
     line: &'f Line,
     defs: &'f Definitions,
-) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, ast::PrefixBlock, ParsingError<'a>> + 'f {
+) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, PrefixBlock, ParsingError<'a>> + 'f {
     move |i| {
         let (i, op) = exp(op(line), Expecting::Impl)(i)?;
         let (i, terms) = many0(ws(term(line, defs)))(i)?;
-        Ok((i, ast::PrefixBlock { op, terms }))
+        Ok((i, PrefixBlock { op, terms }))
     }
 }
 
@@ -772,10 +796,10 @@ mod tests {
         len: usize,
     ) -> Result<T, ParseFail> {
         Err((
-            Error {
-                cat: crate::err::Category::Parsing,
+            err::Error {
+                cat: err::Category::Parsing,
                 desc: "could not parse input line".into(),
-                traces: vec![ErrorTrace {
+                traces: vec![err::Trace {
                     loc: Location::Shell,
                     source: source.into(),
                     desc: Some(cx.into()),
@@ -1669,12 +1693,7 @@ mod tests {
     // -- partial parsing expecting checks
     #[test]
     fn incomplete_expecting_tests() {
-        let exp = |s| {
-            crate::parse(s, &Definitions::default())
-                .map(|_| ())
-                .unwrap_err()
-                .1
-        };
+        let exp = |s| parse(s, &Definitions::default()).map(|_| ()).unwrap_err().1;
 
         assert_eq!(exp("foo-bar | "), Expecting::Impl);
         assert_eq!(exp("foo-bar | in 5 {"), Expecting::Impl);

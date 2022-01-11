@@ -88,7 +88,7 @@ fn run_shell(defs: Vec<PathBuf>) {
 }
 
 fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) -> Result<(), ()> {
-    let mut definitions = ogma::Definitions::default();
+    let mut definitions = ogma::lang::Definitions::default();
 
     // add defs
     for def in defs {
@@ -102,7 +102,7 @@ fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) -> Resu
     let batches = files
         .iter()
         .map(|p| {
-            ogma::bat::parse_file(p).unwrap_or_else(|e| {
+            ogma::rt::bat::parse_file(p).unwrap_or_else(|e| {
                 panic!(
                     "failed parsing in '{}' as batch process: {}",
                     p.display(),
@@ -121,11 +121,11 @@ fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) -> Resu
 
 fn process_and_print_batch(
     path: &Path,
-    batch: &ogma::bat::Batch,
-    defs: &ogma::Definitions,
+    batch: &ogma::rt::bat::Batch,
+    defs: &ogma::lang::Definitions,
     verbose: bool,
 ) -> Result<(), ()> {
-    use ogma::bat::Outcome::*;
+    use ogma::rt::bat::Outcome::*;
     use std::io::Write;
 
     if verbose {
@@ -139,7 +139,7 @@ fn process_and_print_batch(
     let dummy = &::libs::divvy::ProgressTx::dummy();
     let defs = defs.clone();
     let p = Path::new(".");
-    let outcomes = ogma::bat::process(batch, p, p, dummy, defs);
+    let outcomes = ogma::rt::bat::process(batch, p, p, dummy, defs);
 
     let report = || batch.items.iter().map(|i| (i.line, i.ty()));
 
@@ -166,7 +166,7 @@ fn process_and_print_batch(
     {
         errors = true;
         writeln!(buf, "--- Error line {} :: {:?} ---", line, ty).ok();
-        ogma::print_error(&err, buf).ok();
+        ogma::output::print_error(&err, buf).ok();
     }
 
     let p = String::from_utf8(buffer).expect("all written output should be utf8");

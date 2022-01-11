@@ -1,6 +1,13 @@
-use crate::{ast::*, err::Category, hir::*, parsing::*, types::*, HelpParameter::*, *};
-use ::libs::divvy::ProgressTx;
+use crate::prelude::*;
+use ::libs::{colored::*, divvy::ProgressTx};
 use ::table::Entry::*;
+use ast::*;
+use err::*;
+use lang::{defs::*, help::*, syntax::parse::expression};
+use print::*;
+use rt::{bat::*, process_expression};
+use std::{iter::*, path::*};
+use HelpParameter::*;
 
 #[test]
 fn table_printing() {
@@ -249,7 +256,7 @@ where
     T: AsType + Into<Value> + 'static,
 {
     let (root, wd) = paths();
-    crate::process_expression(data, src, Location::Shell, defs, root, wd)
+    process_expression(data, src, Location::Shell, defs, root, wd)
 }
 
 fn paths() -> (&'static Path, &'static Path) {
@@ -257,7 +264,7 @@ fn paths() -> (&'static Path, &'static Path) {
 }
 
 fn print_help(src: &str, defs: &Definitions) -> String {
-    let x = handle_help(&expression(src, Location::Shell, defs).unwrap(), defs)
+    let x = eng::handle_help(&expression(src, Location::Shell, defs).unwrap(), defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
@@ -454,7 +461,7 @@ fn list_defs() {
 
     if let Ok((Value::Tab(x), _)) = &x {
         let mut buf = Vec::new();
-        super::print_table(x, &mut buf).unwrap();
+        print_table(x, &mut buf).unwrap();
         let s = std::str::from_utf8(&buf).unwrap();
         println!("{}", s);
 
@@ -484,7 +491,7 @@ fn list_defs() {
 
 #[test]
 fn add_from_str_and_clearing() {
-    use defs::construct_def_table;
+    use lang::defs::construct_def_table;
 
     let mut defs = with_dummy_defs();
     let mut tab = construct_def_table(&defs);
@@ -660,7 +667,7 @@ fn inner_definition_error() {
         Err(Error {
             cat: Category::Evaluation,
             desc: "header `not-a-header` not found in table".into(),
-            traces: vec![ErrorTrace {
+            traces: vec![Trace {
                 loc: Location::file("some/file", 12),
                 source: "def gt10 (n) { get $n | > 10 }".into(),
                 desc: Some("`n` resolves to `not-a-header`".into()),
@@ -1288,7 +1295,7 @@ fn append_row_testing() {
 // ------ bat - module processing testing --------------------------------------
 #[test]
 fn batch_success_testing() {
-    use bat::*;
+    use rt::bat::*;
     use Outcome::*;
 
     let p = &ProgressTx::dummy();
@@ -1301,7 +1308,7 @@ foo-bar | + 5
 
 def-ty Foo { x:Num }"#;
 
-    let batch = bat::parse_str(code);
+    let batch = parse_str(code);
     let p = |b| {
         process(&b, root, wd, p, Default::default())
             .into_iter()
@@ -1310,13 +1317,13 @@ def-ty Foo { x:Num }"#;
     };
     assert_eq!(p(batch), vec![Success, Success, Success]);
 
-    let batch = bat::parse_str(code);
+    let batch = parse_str(code);
     assert_eq!(p(batch), vec![Success, Success, Success]);
 }
 
 #[test]
 fn batch_fail_testing() {
-    use bat::*;
+    use rt::bat::*;
     use Outcome::*;
 
     let p = &ProgressTx::dummy();
@@ -1339,7 +1346,7 @@ def-ty Foo { x:Num y: }"#;
     let batch = Batch {
         parallelise: false,
         fail_fast: true,
-        ..bat::parse_str(code)
+        ..parse_str(code)
     };
     let mut x = process(&batch, root, wd, p, Default::default()).into_iter();
     assert!(matches!(x.next(), Some((Success, _))));
@@ -1353,7 +1360,7 @@ def-ty Foo { x:Num y: }"#;
 "
     );
 
-    let batch = bat::parse_str(code);
+    let batch = parse_str(code);
     let mut x = process(&batch, root, wd, p, Default::default()).into_iter();
     assert!(matches!(x.next(), Some((Success, _))));
     assert_eq!(

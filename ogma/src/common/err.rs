@@ -1,7 +1,7 @@
-use super::{
-    ast::*,
+use crate::lang::{
+    help::*,
+    syntax::ast::*,
     types::{Type, TypeDef},
-    Error, ErrorTrace,
 };
 use ::libs::colored::*;
 use std::{
@@ -34,15 +34,93 @@ macro_rules! colourln {
     }};
 }
 
+/// Ubiquitous error.
+///
+/// Errors are printed like so:
+/// ```shell
+/// Category: description
+/// --> location:column-num
+///  | source line { }
+///  |        ^^^^ short description
+/// --> help: help message
+/// ```
+#[derive(Debug, PartialEq)]
+pub struct Error {
+    /// Category of error.
+    pub cat: Category,
+    /// Error description.
+    pub desc: String,
+    /// Error backtrace.
+    pub traces: Vec<Trace>,
+    /// Optional help message.
+    pub help_msg: Option<String>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Trace {
+    pub loc: Location,
+    pub source: String,
+    pub desc: Option<String>,
+    pub start: usize,
+    pub len: usize,
+}
+
+pub fn help_as_error(msg: &HelpMessage) -> Error {
+    use fmt::Write;
+
+    let cmd = msg.cmd.as_str();
+    let mut source = format!("{}\n\nUsage:\n => {}", msg.desc, cmd);
+
+    for param in &msg.params {
+        let brk = matches!(param, HelpParameter::Break);
+        if brk {
+            write!(source, "\n => {}", cmd).ok();
+        }
+        if !msg.no_space {
+            source.push(' ');
+        }
+        if !brk {
+            param.write(&mut source);
+        }
+    }
+
+    if !msg.flags.is_empty() {
+        source.push_str("\n\nFlags:");
+        for (name, desc) in &msg.flags {
+            source.push_str("\n --");
+            source.push_str(name);
+            source.push_str(": ");
+            source.push_str(desc);
+        }
+    }
+
+    if !msg.examples.is_empty() {
+        source.push_str("\n\nExamples:");
+        for example in &msg.examples {
+            write!(source, "\n {}\n => {}\n", example.desc, example.code).ok();
+        }
+    }
+
+    Error {
+        cat: Category::Help,
+        desc: format!("`{}`", cmd),
+        help_msg: None,
+        traces: vec![Trace {
+            source,
+            ..Default::default()
+        }],
+    }
+}
+
 // ###### ERROR ################################################################
-fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<ErrorTrace> {
-    vec![ErrorTrace::from_tag(tag, desc)]
+fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
+    vec![Trace::from_tag(tag, desc)]
 }
 
 impl Error {
     pub(crate) fn add_trace(mut self, tag: &Tag) -> Self {
         self.traces
-            .push(ErrorTrace::from_tag(tag, "invoked here".to_string()));
+            .push(Trace::from_tag(tag, "invoked here".to_string()));
         self
     }
 
@@ -271,7 +349,7 @@ expected `{}`, found `{}`",
 
     pub(crate) fn conversion_failed(exp: &Type, found: &Type) -> Self {
         Error {
-            cat: crate::err::Category::Evaluation,
+            cat: Category::Evaluation,
             desc: format!(
                 "converting value into `{}` failed, value has type `{}`",
                 exp, found
@@ -342,7 +420,7 @@ impl error::Error for Error {}
 
 // ###### TRACE ################################################################
 /// Returns a _blank_ trace. Intended for assistance with initialising.
-impl Default for ErrorTrace {
+impl Default for Trace {
     fn default() -> Self {
         Self {
             loc: Location::Shell,
@@ -354,7 +432,7 @@ impl Default for ErrorTrace {
     }
 }
 
-impl ErrorTrace {
+impl Trace {
     pub fn from_tag<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Self {
         Self {
             loc: tag.anchor.clone(),
@@ -472,7 +550,7 @@ pub enum Category {
 mod tests {
     use super::*;
 
-    fn print(err_trace: &ErrorTrace) -> String {
+    fn print(err_trace: &Trace) -> String {
         let mut s = Vec::new();
         err_trace.print(false, &mut s).unwrap();
         String::from_utf8(s).unwrap()
@@ -499,7 +577,7 @@ mod tests {
 
     #[test]
     fn printing_error_traces_basic() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "Hello".into(),
             start: 3,
             len: 2,
@@ -519,7 +597,7 @@ mod tests {
 
     #[test]
     fn printing_error_traces_mutliline_single_span() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "Hello
 World
 This is
@@ -540,7 +618,7 @@ A multiline"
 "
         );
 
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "Hello
 World
     This is
@@ -566,7 +644,7 @@ World
 
     #[test]
     fn printing_error_traces_mutliline_multi_span() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "if { foo {
     bar zog |
     43 |
@@ -592,7 +670,7 @@ World
 
     #[test]
     fn single_mark_cmd() {
-        let et = &ErrorTrace {
+        let et = &Trace {
             source: "in | ".into(),
             start: 5,
             len: 1,

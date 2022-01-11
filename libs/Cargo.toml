@@ -14,6 +14,7 @@ divvy = { git = "https://github.com/kdr-aus/divvy" }
 colored = "2"
 crossbeam = "0.8"
 fastrand = "1"
+# TODO change to rustc_hash
 fxhash = "0.2"
 parking_lot = "0.11"
 rayon = "1"
