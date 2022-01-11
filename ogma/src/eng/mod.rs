@@ -1,4 +1,6 @@
-
 mod hir;
 
-pub use self::hir::{Step, Block, Context, DefImplEvaluator, Argument, construct_evaluator, ExprEvaluator, handle_help};
+pub use self::hir::{
+    construct_evaluator, handle_help, Argument, Block, Context, DefImplEvaluator, ExprEvaluator,
+    Step,
+};

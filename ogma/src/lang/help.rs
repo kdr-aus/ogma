@@ -1,4 +1,4 @@
-use crate::prelude::{Str, err::help_as_error};
+use crate::prelude::{err::help_as_error, Str};
 use std::fmt;
 
 /// Help messages work off the back of error messages such that:

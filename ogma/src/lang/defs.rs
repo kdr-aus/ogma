@@ -1,9 +1,9 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
+use ::libs::divvy::Str;
 use ast::*;
 use err::ErrorTrace;
 use lang::help::*;
-use ::libs::divvy::Str;
 
 /// The working set of `ogma` definitions.
 ///
@@ -359,8 +359,12 @@ def has specialised syntax which takes variable params: ( )"
             helpmsg.desc = format!("{}\n\n{}", helpmsg.desc, help).into();
         }
 
-        defs.impls
-            .insert_impl(in_ty, def, lang::impls::OperationCategory::UserDefined, helpmsg)?;
+        defs.impls.insert_impl(
+            in_ty,
+            def,
+            lang::impls::OperationCategory::UserDefined,
+            helpmsg,
+        )?;
         Ok((Value::Nil, None))
     }
 }

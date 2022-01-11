@@ -1,6 +1,7 @@
+//! Runtime items.
 
-pub mod fscache;
 pub mod bat;
+pub mod fscache;
 mod process;
 
 pub use process::process_expression;

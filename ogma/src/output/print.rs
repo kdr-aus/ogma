@@ -1,7 +1,12 @@
-use libs::colored::*;
-use ::numfmt::Formatter;
+//! Printing values to terminal.
+
 use crate::prelude::*;
-use std::{iter::*, io::{self, Write}};
+use ::numfmt::Formatter;
+use libs::colored::*;
+use std::{
+    io::{self, Write},
+    iter::*,
+};
 
 const ROWS_LIM: usize = 30;
 const COLS_LIM: usize = 7;
@@ -113,6 +118,7 @@ where
     cols
 }
 
+/// Prints a single table _cell_.
 pub fn fmt_cell(entry: &Entry<Value>, numfmtr: &mut Formatter) -> Str {
     use Entry::*;
     use Value as V;
@@ -132,4 +138,3 @@ pub fn print_ogma_data(data: types::OgmaData) -> String {
     use kserd::ToKserd;
     data.into_kserd().unwrap().as_str()
 }
-

@@ -1,7 +1,7 @@
-use std::{convert::TryInto, fmt};
+use crate::lang::var::{Environment, Locals};
 use crate::prelude::*;
-use ast::{Tag, Expression, DefinitionImpl, Term};
-use crate::lang::var::{Locals, Environment};
+use ast::{DefinitionImpl, Expression, Tag, Term};
+use std::{convert::TryInto, fmt};
 use Type as Ty;
 
 type StepR = Result<(Value, Environment)>;
@@ -673,8 +673,8 @@ supplied input type: {}",
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lang::syntax::parse::expression;
     use ast::Location;
+    use lang::syntax::parse::expression;
 
     #[test]
     fn no_cmd_defined() {

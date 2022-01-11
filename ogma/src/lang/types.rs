@@ -1,11 +1,13 @@
-use crate::{
-    HashMap, Mutex,
-    Result};
-    use crate:: lang::{
-        impls,
-        help::HelpMessage, syntax::{
-            parse, ast::{self, *}}};
-    use crate::common::err::{self, Error, ErrorTrace};
+use crate::common::err::{self, Error, ErrorTrace};
+use crate::lang::{
+    help::HelpMessage,
+    impls,
+    syntax::{
+        ast::{self, *},
+        parse,
+    },
+};
+use crate::{HashMap, Mutex, Result};
 use ::kserd::{Kserd, Number, ToKserd, ToKserdErr, Value as KValue};
 use ::libs::{
     divvy::Str,

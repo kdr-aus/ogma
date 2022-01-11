@@ -2,12 +2,15 @@
 //!
 //! This module provides some structure around batch processing, supplying reporting structures
 //! and evaluation semantics.
+use crate::prelude::*;
+use crate::Mutex;
 use ::libs::{
     divvy::*,
     rayon::prelude::*,
     serde::{Deserialize, Serialize},
     serde_json,
 };
+use ast::Location;
 use std::{
     fs, io,
     iter::*,
@@ -15,9 +18,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use crate::prelude::*;
-use crate::Mutex;
-use ast::Location;
 
 /// A batch to process.
 pub struct Batch {
@@ -316,7 +316,9 @@ pub fn process(
 
         let instant = Instant::now();
         let loc = Location::File(def.file.clone(), def.line as usize);
-        let r = lang::defs::process_definition(&def.code, loc, def.comment.clone(), &mut definitions).into();
+        let r =
+            lang::defs::process_definition(&def.code, loc, def.comment.clone(), &mut definitions)
+                .into();
         report_progress(prog, &reporter, idx, &r);
         sw_if_fail(&r);
         results[idx] = (r, instant.elapsed());

@@ -1,12 +1,12 @@
+use crate::prelude::*;
 use ::libs::{colored::*, divvy::ProgressTx};
 use ::table::Entry::*;
-use crate::prelude::*;
-use lang::{syntax::parse::expression, defs::*, help::*};
-use err::*;
 use ast::*;
-use std::{path::*, iter::*};
-use rt::{process_expression, bat::*};
+use err::*;
+use lang::{defs::*, help::*, syntax::parse::expression};
 use print::*;
+use rt::{bat::*, process_expression};
+use std::{iter::*, path::*};
 use HelpParameter::*;
 
 #[test]

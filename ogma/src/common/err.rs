@@ -1,7 +1,7 @@
 use crate::lang::{
     help::*,
-    types::{Type, TypeDef},
     syntax::ast::*,
+    types::{Type, TypeDef},
 };
 use ::libs::colored::*;
 use std::{
@@ -33,7 +33,6 @@ macro_rules! colourln {
         }
     }};
 }
-
 
 /// Processing error.
 ///

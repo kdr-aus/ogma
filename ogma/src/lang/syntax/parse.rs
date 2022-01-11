@@ -1,5 +1,6 @@
 //! Parsing source into a AST.
 
+use crate::prelude::{ast::*, err, Definitions, HashSet};
 use ::kserd::Number;
 use ::libs::divvy::Str;
 use nom::{
@@ -7,7 +8,6 @@ use nom::{
     error::*, multi::*, sequence::*, IResult, Offset,
 };
 use std::sync::Arc;
-use crate::prelude::{HashSet, err, ast::*, Definitions};
 
 struct Line {
     line: Arc<str>,
@@ -1690,12 +1690,7 @@ mod tests {
     // -- partial parsing expecting checks
     #[test]
     fn incomplete_expecting_tests() {
-        let exp = |s| {
-            parse(s, &Definitions::default())
-                .map(|_| ())
-                .unwrap_err()
-                .1
-        };
+        let exp = |s| parse(s, &Definitions::default()).map(|_| ()).unwrap_err().1;
 
         assert_eq!(exp("foo-bar | "), Expecting::Impl);
         assert_eq!(exp("foo-bar | in 5 {"), Expecting::Impl);

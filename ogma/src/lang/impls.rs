@@ -1,24 +1,23 @@
+use crate::prelude::*;
 use ::kserd::Number;
 use ::libs::{divvy::Str, fastrand, rayon::prelude::*};
 use ::table::Entry;
+use ast::{Location, Tag};
+use eng::{Block, Context, Step};
+use lang::help::*;
+use rt::fscache::FSCACHE;
 use std::{
-    iter::*,
-    io::{self, Write},
     cell::RefCell,
-    fmt,
-    path,
     cmp,
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
-    mem,
+    fmt,
+    io::{self, Write},
+    iter::*,
+    mem, path,
     rc::Rc,
     time::Instant,
 };
-use crate::prelude::*;
-use lang::help::*;
-use eng::{Context, Block, Step};
-use ast::{Tag, Location};
-use rt::fscache::FSCACHE;
 use Type as Ty;
 
 #[derive(Clone)]
@@ -764,7 +763,8 @@ fn typedef_init(
 
 fn typedef_init_help(ty: &types::TypeDef) -> HelpMessage {
     let desc = format!("initialise a `{}`", ty.name()).into();
-    let map_field = |f: &types::Field| HelpParameter::Required(format!("{}:{}", f.name(), f.ty()).into());
+    let map_field =
+        |f: &types::Field| HelpParameter::Required(format!("{}:{}", f.name(), f.ty()).into());
 
     match ty.structure() {
         types::TypeVariant::Product(fields) => HelpMessage {
@@ -1212,9 +1212,12 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
                 _ => 0,
             };
             blk.next_arg_do_not_remove(None)?.returns(blk.in_ty())?; // this checks same lhs=rhs type
-            let def =
-                &lang::syntax::parse::definition_impl(build_tuple_cmp_def_str(els), Location::Ogma, blk.defs)
-                    .map_err(|(e, _)| e)?;
+            let def = &lang::syntax::parse::definition_impl(
+                build_tuple_cmp_def_str(els),
+                Location::Ogma,
+                blk.defs,
+            )
+            .map_err(|(e, _)| e)?;
             let ordty = Ty::Def(types::ORD.get());
             let evaltr = eng::DefImplEvaluator::build(&mut blk, def)?.returns(&ordty)?;
             blk.eval(ordty, move |input, cx| {
@@ -1457,9 +1460,12 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
                 _ => 0,
             };
             blk.next_arg_do_not_remove(None)?.returns(blk.in_ty())?; // this checks same lhs=rhs type
-            let def =
-                &lang::syntax::parse::definition_impl(build_tuple_eq_def_str(els), Location::Ogma, blk.defs)
-                    .map_err(|(e, _)| e)?;
+            let def = &lang::syntax::parse::definition_impl(
+                build_tuple_eq_def_str(els),
+                Location::Ogma,
+                blk.defs,
+            )
+            .map_err(|(e, _)| e)?;
             let evaltr = eng::DefImplEvaluator::build(&mut blk, def)?.returns(&Ty::Bool)?;
             blk.eval(Ty::Bool, move |input, cx| {
                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
