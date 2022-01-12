@@ -1,3 +1,5 @@
+mod intrinsics;
+
 use crate::prelude::*;
 use ::kserd::Number;
 use ::libs::{divvy::Str, fastrand, rayon::prelude::*};
@@ -47,6 +49,7 @@ pub enum OperationCategory {
     Logic,
     Morphism,
     Pipeline,
+    Diagnostics,
     UserDefined,
 }
 
@@ -60,6 +63,7 @@ impl fmt::Display for OperationCategory {
             OperationCategory::Init => write!(f, "init"),
             OperationCategory::Io => write!(f, "io"),
             OperationCategory::Pipeline => write!(f, "pipeline"),
+            OperationCategory::Diagnostics => write!(f, "diagnostics"),
             OperationCategory::UserDefined => write!(f, "user-defined"),
         }
     }
@@ -74,101 +78,14 @@ pub struct Implementations {
 
 impl Default for Implementations {
     fn default() -> Self {
-        use ::paste::paste;
-
-        let mut implementations = Implementations {
+        let mut impls = Implementations {
             impls: HashMap::default(),
             names: HashMap::default(),
         };
-        let impls = &mut implementations;
 
-        macro_rules! add {
-            ($cmd:tt, $cat:ident) => {{
-                add!($cmd, $cmd, $cat)
-            }};
-            ($cmd:literal, $inner:tt, $cat:ident) => {{
-                paste! { add!($cmd, [<$inner _intrinsic>], $cat, [<$inner _help>]) }
-            }};
-            ($cmd:tt, $inner:tt, $cat:ident) => {{
-                paste! { add!(stringify!($cmd), [<$inner _intrinsic>], $cat, [<$inner _help>]) }
-            }};
-            ($cmd:expr, $fn:path, $cat:ident, $help:path) => {{
-                impls.insert_intrinsic(
-                    $cmd,
-                    None,
-                    $fn,
-                    Location::Ogma,
-                    OperationCategory::$cat,
-                    $help(),
-                );
-            }};
-        }
+        intrinsics::add_intrinsics(&mut impls);
 
-        // Arithmetic ------------------------------------------
-        add!(+, add, Arithmetic);
-        add!(*, mul, Arithmetic);
-        add!("×", mul, Arithmetic);
-        add!("-", sub, Arithmetic);
-        add!(/, div, Arithmetic);
-        add!("÷", div, Arithmetic);
-        add!(ceil, Arithmetic);
-        add!(floor, Arithmetic);
-        add!("is-finite", isfinite, Arithmetic);
-        add!(root, Arithmetic);
-        // Cmp -------------------------------------------------
-        add!(cmp, Cmp);
-        add!(eq, Cmp);
-        add!(max, Cmp);
-        add!(min, Cmp);
-        // Logic -----------------------------------------------
-        add!(and, Logic);
-        add!(if, Logic);
-        add!(not, Logic);
-        add!(or, Logic);
-        // Morphism --------------------------------------------
-        add!(append, Morphism);
-        add!("append-row", append_row, Morphism);
-        add!(dedup, Morphism);
-        add!(filter, Morphism);
-        add!(fold, Morphism);
-        add!("fold-while", fold_while, Morphism);
-        add!(grp, Morphism);
-        add!("grp-by", grpby, Morphism);
-        add!(map, Morphism);
-        add!(pick, Morphism);
-        add!(ren, Morphism);
-        add!("ren-with", ren_with, Morphism);
-        add!(rev, Morphism);
-        add!(skip, Morphism);
-        add!(sort, Morphism);
-        add!("sort-by", sortby, Morphism);
-        add!(take, Morphism);
-        // Pipeline --------------------------------------------
-        add!(benchmark, Pipeline);
-        add!(get, Pipeline);
-        add!(
-            ".",
-            ast::DotOperatorBlock::instrinsic,
-            Pipeline,
-            ast::DotOperatorBlock::help
-        );
-        add!("\\", in, Pipeline);
-        add!(len, Pipeline);
-        add!(let, Pipeline);
-        add!(nth, Pipeline);
-        add!(rand, Pipeline);
-        add!(range, Pipeline);
-        add!(Table, table, Pipeline);
-        add!("to-str", to_str, Pipeline);
-        add!(Tuple, tuple, Pipeline);
-        // Io --------------------------------------------------
-        add!(ls, Io);
-        add!(open, Io);
-        add!(save, Io);
-
-        // ---- Specialised instrinsic ops --------------
-
-        implementations
+        impls
     }
 }
 
@@ -3909,6 +3826,58 @@ access of the fields is using `get t#` with the field number",
 }
 
 fn tuple_intrinsic(mut blk: Block) -> Result<Step> {
+    let len = blk.args_len();
+    if len < 2 {
+        return Err(Error::insufficient_args(&blk.blk_tag, len));
+    }
+    let mut v = Vec::with_capacity(len);
+    for _ in 0..len {
+        v.push(blk.next_arg(None)?);
+    }
+
+    let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
+
+    blk.eval(Type::Def(ty.clone()), move |input, cx| {
+        let mut data = Vec::with_capacity(v.len());
+        for arg in &v {
+            data.push(arg.resolve(|| input.clone(), &cx)?);
+        }
+        cx.done(OgmaData::new(ty.clone(), None, data))
+    })
+}
+
+// ------ Typify ---------------------------------------------------------------
+fn typify_help() -> HelpMessage {
+    todo!();
+    variadic_help(
+        "Tuple",
+        "construct a tuple of the result of each expression
+tuples impl `eq` and `cmp` if all its fields also implement `eq` and `cmp`
+tuples have unique types: `U_<t0_Ty>-<t1_Ty>_`
+access of the fields is using `get t#` with the field number",
+        vec![
+            HelpExample {
+                desc: "create a two element tuple of numbers. type: U_Num-Num_",
+                code: "Tuple 1 2",
+            },
+            HelpExample {
+                desc: "create 3 numbers after input. type: U_Num-Num-Num_",
+                code: "\\ 3 | Tuple {+ 1} {+ 2} {+ 3}",
+            },
+            HelpExample {
+                desc: "tuples are heterogeneous. type: U_Num-Str-Bool_",
+                code: "Tuple 1 'foo' #t",
+            },
+            HelpExample {
+                desc: "get the first and third element",
+                code: "Tuple 1 'foo' 2 | + {get t0} {get t2}",
+            },
+        ],
+    )
+}
+
+fn typify_intrinsic(mut blk: Block) -> Result<Step> {
+    todo!();
     let len = blk.args_len();
     if len < 2 {
         return Err(Error::insufficient_args(&blk.blk_tag, len));
