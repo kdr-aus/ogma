@@ -9,7 +9,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 
 // ------ Typify ---------------------------------------------------------------
 fn typify_help() -> HelpMessage {
-    todo!();
+    // TODO -- implement properly
     variadic_help(
         "Tuple",
         "construct a tuple of the result of each expression
@@ -38,23 +38,8 @@ access of the fields is using `get t#` with the field number",
 }
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!();
-    let len = blk.args_len();
-    if len < 2 {
-        return Err(Error::insufficient_args(&blk.blk_tag, len));
-    }
-    let mut v = Vec::with_capacity(len);
-    for _ in 0..len {
-        v.push(blk.next_arg(None)?);
-    }
-
-    let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
-
-    blk.eval(Type::Def(ty.clone()), move |input, cx| {
-        let mut data = Vec::with_capacity(v.len());
-        for arg in &v {
-            data.push(arg.resolve(|| input.clone(), &cx)?);
-        }
-        cx.done(OgmaData::new(ty.clone(), None, data))
+    // TODO -- implement properly
+    blk.eval_o(|i, cx| {
+        cx.done_o(())
     })
 }
