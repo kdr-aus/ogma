@@ -1,5 +1,6 @@
 //! Table expression system.
 #![warn(missing_docs)]
+#![recursion_limit = "256"]
 
 mod common;
 mod eng;
