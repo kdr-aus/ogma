@@ -446,7 +446,7 @@ fn resolve_trow_expr_par(table: &Table, expr: &eng::Argument, cx: &Context) -> R
 struct BinaryOp<T> {
     env: var::Environment,
     rhs: var::Variable,
-    evaluator: eng::ExprEvaluator,
+    evaluator: eng::Evaluator,
     transformation: T,
 }
 
@@ -483,7 +483,7 @@ impl<T> BinaryOp<T> {
         // this uses the pseudo-env and the expr we construct, with an input of the type.
         // if the impl of <cmd> on type does not conform to expectations an error will occur
         let evaluator =
-            eng::construct_evaluator(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
+            eng::Evaluator::construct(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
                 Error {
                     cat: err::Category::Semantics,
                     desc: format!(
@@ -1840,7 +1840,7 @@ impl FieldAccessor {
                     .iter()
                     .enumerate()
                     .find(|(_, f)| f.name().str() == field_name)
-                    .ok_or_else(|| Error::field_not_found(field_arg.tag(), tydef))?;
+                    .ok_or_else(|| Error::field_not_found(&field_arg.tag, tydef))?;
 
                 let out_ty = field.ty().clone();
                 Ok((FieldAccessor(idx), out_ty))
@@ -1976,7 +1976,7 @@ fn grpby_intrinsic(mut blk: Block) -> Result<Step> {
         key.out_ty(),
         &ordty,
         "grp-by",
-        key.tag(),
+        &key.tag,
         blk.defs,
         cnv_value_to_ord,
     )?;
@@ -2111,7 +2111,7 @@ fn if_intrinsic(mut blk: Block) -> Result<Step> {
     for cond in &args {
         if out_ty != *cond.expr.out_ty() {
             return Err(Error::eval(
-                cond.expr.tag(),
+                &cond.expr.tag,
                 "branch arms do not have matching output types",
                 "this branch has a different output type".to_string(),
                 "branching impls require consistent output types".to_string(),
@@ -2666,11 +2666,11 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
                 // nth is adj by one to account for header
                 let nth = n
                     .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, n.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
                 let table = Table::try_from(table)?;
                 if nth + 1 >= table.rows_len() {
                     return Err(Error::eval(
-                        n.tag(),
+                        &n.tag,
                         "index is outside table bounds",
                         format!("this resolves to `{}`", nth),
                         None,
@@ -2686,12 +2686,12 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o::<_, Str>(move |string, cx| {
                 let nth = n
                     .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, n.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
                 Str::try_from(string)
                     .and_then(|s| {
                         s.chars().nth(nth).ok_or_else(|| {
                             Error::eval(
-                                n.tag(),
+                                &n.tag,
                                 "index is outside string bounds",
                                 format!("this resolves to `{}`", nth),
                                 None,
@@ -2943,7 +2943,7 @@ fn rand_intrinsic(mut blk: Block) -> Result<Step> {
             let f = bnd(from.as_ref(), &mut i, &cx, 0.0)?;
             let t = bnd(to.as_ref(), &mut i, &cx, 1.0)?;
             let d = t - f;
-            let len: usize = cnv_num_to_uint(len.resolve(|| i, &cx)?, len.tag())?;
+            let len: usize = cnv_num_to_uint(len.resolve(|| i, &cx)?, &len.tag)?;
             check_from_lt_to(f, t, &tag)?;
             let mut table = InnerTable::new();
             let rng = fastrand::Rng::new();
@@ -3015,7 +3015,7 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)
-                    .and_then(|n| cnv_num_to_uint(n, from.tag()))?;
+                    .and_then(|n| cnv_num_to_uint(n, &from.tag))?;
                 let to = cnv_num_to_uint(input, &blktag)?;
                 cx.done_o(table_range(from, to))
             })
@@ -3025,10 +3025,10 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)
-                    .and_then(|n| cnv_num_to_uint(n, from.tag()))?;
+                    .and_then(|n| cnv_num_to_uint(n, &from.tag))?;
                 let to = to
                     .resolve(|| input.clone(), &cx)
-                    .and_then(|n| cnv_num_to_uint(n, to.tag()))?;
+                    .and_then(|n| cnv_num_to_uint(n, &to.tag))?;
                 cx.done_o(table_range(from, to))
             })
         }
@@ -3090,11 +3090,11 @@ fn ren_intrinsic(mut blk: Block) -> Result<Step> {
                 let i = match h {
                     Ref::Idx(x) => x
                         .resolve(|| Value::Nil, &cx)
-                        .and_then(|n| cnv_num_to_uint::<usize>(n, x.tag())),
+                        .and_then(|n| cnv_num_to_uint::<usize>(n, &x.tag)),
                     Ref::Name(x) => x
                         .resolve(|| Value::Nil, &cx)
                         .and_then(Str::try_from)
-                        .and_then(|n| TableRow::col_idx(&table, n.as_str(), x.tag())),
+                        .and_then(|n| TableRow::col_idx(&table, n.as_str(), &x.tag)),
                 }?;
                 indices.push(i);
             }
@@ -3112,7 +3112,7 @@ fn ren_intrinsic(mut blk: Block) -> Result<Step> {
                     }
                     None => Err(Error::eval(
                         match &hdrs[idx] {
-                            Ref::Name(x) | Ref::Idx(x) => x.tag(),
+                            Ref::Name(x) | Ref::Idx(x) => &x.tag,
                         },
                         format!("{} is outside table column bounds", i),
                         None,
@@ -3434,7 +3434,7 @@ fn skip_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |table, cx| {
                 let count = count
                     .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 let mut table = Table::try_from(table)?;
                 if let Some(t) = table.get_mut() {
                     t.retain_rows(|i, _| i == 0 || i > count);
@@ -3456,7 +3456,7 @@ fn skip_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o::<_, Str>(move |string, cx| {
                 let count = count
                     .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 Str::try_from(string)
                     .map(|s| s.chars().skip(count).collect::<Str>())
                     .and_then(|x| cx.done_o(x))
@@ -3591,7 +3591,7 @@ fn sortby_intrinsic(mut blk: Block) -> Result<Step> {
         key.out_ty(),
         &ordty,
         "sort-by",
-        key.tag(),
+        &key.tag,
         blk.defs,
         cnv_value_to_ord,
     )?;
@@ -3747,7 +3747,7 @@ fn take_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |table, cx| {
                 let count = count
                     .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 let mut table = Table::try_from(table)?;
                 if let Some(t) = table.get_mut() {
                     t.retain_rows(|i, _| i == 0 || i <= count);
@@ -3769,7 +3769,7 @@ fn take_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o::<_, Str>(move |string, cx| {
                 let count = count
                     .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 Str::try_from(string)
                     .map(|s| s.chars().take(count).collect::<Str>())
                     .and_then(|x| cx.done_o(x))
@@ -3826,58 +3826,6 @@ access of the fields is using `get t#` with the field number",
 }
 
 fn tuple_intrinsic(mut blk: Block) -> Result<Step> {
-    let len = blk.args_len();
-    if len < 2 {
-        return Err(Error::insufficient_args(&blk.blk_tag, len));
-    }
-    let mut v = Vec::with_capacity(len);
-    for _ in 0..len {
-        v.push(blk.next_arg(None)?);
-    }
-
-    let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
-
-    blk.eval(Type::Def(ty.clone()), move |input, cx| {
-        let mut data = Vec::with_capacity(v.len());
-        for arg in &v {
-            data.push(arg.resolve(|| input.clone(), &cx)?);
-        }
-        cx.done(OgmaData::new(ty.clone(), None, data))
-    })
-}
-
-// ------ Typify ---------------------------------------------------------------
-fn typify_help() -> HelpMessage {
-    todo!();
-    variadic_help(
-        "Tuple",
-        "construct a tuple of the result of each expression
-tuples impl `eq` and `cmp` if all its fields also implement `eq` and `cmp`
-tuples have unique types: `U_<t0_Ty>-<t1_Ty>_`
-access of the fields is using `get t#` with the field number",
-        vec![
-            HelpExample {
-                desc: "create a two element tuple of numbers. type: U_Num-Num_",
-                code: "Tuple 1 2",
-            },
-            HelpExample {
-                desc: "create 3 numbers after input. type: U_Num-Num-Num_",
-                code: "\\ 3 | Tuple {+ 1} {+ 2} {+ 3}",
-            },
-            HelpExample {
-                desc: "tuples are heterogeneous. type: U_Num-Str-Bool_",
-                code: "Tuple 1 'foo' #t",
-            },
-            HelpExample {
-                desc: "get the first and third element",
-                code: "Tuple 1 'foo' 2 | + {get t0} {get t2}",
-            },
-        ],
-    )
-}
-
-fn typify_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!();
     let len = blk.args_len();
     if len < 2 {
         return Err(Error::insufficient_args(&blk.blk_tag, len));
