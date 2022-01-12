@@ -25,7 +25,7 @@ where
     let expr = lang::syntax::parse::expression(expr, loc, defs).map_err(|e| e.0)?;
     eng::handle_help(&expr, defs)?;
     let vars = var::Locals::default();
-    let evaluator = eng::construct_evaluator(I::as_type(), expr, defs, vars.clone())?;
+    let evaluator = eng::Evaluator::construct(I::as_type(), expr, defs, vars.clone())?;
     let cx = eng::Context {
         root,
         wd,

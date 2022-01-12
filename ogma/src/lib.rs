@@ -3,7 +3,7 @@
 #![recursion_limit = "256"]
 
 mod common;
-mod eng;
+pub mod eng;
 pub mod lang;
 pub mod output;
 pub mod rt;
