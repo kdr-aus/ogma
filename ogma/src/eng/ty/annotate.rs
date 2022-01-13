@@ -1,7 +1,6 @@
 //! Module handling type _annotations_, human readable type information.
 
 use super::*;
-use ast::IBlock;
 use lang::var::Locals;
 use std::{borrow::Cow, fmt};
 
@@ -12,17 +11,17 @@ impl Type {
 }
 
 impl Argument {
+    /// Annotate this argument with type information.
     pub fn type_annotation(&self) -> Cow<'_, str> {
         match &self.hold {
             Hold::Expr(evaluator) => return evaluator.type_annotation().into(),
-            Hold::Lit(_) => {
-                if self.tag.str().is_empty() {
+            Hold::Lit(_) => if self.tag.str().is_empty() {
                 format!("'':{}", self.out_ty.fmt_annotation())
-                } else {
+            } else {
                 format!("{}:{}", self.tag, self.out_ty.fmt_annotation())
-                }.into()
             }
-            Hold::Var(_) => format!("${}:{}", self.tag, self.out_ty.fmt_annotation()).into()
+            .into(),
+            Hold::Var(_) => format!("${}:{}", self.tag, self.out_ty.fmt_annotation()).into(),
         }
     }
 }
@@ -43,87 +42,6 @@ impl Clone for Annotator<'_> {
             block_tag: self.block_tag,
         }
     }
-}
-
-fn argument(arg: &ast::Argument, annotator: Annotator) -> Result<String> {
-    let (s, ty) = argument_inner(arg, annotator)?;
-    Ok(format!("{}:{}", s, Display(&ty)))
-}
-
-fn argument_inner(arg: &ast::Argument, annotator: Annotator) -> Result<(String, Type)> {
-    use ast::Argument::*;
-
-    // TODO the Pound matching code is repetitive with arg_recursive,
-    // Work out how to generalise this.
-    Ok(match arg {
-        Ident(ident) => (ident.to_string(), Type::Str),
-        Num(_num, tag) => (tag.to_string(), Type::Num),
-        Pound('t', tag) => (tag.to_string(), Type::Bool),
-        Pound('f', tag) => (tag.to_string(), Type::Bool),
-        Pound('n', tag) => (tag.to_string(), Type::Nil),
-        Pound('i', tag) => (tag.to_string(), annotator.in_ty),
-        Pound(ch, tag) => return Err(Error::unknown_spec_literal(*ch, &tag)),
-        Var(var) => {
-            let ty = match annotator
-                .locals
-                .get(var.str())
-                .ok_or_else(|| Error::var_not_found(&var))?
-            {
-                Local::Param(arg, _) => {
-                    argument_inner(arg, annotator)
-                        .map_err(|e| e.add_trace(&var))?
-                        .1
-                }
-                Local::Var(v) => v.ty().clone(),
-            };
-            (format!("${}", var), ty)
-        }
-        Expr(expr) => {
-            let eval = Evaluator::construct(
-                annotator.in_ty.clone(),
-                expr.clone(),
-                annotator.defs,
-                annotator.locals.clone(),
-            )
-            .map_err(|e| e.add_trace(annotator.block_tag))?;
-            let oty = eval.ty().clone();
-            let text = eval.type_annotation().to_string();
-
-            (text, oty)
-        }
-        x => todo!(),
-    })
-}
-
-fn expression(
-    expr: &ast::Expression,
-    evaluator: &Evaluator,
-    mut annotator: Annotator,
-) -> Result<String> {
-    let mut s = format!("{{:{} ", Display(&annotator.in_ty));
-
-    for (blk, step) in expr.blocks.iter().zip(evaluator.steps()) {
-        s.push_str(&block(blk, &annotator)?);
-        s.push(' ');
-    }
-
-    s.push('}');
-
-    Ok(s)
-}
-
-fn block(blk: &ast::Block, annotator: &Annotator) -> Result<String> {
-    let mut op = blk.op().str().to_string();
-
-    for arg in blk.terms().iter().filter_map(|term| match term {
-        ast::Term::Arg(arg) => Some(arg),
-        _ => None,
-    }) {
-        op.push(' ');
-        op.push_str(&argument(arg, annotator.clone())?);
-    }
-
-    Ok(op)
 }
 
 /// Formatter for [`Type`] annonations.

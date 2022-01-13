@@ -42,7 +42,9 @@ impl Evaluator {
 
         for block in expr.blocks {
             evaluator.type_annotation.push(':');
-            evaluator.type_annotation.push_str(&evaluator.ty().fmt_annotation().to_string());
+            evaluator
+                .type_annotation
+                .push_str(&evaluator.ty().fmt_annotation().to_string());
 
             let im = defs.impls().get_impl(&block.op(), evaluator.ty())?;
             let mut block = Block::new(evaluator.ty().clone(), defs, &mut variables, block);
@@ -58,10 +60,11 @@ impl Evaluator {
                         let type_annotation = block.type_annotation.clone();
 
                         Step {
-                        out_ty: evaluator.ty().clone(),
-                        f: Box::new(move |input, cx| evaluator.eval(input, cx)),
-                        type_annotation
-                    }})
+                            out_ty: evaluator.ty().clone(),
+                            f: Box::new(move |input, cx| evaluator.eval(input, cx)),
+                            type_annotation,
+                        }
+                    })
                 }
             }?;
 
@@ -74,7 +77,9 @@ impl Evaluator {
 
         evaluator.type_annotation.pop();
         evaluator.type_annotation.push_str("}:");
-        evaluator.type_annotation.push_str(&evaluator.ty().fmt_annotation().to_string());
+        evaluator
+            .type_annotation
+            .push_str(&evaluator.ty().fmt_annotation().to_string());
 
         Ok(evaluator)
     }
@@ -89,11 +94,6 @@ impl Evaluator {
 
     pub fn tag(&self) -> &Tag {
         &self.tag
-    }
-
-    /// The steps comprising this evaluator.
-    pub fn steps(&self) -> &[Step] {
-        &self.steps
     }
 
     pub fn type_annotation(&self) -> &str {

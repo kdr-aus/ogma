@@ -1,8 +1,7 @@
 use super::*;
 use crate::lang::var::{Environment, Locals};
-use crate::prelude::*;
-use ast::{DefinitionImpl, Expression, Tag, Term};
-use std::{convert::TryInto, fmt};
+use ast::{Expression, Tag, Term};
+use std::fmt;
 
 pub fn handle_help(expr: &Expression, definitions: &Definitions) -> Result<()> {
     // rejig on new proc
@@ -98,6 +97,7 @@ impl<'d, 'v> Block<'d, 'v> {
         })
     }
 
+    /// Generate a new compilation block from the ast node.
     pub fn new(
         in_ty: Type,
         defs: &'d Definitions,
@@ -132,10 +132,11 @@ impl<'d, 'v> Block<'d, 'v> {
             args,
             args_count: 0,
             vars,
-            type_annotation
+            type_annotation,
         }
     }
 
+    /// The input [`Type`] of the block.
     pub fn in_ty(&self) -> &Type {
         &self.in_ty
     }
@@ -277,6 +278,7 @@ impl<'d, 'v> Block<'d, 'v> {
 // ###### STEP #################################################################
 
 impl Step {
+    /// Evaluate this step, invoking the stored closure with the given value and context.
     pub fn invoke(&self, input: Value, cx: Context) -> StepR {
         let r = (self.f)(input, cx);
 
