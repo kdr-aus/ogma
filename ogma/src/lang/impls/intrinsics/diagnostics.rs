@@ -39,5 +39,10 @@ access of the fields is using `get t#` with the field number",
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
     // TODO -- implement properly
-    blk.eval_o(|i, cx| cx.done_o(()))
+    let arg = blk.next_arg(None)?;
+
+    blk.eval_o(move |_, cx| {
+        let annotation = Str::from(arg.type_annotation().into_owned());
+        cx.done_o(annotation)
+    })
 }

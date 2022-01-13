@@ -3,7 +3,23 @@
 use super::*;
 use ast::IBlock;
 use lang::var::Locals;
-use std::fmt;
+use std::{borrow::Cow, fmt};
+
+impl Type {
+    pub fn fmt_annotation(&self) -> Display {
+        Display(self)
+    }
+}
+
+impl Argument {
+    pub fn type_annotation(&self) -> Cow<'_, str> {
+        match &self.hold {
+            Hold::Expr(evaluator) => return evaluator.type_annotation().into(),
+            Hold::Lit(_) => format!("{}:{}", self.tag, self.out_ty.fmt_annotation()).into(),
+            Hold::Var(_) => format!("${}:{}", self.tag, self.out_ty.fmt_annotation()).into()
+        }
+    }
+}
 
 struct Annotator<'a> {
     in_ty: Type,
@@ -25,13 +41,11 @@ impl Clone for Annotator<'_> {
 
 fn argument(arg: &ast::Argument, annotator: Annotator) -> Result<String> {
     let (s, ty) = argument_inner(arg, annotator)?;
-    Ok(format!("{}:{}", s, AnnotationDisplay(&ty)))
+    Ok(format!("{}:{}", s, Display(&ty)))
 }
 
 fn argument_inner(arg: &ast::Argument, annotator: Annotator) -> Result<(String, Type)> {
     use ast::Argument::*;
-
-    dbg!(arg, &annotator.in_ty);
 
     // TODO the Pound matching code is repetitive with arg_recursive,
     // Work out how to generalise this.
@@ -67,7 +81,7 @@ fn argument_inner(arg: &ast::Argument, annotator: Annotator) -> Result<(String, 
             )
             .map_err(|e| e.add_trace(annotator.block_tag))?;
             let oty = eval.ty().clone();
-            let text = expression(expr, &eval, annotator)?;
+            let text = eval.type_annotation().to_string();
 
             (text, oty)
         }
@@ -80,7 +94,7 @@ fn expression(
     evaluator: &Evaluator,
     mut annotator: Annotator,
 ) -> Result<String> {
-    let mut s = format!("{{:{} ", AnnotationDisplay(&annotator.in_ty));
+    let mut s = format!("{{:{} ", Display(&annotator.in_ty));
 
     for (blk, step) in expr.blocks.iter().zip(evaluator.steps()) {
         s.push_str(&block(blk, &annotator)?);
@@ -106,9 +120,10 @@ fn block(blk: &ast::Block, annotator: &Annotator) -> Result<String> {
     Ok(op)
 }
 
-struct AnnotationDisplay<'a>(&'a Type);
+/// Formatter for [`Type`] annonations.
+pub struct Display<'a>(pub &'a Type);
 
-impl fmt::Display for AnnotationDisplay<'_> {
+impl fmt::Display for Display<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Type::*;
 

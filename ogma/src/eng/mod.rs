@@ -54,6 +54,13 @@ pub struct Block<'d, 'v> {
     args: Vec<ast::Argument>,
     /// Counter of the arguments used.
     args_count: usize,
+
+    /// A tracked type annotation code representation.
+    ///
+    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
+    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
+    /// moved into that system.
+    type_annotation: String
 }
 
 impl<'d, 'v> Block<'d, 'v> {
@@ -82,6 +89,14 @@ impl<'d, 'v> Block<'d, 'v> {
 pub struct Step {
     out_ty: Type,
     f: Box<dyn Fn(Value, Context) -> StepR + Sync>,
+
+    /// A tracked type annotation code representation.
+    /// This comes directly off the block when transforming into a `Step`.
+    ///
+    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
+    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
+    /// moved into that system.
+    type_annotation: String
 }
 
 type StepR = Result<(Value, Environment)>;

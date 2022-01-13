@@ -97,6 +97,7 @@ impl<'d, 'v> Block<'d, 'v> {
             hold,
         })
     }
+
     pub fn new(
         in_ty: Type,
         defs: &'d Definitions,
@@ -120,6 +121,8 @@ impl<'d, 'v> Block<'d, 'v> {
         flags.reverse();
         args.reverse();
 
+        let type_annotation = op_tag.to_string();
+
         Self {
             in_ty,
             defs,
@@ -129,6 +132,7 @@ impl<'d, 'v> Block<'d, 'v> {
             args,
             args_count: 0,
             vars,
+            type_annotation
         }
     }
 
@@ -156,11 +160,16 @@ impl<'d, 'v> Block<'d, 'v> {
     /// > input value passed through is [`Value::Nil`].
     pub fn next_arg<I: Into<Option<Type>>>(&mut self, input_type: I) -> Result<Argument> {
         let arg = self.next_arg_raw()?;
-        self.arg_recursive(
+        let arg = self.arg_recursive(
             arg,
             input_type.into().unwrap_or_else(|| self.in_ty().clone()),
             self.vars,
-        )
+        )?;
+
+        self.type_annotation.push(' ');
+        self.type_annotation += &*arg.type_annotation();
+
+        Ok(arg)
     }
 
     /// Works in the same fashion as [`Block::next_arg`], but **does not remove the argument from
@@ -243,9 +252,11 @@ impl<'d, 'v> Block<'d, 'v> {
         F: Fn(Value, Context) -> StepR + Sync + 'static,
     {
         self.finalise()?;
+        let type_annotation = self.type_annotation;
         Ok(Step {
             out_ty,
             f: Box::new(f),
+            type_annotation,
         })
     }
 
