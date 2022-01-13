@@ -9,6 +9,8 @@ use rt::{bat::*, process_expression};
 use std::{iter::*, path::*};
 use HelpParameter::*;
 
+mod diagnostics;
+
 #[test]
 fn table_printing() {
     let mut table = Table::default();

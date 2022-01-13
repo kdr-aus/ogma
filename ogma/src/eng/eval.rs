@@ -9,6 +9,13 @@ pub struct Evaluator {
     out_ty: Type,
     /// Each block converted into a function.
     steps: Vec<Step>,
+
+    /// A tracked type annotation code representation.
+    ///
+    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
+    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
+    /// moved into that system.
+    type_annotation: String,
 }
 
 impl Evaluator {
@@ -17,6 +24,7 @@ impl Evaluator {
             tag,
             out_ty: in_ty,
             steps: Vec::with_capacity(stepslen),
+            type_annotation: String::default(),
         }
     }
 
@@ -26,23 +34,42 @@ impl Evaluator {
         defs: &Definitions,
         mut variables: Locals,
     ) -> Result<Evaluator> {
+        let type_annotation = String::from("{");
+
         let mut evaluator = Evaluator::new(in_ty, expr.tag, expr.blocks.len());
 
+        evaluator.type_annotation = type_annotation;
+
         for block in expr.blocks {
+            evaluator.type_annotation.push(':');
+            evaluator.type_annotation.push_str(&evaluator.ty().fmt_annotation().to_string());
+
             let im = defs.impls().get_impl(&block.op(), evaluator.ty())?;
             let mut block = Block::new(evaluator.ty().clone(), defs, &mut variables, block);
             let step = match im {
                 Implementation::Intrinsic { f, .. } => f(block),
                 Implementation::Definition(def) => {
                     // TODO This seems unnecessary, wrapping an evaluator in a step???
-                    DefImplEvaluator::build(&mut block, def).map(|evaluator| Step {
+                    DefImplEvaluator::build(&mut block, def).map(|evaluator| {
+                        let type_annotation = evaluator.expr_eval.type_annotation.clone();
+                        Step {
                         out_ty: evaluator.ty().clone(),
                         f: Box::new(move |input, cx| evaluator.eval(input, cx)),
-                    })
+                        type_annotation: Default::default(),
+                    }})
                 }
             }?;
+
+            evaluator.type_annotation.push(' ');
+            evaluator.type_annotation.push_str(&step.type_annotation);
+            evaluator.type_annotation.push_str(" |");
+
             evaluator.push_step(step);
         }
+
+        evaluator.type_annotation.pop();
+        evaluator.type_annotation.push_str("}:");
+        evaluator.type_annotation.push_str(&evaluator.ty().fmt_annotation().to_string());
 
         Ok(evaluator)
     }
@@ -62,6 +89,10 @@ impl Evaluator {
     /// The steps comprising this evaluator.
     pub fn steps(&self) -> &[Step] {
         &self.steps
+    }
+
+    pub fn type_annotation(&self) -> &str {
+        &*self.type_annotation
     }
 
     /// Asserts that the expressions returns the type `ty` once resolved.
@@ -197,12 +228,15 @@ impl DefImplEvaluator {
 /// The input type is expected to match `in_ty`.
 pub fn make_input_pound_expr(in_ty: Type, tag: Tag) -> Evaluator {
     let out_ty = in_ty;
+    let tyan = format!("#i:{}", out_ty);
     Evaluator {
         tag,
         out_ty: out_ty.clone(),
         steps: vec![Step {
             out_ty,
             f: Box::new(|i, cx| cx.done(i)),
+            type_annotation: tyan.clone(),
         }],
+        type_annotation: tyan,
     }
 }
