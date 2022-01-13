@@ -39,7 +39,5 @@ access of the fields is using `get t#` with the field number",
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
     // TODO -- implement properly
-    blk.eval_o(|i, cx| {
-        cx.done_o(())
-    })
+    blk.eval_o(|i, cx| cx.done_o(()))
 }

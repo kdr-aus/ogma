@@ -98,6 +98,12 @@ pub enum Location {
     File(Arc<Path>, usize),
 }
 
+impl Default for Location {
+    fn default() -> Self {
+        Location::Shell
+    }
+}
+
 impl Location {
     /// Construct a location from a file and a line number.
     pub fn file<F: AsRef<Path>>(file: F, line: usize) -> Self {
