@@ -78,7 +78,6 @@ fn typify_test_vars() {
     assert_eq!(x, s("$x:Num"));
 }
 
-
 #[test]
 fn typify_test_expressions() {
     let defs = &Definitions::new();
@@ -89,9 +88,14 @@ fn typify_test_expressions() {
     assert_eq!(x, s("{:Nil ls }:Table"));
 
     let x = process_w_nil("typify { ls | filter foo < 3 }", defs);
-    assert_eq!(x, s("{:Nil ls |:Table filter foo:Str {:Num < 3:Num }:Bool }:Table"));
+    assert_eq!(
+        x,
+        s("{:Nil ls |:Table filter foo:Str {:Num < 3:Num }:Bool }:Table")
+    );
 
-    let x = process_w_nil("typify { ls | fold '' + { \\$row | get foo --Str } | = bar }", defs);
+    let x = process_w_nil(
+        "typify { ls | fold '' + { \\$row | get foo --Str } | = bar }",
+        defs,
+    );
     assert_eq!(x, s("{:Nil ls |:Table fold '':Str {:Str + {:Str \\ $row:TableRow |:TableRow get foo:Str }:Str }:Str |:Str = bar:Str }:Bool"));
 }
-

@@ -60,7 +60,7 @@ pub struct Block<'d, 'v> {
     /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
     /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
     /// moved into that system.
-    type_annotation: String
+    type_annotation: String,
 }
 
 impl<'d, 'v> Block<'d, 'v> {
@@ -96,7 +96,7 @@ pub struct Step {
     /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
     /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
     /// moved into that system.
-    type_annotation: String
+    type_annotation: String,
 }
 
 type StepR = Result<(Value, Environment)>;

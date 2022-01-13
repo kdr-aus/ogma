@@ -63,8 +63,10 @@ impl Variable {
 // ###### LOCALS ###############################################################
 #[derive(Debug)]
 struct LocalEntry {
-    defined_depth: u32,
-    local: Local,
+    // TODO remove this???
+    _defined_depth: u32,
+    // TODO remove this???
+    _local: Local,
 }
 
 #[derive(Debug, Default)]
