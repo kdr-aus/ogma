@@ -1,12 +1,12 @@
 //! Compilation and evaluation engine.
 
 use crate::prelude::*;
-use lang::var::{Environment, Locals};
 
 mod arg;
 mod eval;
 mod hir;
 mod ty;
+mod var;
 
 pub(crate) use self::{
     eval::{DefImplEvaluator, Evaluator},
@@ -42,7 +42,7 @@ pub struct Block<'d, 'v> {
     /// Definitions,
     pub defs: &'d Definitions,
     /// Variables tracking.
-    vars: &'v mut Locals,
+    vars: &'v mut var::Locals,
     /// Must be empty upon finalisation, unused flags return error.
     ///
     /// > Stored in reverse order as a stack.
