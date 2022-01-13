@@ -34,6 +34,7 @@ impl Evaluator {
             let step = match im {
                 Implementation::Intrinsic { f, .. } => f(block),
                 Implementation::Definition(def) => {
+                    // TODO This seems unnecessary, wrapping an evaluator in a step???
                     DefImplEvaluator::build(&mut block, def).map(|evaluator| Step {
                         out_ty: evaluator.ty().clone(),
                         f: Box::new(move |input, cx| evaluator.eval(input, cx)),
@@ -46,15 +47,6 @@ impl Evaluator {
         Ok(evaluator)
     }
 
-    /// Asserts that the expressions returns the type `ty` once resolved.
-    pub fn returns(self, ty: &Type) -> Result<Self> {
-        if &self.out_ty == ty {
-            Ok(self)
-        } else {
-            Err(Error::unexp_arg_ty(ty, &self.out_ty, &self.tag))
-        }
-    }
-
     /// The output type of this expression.
     ///
     /// This updates when `push_step` is used to add another step. The output will become the
@@ -65,6 +57,20 @@ impl Evaluator {
 
     pub fn tag(&self) -> &Tag {
         &self.tag
+    }
+
+    /// The steps comprising this evaluator.
+    pub fn steps(&self) -> &[Step] {
+        &self.steps
+    }
+
+    /// Asserts that the expressions returns the type `ty` once resolved.
+    pub fn returns(self, ty: &Type) -> Result<Self> {
+        if &self.out_ty == ty {
+            Ok(self)
+        } else {
+            Err(Error::unexp_arg_ty(ty, &self.out_ty, &self.tag))
+        }
     }
 
     pub fn push_step(&mut self, step: Step) {
@@ -190,11 +196,12 @@ impl DefImplEvaluator {
 /// Makes an [`Evaluator`] which just passes then input to the output.
 /// The input type is expected to match `in_ty`.
 pub fn make_input_pound_expr(in_ty: Type, tag: Tag) -> Evaluator {
+    let out_ty = in_ty;
     Evaluator {
         tag,
-        out_ty: in_ty.clone(),
+        out_ty: out_ty.clone(),
         steps: vec![Step {
-            out_ty: in_ty,
+            out_ty,
             f: Box::new(|i, cx| cx.done(i)),
         }],
     }

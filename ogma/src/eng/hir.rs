@@ -268,6 +268,7 @@ impl<'d, 'v> Block<'d, 'v> {
 impl Step {
     pub fn invoke(&self, input: Value, cx: Context) -> StepR {
         let r = (self.f)(input, cx);
+
         if cfg!(debug_assertions) {
             // we runtime check the step's output type with the eval type in debug mode.
             // this should help isolate pervasive typing bugs but won't impact release performance
@@ -282,6 +283,7 @@ EVAL VALUE: {:?}",
                 );
             }
         }
+
         r
     }
 }
