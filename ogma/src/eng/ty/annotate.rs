@@ -15,7 +15,13 @@ impl Argument {
     pub fn type_annotation(&self) -> Cow<'_, str> {
         match &self.hold {
             Hold::Expr(evaluator) => return evaluator.type_annotation().into(),
-            Hold::Lit(_) => format!("{}:{}", self.tag, self.out_ty.fmt_annotation()).into(),
+            Hold::Lit(_) => {
+                if self.tag.str().is_empty() {
+                format!("'':{}", self.out_ty.fmt_annotation())
+                } else {
+                format!("{}:{}", self.tag, self.out_ty.fmt_annotation())
+                }.into()
+            }
             Hold::Var(_) => format!("${}:{}", self.tag, self.out_ty.fmt_annotation()).into()
         }
     }
