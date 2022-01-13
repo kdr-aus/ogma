@@ -51,11 +51,16 @@ impl Evaluator {
                 Implementation::Definition(def) => {
                     // TODO This seems unnecessary, wrapping an evaluator in a step???
                     DefImplEvaluator::build(&mut block, def).map(|evaluator| {
-                        let type_annotation = evaluator.expr_eval.type_annotation.clone();
+                        // the DefImplEvaluator::build will process the block
+                        // this has the effect of updating the blocks type annotation
+                        // NOTE that the evaluator's type annotation is the type annotation of the
+                        // inner definition (which might be useful!)
+                        let type_annotation = block.type_annotation.clone();
+
                         Step {
                         out_ty: evaluator.ty().clone(),
                         f: Box::new(move |input, cx| evaluator.eval(input, cx)),
-                        type_annotation: Default::default(),
+                        type_annotation
                     }})
                 }
             }?;

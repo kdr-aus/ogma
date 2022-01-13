@@ -44,6 +44,10 @@ fn typify_test_raw() {
     // Ident
     let x = process_w_nil("typify foo-bar", defs);
     assert_eq!(x, s("foo-bar:Str"));
+    let x = process_w_nil("typify 'foo-bar'", defs);
+    assert_eq!(x, s("foo-bar:Str"));
+    let x = process_w_nil("typify ''", defs);
+    assert_eq!(x, s("'':Str"));
 
     // Number
     let x = process_w_nil("typify 3.14e3", defs);
@@ -86,5 +90,8 @@ fn typify_test_expressions() {
 
     let x = process_w_nil("typify { ls | filter foo < 3 }", defs);
     assert_eq!(x, s("{:Nil ls |:Table filter foo:Str {:Num < 3:Num }:Bool }:Table"));
+
+    let x = process_w_nil("typify { ls | fold '' + { \\$row | get foo --Str } | = bar }", defs);
+    assert_eq!(x, s("{:Nil ls |:Table fold '':Str {:Str + {:Str \\ $row:TableRow |:TableRow get foo:Str }:Str }:Str |:Str = bar:Str }:Bool"));
 }
 
