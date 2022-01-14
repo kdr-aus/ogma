@@ -387,9 +387,11 @@ pub struct Variant {
 #[derive(Debug, Clone)]
 pub struct Field {
     name: Tag,
-    typedef: Tag,
+    // TODO this will probably be used with generics
+    _typedef: Tag,
     ty: Type,
-    params: Vec<Type>,
+    // TODO this will probably be used with generics
+    _params: Vec<Type>,
 }
 
 impl TypeDef {
@@ -464,9 +466,9 @@ fn from_parsed_fields(fields: Vec<ast::Field>, types: &Types) -> Result<Vec<Fiel
 
         v.push(Field {
             name,
-            typedef,
+            _typedef: typedef,
             ty,
-            params,
+            _params: params,
         });
     }
     Ok(v)
@@ -819,9 +821,9 @@ impl Tuple {
                 s = typedef.end + 1;
                 Field {
                     name,
-                    typedef,
+                    _typedef: typedef,
                     ty: arg,
-                    params: Vec::new(),
+                    _params: Vec::new(),
                 }
             })
             .collect();
@@ -889,7 +891,6 @@ impl<'a> Split<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lang::types::Field;
     use Type::*;
 
     #[test]

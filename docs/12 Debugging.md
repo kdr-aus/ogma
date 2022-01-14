@@ -12,5 +12,16 @@ Another handy debugging tool is the REPL. Any implementations can be tested when
 REPL. If working with a batch file, link the batch file into the REPL and use `def --load` to load
 the definitions. This way the definitions can be tested using the REPL.
 
+## Investigate Types
+
+There are times when understanding the types of an expression might be required.
+The `typify` command takes an argument which will be expanded with type annotations.
+This can illuminate the way ogma is typing your expression.
+
+```plaintext
+>> typify { ls | fold 0 + $row.size }
+{:Nil ls |:Table fold 0:Num {:Num + {:Num . $row:TableRow size:Str }:Num }:Num }:Num
+```
+
 > 🔬 Improvements to debugging capabilities and tooling are required! Get involved
 > through Github to help shape ogma's development.

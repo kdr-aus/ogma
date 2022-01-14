@@ -9,6 +9,8 @@ use rt::{bat::*, process_expression};
 use std::{iter::*, path::*};
 use HelpParameter::*;
 
+mod diagnostics;
+
 #[test]
 fn table_printing() {
     let mut table = Table::default();
@@ -467,21 +469,21 @@ fn list_defs() {
 
         assert_eq!(
             s,
-            "┌────────────────┬────────────┬───────┬──────────┬──────┬────────────────────────────┐
-│ name           ┆ category   ┆ input ┆ location ┆ line ┆ code                       │
-╞════════════════╪════════════╪═══════╪══════════╪══════╪════════════════════════════╡
-│ !=             ┆ cmp        ┆ -     ┆ <ogma>   ┆ -    ┆ != (rhs) { eq $rhs | not } │
-│ *              ┆ arithmetic ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ +              ┆ arithmetic ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ -              ┆ arithmetic ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ .              ┆ pipeline   ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ 60 rows elided ┆ ...        ┆ ...   ┆ ...      ┆ ...  ┆ ...                        │
-│ sort-by        ┆ morphism   ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ take           ┆ morphism   ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ to-str         ┆ pipeline   ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ ×              ┆ arithmetic ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-│ ÷              ┆ arithmetic ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
-└────────────────┴────────────┴───────┴──────────┴──────┴────────────────────────────┘
+            "┌────────────────┬─────────────┬───────┬──────────┬──────┬────────────────────────────┐
+│ name           ┆ category    ┆ input ┆ location ┆ line ┆ code                       │
+╞════════════════╪═════════════╪═══════╪══════════╪══════╪════════════════════════════╡
+│ !=             ┆ cmp         ┆ -     ┆ <ogma>   ┆ -    ┆ != (rhs) { eq $rhs | not } │
+│ *              ┆ arithmetic  ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ +              ┆ arithmetic  ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ -              ┆ arithmetic  ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ .              ┆ pipeline    ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ 61 rows elided ┆ ...         ┆ ...   ┆ ...      ┆ ...  ┆ ...                        │
+│ take           ┆ morphism    ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ to-str         ┆ pipeline    ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ typify         ┆ diagnostics ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ ×              ┆ arithmetic  ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+│ ÷              ┆ arithmetic  ┆ -     ┆ <ogma>   ┆ -    ┆ -                          │
+└────────────────┴─────────────┴───────┴──────────┴──────┴────────────────────────────┘
 "
         );
     } else {

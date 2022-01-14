@@ -1,8 +1,9 @@
 //! Table expression system.
 #![warn(missing_docs)]
+#![recursion_limit = "256"]
 
 mod common;
-mod eng;
+pub mod eng;
 pub mod lang;
 pub mod output;
 pub mod rt;
@@ -25,7 +26,6 @@ mod prelude {
         impls::{Implementation, Implementations},
         syntax::ast::{self, Tag},
         types::{self, AsType, OgmaData, Table, TableRow, Tuple, Type, Value},
-        var::{self, Local, Variable},
     };
     pub(crate) use super::output::print;
     pub(crate) use super::rt;

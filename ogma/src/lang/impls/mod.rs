@@ -1,3 +1,5 @@
+mod intrinsics;
+
 use crate::prelude::*;
 use ::kserd::Number;
 use ::libs::{divvy::Str, fastrand, rayon::prelude::*};
@@ -47,6 +49,7 @@ pub enum OperationCategory {
     Logic,
     Morphism,
     Pipeline,
+    Diagnostics,
     UserDefined,
 }
 
@@ -60,6 +63,7 @@ impl fmt::Display for OperationCategory {
             OperationCategory::Init => write!(f, "init"),
             OperationCategory::Io => write!(f, "io"),
             OperationCategory::Pipeline => write!(f, "pipeline"),
+            OperationCategory::Diagnostics => write!(f, "diagnostics"),
             OperationCategory::UserDefined => write!(f, "user-defined"),
         }
     }
@@ -74,101 +78,14 @@ pub struct Implementations {
 
 impl Default for Implementations {
     fn default() -> Self {
-        use ::paste::paste;
-
-        let mut implementations = Implementations {
+        let mut impls = Implementations {
             impls: HashMap::default(),
             names: HashMap::default(),
         };
-        let impls = &mut implementations;
 
-        macro_rules! add {
-            ($cmd:tt, $cat:ident) => {{
-                add!($cmd, $cmd, $cat)
-            }};
-            ($cmd:literal, $inner:tt, $cat:ident) => {{
-                paste! { add!($cmd, [<$inner _intrinsic>], $cat, [<$inner _help>]) }
-            }};
-            ($cmd:tt, $inner:tt, $cat:ident) => {{
-                paste! { add!(stringify!($cmd), [<$inner _intrinsic>], $cat, [<$inner _help>]) }
-            }};
-            ($cmd:expr, $fn:path, $cat:ident, $help:path) => {{
-                impls.insert_intrinsic(
-                    $cmd,
-                    None,
-                    $fn,
-                    Location::Ogma,
-                    OperationCategory::$cat,
-                    $help(),
-                );
-            }};
-        }
+        intrinsics::add_intrinsics(&mut impls);
 
-        // Arithmetic ------------------------------------------
-        add!(+, add, Arithmetic);
-        add!(*, mul, Arithmetic);
-        add!("×", mul, Arithmetic);
-        add!("-", sub, Arithmetic);
-        add!(/, div, Arithmetic);
-        add!("÷", div, Arithmetic);
-        add!(ceil, Arithmetic);
-        add!(floor, Arithmetic);
-        add!("is-finite", isfinite, Arithmetic);
-        add!(root, Arithmetic);
-        // Cmp -------------------------------------------------
-        add!(cmp, Cmp);
-        add!(eq, Cmp);
-        add!(max, Cmp);
-        add!(min, Cmp);
-        // Logic -----------------------------------------------
-        add!(and, Logic);
-        add!(if, Logic);
-        add!(not, Logic);
-        add!(or, Logic);
-        // Morphism --------------------------------------------
-        add!(append, Morphism);
-        add!("append-row", append_row, Morphism);
-        add!(dedup, Morphism);
-        add!(filter, Morphism);
-        add!(fold, Morphism);
-        add!("fold-while", fold_while, Morphism);
-        add!(grp, Morphism);
-        add!("grp-by", grpby, Morphism);
-        add!(map, Morphism);
-        add!(pick, Morphism);
-        add!(ren, Morphism);
-        add!("ren-with", ren_with, Morphism);
-        add!(rev, Morphism);
-        add!(skip, Morphism);
-        add!(sort, Morphism);
-        add!("sort-by", sortby, Morphism);
-        add!(take, Morphism);
-        // Pipeline --------------------------------------------
-        add!(benchmark, Pipeline);
-        add!(get, Pipeline);
-        add!(
-            ".",
-            ast::DotOperatorBlock::instrinsic,
-            Pipeline,
-            ast::DotOperatorBlock::help
-        );
-        add!("\\", in, Pipeline);
-        add!(len, Pipeline);
-        add!(let, Pipeline);
-        add!(nth, Pipeline);
-        add!(rand, Pipeline);
-        add!(range, Pipeline);
-        add!(Table, table, Pipeline);
-        add!("to-str", to_str, Pipeline);
-        add!(Tuple, tuple, Pipeline);
-        // Io --------------------------------------------------
-        add!(ls, Io);
-        add!(open, Io);
-        add!(save, Io);
-
-        // ---- Specialised instrinsic ops --------------
-
-        implementations
+        impls
     }
 }
 
@@ -527,14 +444,14 @@ fn resolve_trow_expr_par(table: &Table, expr: &eng::Argument, cx: &Context) -> R
 /// grp-by, so this provides a common structure around setting the env, doing the resolve, and
 /// handling the variables and error checking. `<cmd>` can be any ogma command.
 struct BinaryOp<T> {
-    env: var::Environment,
-    rhs: var::Variable,
-    evaluator: eng::ExprEvaluator,
+    env: eng::Environment,
+    rhs: eng::Variable,
+    evaluator: eng::Evaluator,
     transformation: T,
 }
 
 struct BinaryOpRef<'a, T> {
-    env: var::Environment,
+    env: eng::Environment,
     binop: &'a BinaryOp<T>,
 }
 
@@ -559,14 +476,14 @@ impl<T> BinaryOp<T> {
     {
         // create the binary expression and the variables tag
         let (expr, var) = Self::create_expr_and_var(cmd);
-        let mut locals = var::Locals::default();
+        let mut locals = eng::Locals::default();
         // create the $rhs to be set in the new env
         let rhs = locals.add_new_var("rhs".into(), ty.clone(), var);
         // construct the expr evaluator
         // this uses the pseudo-env and the expr we construct, with an input of the type.
         // if the impl of <cmd> on type does not conform to expectations an error will occur
         let evaluator =
-            eng::construct_evaluator(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
+            eng::Evaluator::construct(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
                 Error {
                     cat: err::Category::Semantics,
                     desc: format!(
@@ -594,7 +511,7 @@ impl<T> BinaryOp<T> {
         }
 
         Ok(Self {
-            env: var::Environment::new(locals),
+            env: eng::Environment::new(locals),
             rhs,
             evaluator,
             transformation: value_trns,
@@ -1839,7 +1756,12 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
     match blk.in_ty().clone() {
         Ty::TabRow => {
             let colarg = blk.next_arg(Type::Nil)?.returns(&Ty::Str)?;
-            let get_type = match blk.next_arg(Type::Nil).ok().map(TableGetType::Default) {
+            let get_type = match blk
+                .next_arg(Type::Nil)
+                .ok()
+                .map(Box::new)
+                .map(TableGetType::Default)
+            {
                 Some(x) => x,
                 None => TableGetType::Flag(type_flag(&mut blk, Type::Num)?),
             };
@@ -1859,7 +1781,8 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 enum TableGetType {
-    Default(eng::Argument),
+    // TODO remove box once Argument size reduce
+    Default(Box<eng::Argument>),
     Flag(Type),
 }
 
@@ -1877,7 +1800,7 @@ fn table_row_get(
     colarg: &eng::Argument,
     ty: &TableGetType,
     cx: Context,
-) -> Result<(Value, var::Environment)> {
+) -> Result<(Value, eng::Environment)> {
     let colname = colarg.resolve(|| Value::Nil, &cx).and_then(Str::try_from)?;
     let idx = trow.idx;
     let entry = trow.entry(colname.as_str(), &colarg.tag)?;
@@ -1923,7 +1846,7 @@ impl FieldAccessor {
                     .iter()
                     .enumerate()
                     .find(|(_, f)| f.name().str() == field_name)
-                    .ok_or_else(|| Error::field_not_found(field_arg.tag(), tydef))?;
+                    .ok_or_else(|| Error::field_not_found(&field_arg.tag, tydef))?;
 
                 let out_ty = field.ty().clone();
                 Ok((FieldAccessor(idx), out_ty))
@@ -2059,7 +1982,7 @@ fn grpby_intrinsic(mut blk: Block) -> Result<Step> {
         key.out_ty(),
         &ordty,
         "grp-by",
-        key.tag(),
+        &key.tag,
         blk.defs,
         cnv_value_to_ord,
     )?;
@@ -2194,7 +2117,7 @@ fn if_intrinsic(mut blk: Block) -> Result<Step> {
     for cond in &args {
         if out_ty != *cond.expr.out_ty() {
             return Err(Error::eval(
-                cond.expr.tag(),
+                &cond.expr.tag,
                 "branch arms do not have matching output types",
                 "this branch has a different output type".to_string(),
                 "branching impls require consistent output types".to_string(),
@@ -2356,7 +2279,7 @@ variables are scoped to within the expression they are defined"
 }
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
-    type Binding = (var::Variable, eng::Argument);
+    type Binding = (eng::Variable, eng::Argument);
     let mut bindings = Vec::with_capacity(blk.args_len() / 2);
 
     while blk.args_len() > 1 {
@@ -2557,7 +2480,7 @@ struct MapTable {
     transformation: eng::Argument,
     colarg: eng::Argument,
     colty: Option<Type>,
-    row_var: var::Variable,
+    row_var: eng::Variable,
 }
 
 impl MapTable {
@@ -2749,11 +2672,11 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
                 // nth is adj by one to account for header
                 let nth = n
                     .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, n.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
                 let table = Table::try_from(table)?;
                 if nth + 1 >= table.rows_len() {
                     return Err(Error::eval(
-                        n.tag(),
+                        &n.tag,
                         "index is outside table bounds",
                         format!("this resolves to `{}`", nth),
                         None,
@@ -2769,12 +2692,12 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o::<_, Str>(move |string, cx| {
                 let nth = n
                     .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, n.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
                 Str::try_from(string)
                     .and_then(|s| {
                         s.chars().nth(nth).ok_or_else(|| {
                             Error::eval(
-                                n.tag(),
+                                &n.tag,
                                 "index is outside string bounds",
                                 format!("this resolves to `{}`", nth),
                                 None,
@@ -3026,7 +2949,7 @@ fn rand_intrinsic(mut blk: Block) -> Result<Step> {
             let f = bnd(from.as_ref(), &mut i, &cx, 0.0)?;
             let t = bnd(to.as_ref(), &mut i, &cx, 1.0)?;
             let d = t - f;
-            let len: usize = cnv_num_to_uint(len.resolve(|| i, &cx)?, len.tag())?;
+            let len: usize = cnv_num_to_uint(len.resolve(|| i, &cx)?, &len.tag)?;
             check_from_lt_to(f, t, &tag)?;
             let mut table = InnerTable::new();
             let rng = fastrand::Rng::new();
@@ -3098,7 +3021,7 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)
-                    .and_then(|n| cnv_num_to_uint(n, from.tag()))?;
+                    .and_then(|n| cnv_num_to_uint(n, &from.tag))?;
                 let to = cnv_num_to_uint(input, &blktag)?;
                 cx.done_o(table_range(from, to))
             })
@@ -3108,10 +3031,10 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)
-                    .and_then(|n| cnv_num_to_uint(n, from.tag()))?;
+                    .and_then(|n| cnv_num_to_uint(n, &from.tag))?;
                 let to = to
                     .resolve(|| input.clone(), &cx)
-                    .and_then(|n| cnv_num_to_uint(n, to.tag()))?;
+                    .and_then(|n| cnv_num_to_uint(n, &to.tag))?;
                 cx.done_o(table_range(from, to))
             })
         }
@@ -3173,11 +3096,11 @@ fn ren_intrinsic(mut blk: Block) -> Result<Step> {
                 let i = match h {
                     Ref::Idx(x) => x
                         .resolve(|| Value::Nil, &cx)
-                        .and_then(|n| cnv_num_to_uint::<usize>(n, x.tag())),
+                        .and_then(|n| cnv_num_to_uint::<usize>(n, &x.tag)),
                     Ref::Name(x) => x
                         .resolve(|| Value::Nil, &cx)
                         .and_then(Str::try_from)
-                        .and_then(|n| TableRow::col_idx(&table, n.as_str(), x.tag())),
+                        .and_then(|n| TableRow::col_idx(&table, n.as_str(), &x.tag)),
                 }?;
                 indices.push(i);
             }
@@ -3195,7 +3118,7 @@ fn ren_intrinsic(mut blk: Block) -> Result<Step> {
                     }
                     None => Err(Error::eval(
                         match &hdrs[idx] {
-                            Ref::Name(x) | Ref::Idx(x) => x.tag(),
+                            Ref::Name(x) | Ref::Idx(x) => &x.tag,
                         },
                         format!("{} is outside table column bounds", i),
                         None,
@@ -3517,7 +3440,7 @@ fn skip_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |table, cx| {
                 let count = count
                     .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 let mut table = Table::try_from(table)?;
                 if let Some(t) = table.get_mut() {
                     t.retain_rows(|i, _| i == 0 || i > count);
@@ -3539,7 +3462,7 @@ fn skip_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o::<_, Str>(move |string, cx| {
                 let count = count
                     .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 Str::try_from(string)
                     .map(|s| s.chars().skip(count).collect::<Str>())
                     .and_then(|x| cx.done_o(x))
@@ -3674,7 +3597,7 @@ fn sortby_intrinsic(mut blk: Block) -> Result<Step> {
         key.out_ty(),
         &ordty,
         "sort-by",
-        key.tag(),
+        &key.tag,
         blk.defs,
         cnv_value_to_ord,
     )?;
@@ -3830,7 +3753,7 @@ fn take_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o(move |table, cx| {
                 let count = count
                     .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 let mut table = Table::try_from(table)?;
                 if let Some(t) = table.get_mut() {
                     t.retain_rows(|i, _| i == 0 || i <= count);
@@ -3852,7 +3775,7 @@ fn take_intrinsic(mut blk: Block) -> Result<Step> {
             blk.eval_o::<_, Str>(move |string, cx| {
                 let count = count
                     .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, count.tag()))?;
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
                 Str::try_from(string)
                     .map(|s| s.chars().take(count).collect::<Str>())
                     .and_then(|x| cx.done_o(x))
