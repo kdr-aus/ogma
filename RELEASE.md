@@ -1,5 +1,5 @@
 **🔬 New Features**
-- `typify` command: output type annotations on argument
+- `typify` command: output type annotations on argument <https://github.com/kdr-aus/ogma/pull/27>
 
 **🐛 Bug Fixes**
 - Handle BOM: https://github.com/kdr-aus/ogma/pull/12
