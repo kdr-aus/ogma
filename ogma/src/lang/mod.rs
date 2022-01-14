@@ -5,7 +5,6 @@ pub(crate) mod help;
 pub(crate) mod impls;
 pub(crate) mod syntax;
 pub(crate) mod types;
-pub(crate) mod var;
 
 // Public API
 

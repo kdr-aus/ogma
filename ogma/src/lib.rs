@@ -26,7 +26,6 @@ mod prelude {
         impls::{Implementation, Implementations},
         syntax::ast::{self, Tag},
         types::{self, AsType, OgmaData, Table, TableRow, Tuple, Type, Value},
-        var::{self, Local, Variable},
     };
     pub(crate) use super::output::print;
     pub(crate) use super::rt;

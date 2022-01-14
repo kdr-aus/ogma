@@ -1,5 +1,4 @@
 use super::*;
-use crate::lang::var::{Environment, Locals};
 use ast::{Expression, Tag, Term};
 use std::fmt;
 

@@ -24,12 +24,12 @@ where
 
     let expr = lang::syntax::parse::expression(expr, loc, defs).map_err(|e| e.0)?;
     eng::handle_help(&expr, defs)?;
-    let vars = var::Locals::default();
+    let vars = eng::Locals::default();
     let evaluator = eng::Evaluator::construct(I::as_type(), expr, defs, vars.clone())?;
     let cx = eng::Context {
         root,
         wd,
-        env: var::Environment::new(vars),
+        env: eng::Environment::new(vars),
     };
     let output = evaluator.eval(seed.into(), cx)?.0;
 

@@ -1,7 +1,6 @@
 //! Module handling type _annotations_, human readable type information.
 
 use super::*;
-use lang::var::Locals;
 use std::{borrow::Cow, fmt};
 
 impl Type {

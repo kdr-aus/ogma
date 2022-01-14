@@ -444,14 +444,14 @@ fn resolve_trow_expr_par(table: &Table, expr: &eng::Argument, cx: &Context) -> R
 /// grp-by, so this provides a common structure around setting the env, doing the resolve, and
 /// handling the variables and error checking. `<cmd>` can be any ogma command.
 struct BinaryOp<T> {
-    env: var::Environment,
-    rhs: var::Variable,
+    env: eng::Environment,
+    rhs: eng::Variable,
     evaluator: eng::Evaluator,
     transformation: T,
 }
 
 struct BinaryOpRef<'a, T> {
-    env: var::Environment,
+    env: eng::Environment,
     binop: &'a BinaryOp<T>,
 }
 
@@ -476,7 +476,7 @@ impl<T> BinaryOp<T> {
     {
         // create the binary expression and the variables tag
         let (expr, var) = Self::create_expr_and_var(cmd);
-        let mut locals = var::Locals::default();
+        let mut locals = eng::Locals::default();
         // create the $rhs to be set in the new env
         let rhs = locals.add_new_var("rhs".into(), ty.clone(), var);
         // construct the expr evaluator
@@ -511,7 +511,7 @@ impl<T> BinaryOp<T> {
         }
 
         Ok(Self {
-            env: var::Environment::new(locals),
+            env: eng::Environment::new(locals),
             rhs,
             evaluator,
             transformation: value_trns,
@@ -1794,7 +1794,7 @@ fn table_row_get(
     colarg: &eng::Argument,
     ty: &TableGetType,
     cx: Context,
-) -> Result<(Value, var::Environment)> {
+) -> Result<(Value, eng::Environment)> {
     let colname = colarg.resolve(|| Value::Nil, &cx).and_then(Str::try_from)?;
     let idx = trow.idx;
     let entry = trow.entry(colname.as_str(), &colarg.tag)?;
@@ -2273,7 +2273,7 @@ variables are scoped to within the expression they are defined"
 }
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
-    type Binding = (var::Variable, eng::Argument);
+    type Binding = (eng::Variable, eng::Argument);
     let mut bindings = Vec::with_capacity(blk.args_len() / 2);
 
     while blk.args_len() > 1 {
@@ -2474,7 +2474,7 @@ struct MapTable {
     transformation: eng::Argument,
     colarg: eng::Argument,
     colty: Option<Type>,
-    row_var: var::Variable,
+    row_var: eng::Variable,
 }
 
 impl MapTable {
