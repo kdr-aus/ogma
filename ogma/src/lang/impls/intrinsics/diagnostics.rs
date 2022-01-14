@@ -9,36 +9,24 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 
 // ------ Typify ---------------------------------------------------------------
 fn typify_help() -> HelpMessage {
-    // TODO -- implement properly
-    variadic_help(
-        "Tuple",
-        "construct a tuple of the result of each expression
-tuples impl `eq` and `cmp` if all its fields also implement `eq` and `cmp`
-tuples have unique types: `U_<t0_Ty>-<t1_Ty>_`
-access of the fields is using `get t#` with the field number",
-        vec![
+    HelpMessage {
+        desc: "output an expanded, type annotated, string of the argument".into(),
+        params: vec![HelpParameter::Required("argument".into())],
+        examples: vec![
             HelpExample {
-                desc: "create a two element tuple of numbers. type: U_Num-Num_",
-                code: "Tuple 1 2",
+                desc: "output the types of the ls command",
+                code: "typify ls",
             },
             HelpExample {
-                desc: "create 3 numbers after input. type: U_Num-Num-Num_",
-                code: "\\ 3 | Tuple {+ 1} {+ 2} {+ 3}",
-            },
-            HelpExample {
-                desc: "tuples are heterogeneous. type: U_Num-Str-Bool_",
-                code: "Tuple 1 'foo' #t",
-            },
-            HelpExample {
-                desc: "get the first and third element",
-                code: "Tuple 1 'foo' 2 | + {get t0} {get t2}",
+                desc: "output the types of an expression",
+                code: "typify { ls | filter size > 3 }",
             },
         ],
-    )
+        ..HelpMessage::new("typify")
+    }
 }
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
-    // TODO -- implement properly
     let arg = blk.next_arg(None)?;
 
     blk.eval_o(move |_, cx| {

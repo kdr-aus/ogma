@@ -5,32 +5,21 @@ use super::*;
 fn typify_help_msg() {
     let src = "typify --help";
     let x = print_help(src, &Definitions::new());
-    return; // pass for now TODO wire in
     assert_eq!(
         &x,
         "Help: `typify`
 --> shell:0
- | construct a tuple of the result of each expression
- | tuples impl `eq` and `cmp` if all its fields also implement `eq` and `cmp`
- | tuples have unique types: `U_<t0_Ty>-<t1_Ty>_`
- | access of the fields is using `get t#` with the field number
- | -variadic-: more than one argument can be specified
+ | output an expanded, type annotated, string of the argument
  | 
  | Usage:
- |  => Tuple args..
+ |  => typify argument
  | 
  | Examples:
- |  create a two element tuple of numbers. type: U_Num-Num_
- |  => Tuple 1 2
+ |  output the types of the ls command
+ |  => typify ls
  | 
- |  create 3 numbers after input. type: U_Num-Num-Num_
- |  => \\ 3 | Tuple {+ 1} {+ 2} {+ 3}
- | 
- |  tuples are heterogeneous. type: U_Num-Str-Bool_
- |  => Tuple 1 'foo' #t
- | 
- |  get the first and third element
- |  => Tuple 1 'foo' 2 | + {get t0} {get t2}
+ |  output the types of an expression
+ |  => typify { ls | filter size > 3 }
 "
     );
 }

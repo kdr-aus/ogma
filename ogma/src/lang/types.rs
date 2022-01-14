@@ -891,7 +891,6 @@ impl<'a> Split<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lang::types::Field;
     use Type::*;
 
     #[test]

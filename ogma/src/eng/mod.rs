@@ -11,11 +11,13 @@ mod var;
 pub(crate) use self::{
     eval::{DefImplEvaluator, Evaluator},
     hir::{handle_help, Context},
-    var::{Variable, Locals, Local, Environment},
+    var::{Environment, Local, Locals, Variable},
 };
 
 // ###### ARGUMENT #############################################################
 /// Compiled argument.
+///
+/// TODO: reduce the size of this, possibly by boxing the Hold??
 pub struct Argument {
     /// The argument tag.
     pub tag: Tag,
@@ -104,3 +106,20 @@ type StepR = Result<(Value, Environment)>;
 
 // ###### FUNCTIONS ############################################################
 
+// ###### testing ##############################################################
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn structures_sizing() {
+        use std::mem::size_of;
+
+        // TODO review this sizing, maybe it can be reduced by boxing
+        assert_eq!(size_of::<Argument>(), 232);
+        assert_eq!(size_of::<Hold>(), 136);
+
+        // Evaluator is quite large
+        assert_eq!(size_of::<Evaluator>(), 128);
+    }
+}

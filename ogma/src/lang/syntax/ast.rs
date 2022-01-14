@@ -395,4 +395,10 @@ mod tests {
         assert_eq!(tag.range(), 0..5);
         assert_eq!(&format!("{:?}", tag), r#"Tag("Hello", 0..5)"#);
     }
+
+    #[test]
+    fn tag_sizing() {
+        // TODO -- reduce size of tag.
+        assert_eq!(std::mem::size_of::<Tag>(), 64);
+    }
 }
