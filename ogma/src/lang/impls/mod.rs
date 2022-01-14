@@ -1756,7 +1756,12 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
     match blk.in_ty().clone() {
         Ty::TabRow => {
             let colarg = blk.next_arg(Type::Nil)?.returns(&Ty::Str)?;
-            let get_type = match blk.next_arg(Type::Nil).ok().map(TableGetType::Default) {
+            let get_type = match blk
+                .next_arg(Type::Nil)
+                .ok()
+                .map(Box::new)
+                .map(TableGetType::Default)
+            {
                 Some(x) => x,
                 None => TableGetType::Flag(type_flag(&mut blk, Type::Num)?),
             };
@@ -1776,7 +1781,8 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 enum TableGetType {
-    Default(eng::Argument),
+    // TODO remove box once Argument size reduce
+    Default(Box<eng::Argument>),
     Flag(Type),
 }
 
