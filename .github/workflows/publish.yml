@@ -28,7 +28,7 @@ jobs:
 
     - name: Copy files to output
       run: |
-        cp target/release/ogma-bin output/ogma
+        cp target/release/ogma output/ogma
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
@@ -61,7 +61,7 @@ jobs:
 
     - name: Copy files to output
       run: |
-        cp target\release\ogma-bin.exe output\ogma.exe
+        cp target\release\ogma.exe output\ogma.exe
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
