@@ -1,3 +1,8 @@
+This release fixed mostly bugs and some crate maintenance.
+The `typify` command was introduced, paving the way for type inferencing.
+
+Thanks @iamalicecarroll for the contributions!
+
 **🔬 New Features**
 - `typify` command: output type annotations on argument <https://github.com/kdr-aus/ogma/pull/27>
 

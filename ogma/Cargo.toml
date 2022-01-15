@@ -1,6 +1,6 @@
 [package]
 name = "ogma"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["kurt <kurtlawrence92@gmail.com>"]
 # TODO -- update to 2021
 edition = "2018"
