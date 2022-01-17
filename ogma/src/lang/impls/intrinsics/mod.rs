@@ -25,22 +25,11 @@ macro_rules! add {
     ($impls:expr,) => {{}}
 }
 
+mod arithmetic;
 mod diagnostics;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
-    // TODO split this out into submodules
     add! { impls,
-        // Arithmetic ------------------------------------------
-        (+, add, Arithmetic)
-        (*, mul, Arithmetic)
-        ("×", mul, Arithmetic)
-        ("-", sub, Arithmetic)
-        (/, div, Arithmetic)
-        ("÷", div, Arithmetic)
-        (ceil, Arithmetic)
-        (floor, Arithmetic)
-        ("is-finite", isfinite, Arithmetic)
-        (root, Arithmetic)
         // Cmp -------------------------------------------------
         (cmp, Cmp)
         (eq, Cmp)
@@ -94,5 +83,6 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         // ---- Specialised instrinsic ops --------------
     };
 
+    arithmetic::add_intrinsics(impls);
     diagnostics::add_intrinsics(impls);
 }
