@@ -28,23 +28,16 @@ macro_rules! add {
 mod arithmetic;
 mod cmp;
 mod diagnostics;
+mod io;
 mod logic;
 mod morphism;
 mod pipeline;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
-    add! { impls,
-        // Io --------------------------------------------------
-        (ls, Io)
-        (open, Io)
-        (save, Io)
-
-        // ---- Specialised instrinsic ops --------------
-    };
-
     arithmetic::add_intrinsics(impls);
     cmp::add_intrinsics(impls);
     diagnostics::add_intrinsics(impls);
+    io::add_intrinsics(impls);
     morphism::add_intrinsics(impls);
     pipeline::add_intrinsics(impls);
     logic::add_intrinsics(impls);
