@@ -30,26 +30,10 @@ mod cmp;
 mod diagnostics;
 mod logic;
 mod morphism;
+mod pipeline;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-        // Pipeline --------------------------------------------
-        (get, Pipeline)
-        (
-            ".",
-            ast::DotOperatorBlock::instrinsic,
-            Pipeline,
-            ast::DotOperatorBlock::help
-        )
-        ("\\", in, Pipeline)
-        (len, Pipeline)
-        (let, Pipeline)
-        (nth, Pipeline)
-        (rand, Pipeline)
-        (range, Pipeline)
-        (Table, table, Pipeline)
-        ("to-str", to_str, Pipeline)
-        (Tuple, tuple, Pipeline)
         // Io --------------------------------------------------
         (ls, Io)
         (open, Io)
@@ -62,5 +46,6 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     cmp::add_intrinsics(impls);
     diagnostics::add_intrinsics(impls);
     morphism::add_intrinsics(impls);
+    pipeline::add_intrinsics(impls);
     logic::add_intrinsics(impls);
 }
