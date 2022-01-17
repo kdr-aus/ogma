@@ -1,4 +1,5 @@
 use super::*;
+use std::time::Instant;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
