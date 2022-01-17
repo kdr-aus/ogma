@@ -26,15 +26,11 @@ macro_rules! add {
 }
 
 mod arithmetic;
+mod cmp;
 mod diagnostics;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-        // Cmp -------------------------------------------------
-        (cmp, Cmp)
-        (eq, Cmp)
-        (max, Cmp)
-        (min, Cmp)
         // Logic -----------------------------------------------
         (and, Logic)
         (if, Logic)
@@ -84,5 +80,6 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     };
 
     arithmetic::add_intrinsics(impls);
+    cmp::add_intrinsics(impls);
     diagnostics::add_intrinsics(impls);
 }

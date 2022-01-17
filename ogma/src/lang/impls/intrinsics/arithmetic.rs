@@ -1,4 +1,5 @@
 use super::*;
+use std::cmp;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
