@@ -29,27 +29,10 @@ mod arithmetic;
 mod cmp;
 mod diagnostics;
 mod logic;
+mod morphism;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-        // Morphism --------------------------------------------
-        (append, Morphism)
-        ("append-row", append_row, Morphism)
-        (dedup, Morphism)
-        (filter, Morphism)
-        (fold, Morphism)
-        ("fold-while", fold_while, Morphism)
-        (grp, Morphism)
-        ("grp-by", grpby, Morphism)
-        (map, Morphism)
-        (pick, Morphism)
-        (ren, Morphism)
-        ("ren-with", ren_with, Morphism)
-        (rev, Morphism)
-        (skip, Morphism)
-        (sort, Morphism)
-        ("sort-by", sortby, Morphism)
-        (take, Morphism)
         // Pipeline --------------------------------------------
         (get, Pipeline)
         (
@@ -78,5 +61,6 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     arithmetic::add_intrinsics(impls);
     cmp::add_intrinsics(impls);
     diagnostics::add_intrinsics(impls);
+    morphism::add_intrinsics(impls);
     logic::add_intrinsics(impls);
 }
