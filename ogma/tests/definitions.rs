@@ -1,4 +1,3 @@
-
 fn with_dummy_defs() -> Definitions {
     let mut defs = Definitions::new();
     assert_eq!(
@@ -439,4 +438,3 @@ fn passing_invalid_arg_to_def() {
 "#
     );
 }
-

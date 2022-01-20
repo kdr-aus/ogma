@@ -47,7 +47,7 @@ fn is_ord(res: Result<Value>, s: &'static str, idx: usize) {
     }
     let res = res.unwrap();
     assert!(
-        matches!(res, Value::Ogma(y) if y.variant_idx == idx),
+        matches!(res, Value::Ogma(y) if y.variant_idx() == idx),
         "{}",
         s
     );
@@ -339,4 +339,3 @@ fn min_max_testing() {
     let x = process_w_num("max 101 0", defs);
     assert_eq!(x, Ok(Value::Num(101.into())));
 }
-

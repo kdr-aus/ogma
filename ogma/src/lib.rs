@@ -7,8 +7,6 @@ pub mod eng;
 pub mod lang;
 pub mod output;
 pub mod rt;
-#[cfg(test)]
-mod tests;
 
 pub use common::err::Error;
 

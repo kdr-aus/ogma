@@ -1,5 +1,3 @@
-
-
 #[test]
 fn batch_success_testing() {
     use rt::bat::*;
@@ -88,4 +86,3 @@ def-ty Foo { x:Num y: }"#;
 "
     );
 }
-

@@ -177,4 +177,3 @@ fn or_test() {
     ];
     check_is_table(x, exp);
 }
-

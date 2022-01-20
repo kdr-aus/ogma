@@ -143,48 +143,48 @@ pub fn print_ogma_data(data: types::OgmaData) -> String {
 mod tests {
     use super::*;
 
-fn o(s: &str) -> Entry<Value> {
-    Entry::Obj(Value::Str(Str::new(s)))
-}
+    fn o(s: &str) -> Entry<Value> {
+        Entry::Obj(Value::Str(Str::new(s)))
+    }
 
-fn check_table(table: &[u8], chk: &str) {
-    let table = std::str::from_utf8(table).unwrap();
-    println!("{}", table);
-    assert_eq!(table, chk);
-}
+    fn check_table(table: &[u8], chk: &str) {
+        let table = std::str::from_utf8(table).unwrap();
+        println!("{}", table);
+        assert_eq!(table, chk);
+    }
 
-#[test]
-fn table_printing() {
-    use Entry::*;
+    #[test]
+    fn table_printing() {
+        use Entry::*;
 
-    let mut table = Table::default();
-    let mut wtr = Vec::new();
+        let mut table = Table::default();
+        let mut wtr = Vec::new();
 
-    // empty table
-    print_table(&table, &mut wtr).unwrap();
-    assert_eq!(
-        std::str::from_utf8(&wtr).unwrap().to_string(),
-        format!("{}\n", "table is empty".bright_yellow())
-    );
+        // empty table
+        print_table(&table, &mut wtr).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&wtr).unwrap().to_string(),
+            format!("{}\n", "table is empty".bright_yellow())
+        );
 
-    let t = table.make_mut();
-    // do table on bounds of constraints (30row, 7col)
-    t.add_row(
-        once(o("idx"))
-            .chain(once(o("one")))
-            .chain(once(o("two")))
-            .chain(once(o("three")))
-            .chain(once(o("four")))
-            .chain(once(o("five")))
-            .chain(once(o("six"))),
-    );
-    t.add_rows((0..29).map(|n| once(Num(n.into())).chain(repeat_with(|| Nil).take(6))));
+        let t = table.make_mut();
+        // do table on bounds of constraints (30row, 7col)
+        t.add_row(
+            once(o("idx"))
+                .chain(once(o("one")))
+                .chain(once(o("two")))
+                .chain(once(o("three")))
+                .chain(once(o("four")))
+                .chain(once(o("five")))
+                .chain(once(o("six"))),
+        );
+        t.add_rows((0..29).map(|n| once(Num(n.into())).chain(repeat_with(|| Nil).take(6))));
 
-    wtr.clear();
-    print_table(&table, &mut wtr).unwrap();
-    check_table(
-        &wtr,
-        "┌──────┬─────┬─────┬───────┬──────┬──────┬─────┐
+        wtr.clear();
+        print_table(&table, &mut wtr).unwrap();
+        check_table(
+            &wtr,
+            "┌──────┬─────┬─────┬───────┬──────┬──────┬─────┐
 │ idx  ┆ one ┆ two ┆ three ┆ four ┆ five ┆ six │
 ╞══════╪═════╪═════╪═══════╪══════╪══════╪═════╡
 │ 0    ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
@@ -218,17 +218,17 @@ fn table_printing() {
 │ 28.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
 └──────┴─────┴─────┴───────┴──────┴──────┴─────┘
 ",
-    );
+        );
 
-    let t = table.make_mut();
-    // do table outside bounds of constraints (21row, 8col)
-    t.add_row(once(Num(29.into())).chain(repeat_with(|| Nil).take(7)));
+        let t = table.make_mut();
+        // do table outside bounds of constraints (21row, 8col)
+        t.add_row(once(Num(29.into())).chain(repeat_with(|| Nil).take(7)));
 
-    wtr.clear();
-    print_table(&table, &mut wtr).unwrap();
-    check_table(
-        &wtr,
-        "┌────────────────┬─────┬─────┬───────────────┬──────┬─────┬─────┐
+        wtr.clear();
+        print_table(&table, &mut wtr).unwrap();
+        check_table(
+            &wtr,
+            "┌────────────────┬─────┬─────┬───────────────┬──────┬─────┬─────┐
 │ idx            ┆ one ┆ two ┆ 2 cols elided ┆ five ┆ six ┆ -   │
 ╞════════════════╪═════╪═════╪═══════════════╪══════╪═════╪═════╡
 │ 0              ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
@@ -244,7 +244,6 @@ fn table_printing() {
 │ 29.0           ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
 └────────────────┴─────┴─────┴───────────────┴──────┴─────┴─────┘
 ",
-    );
-}
-
+        );
+    }
 }

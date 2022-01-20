@@ -253,16 +253,16 @@ fn point_construction() {
     let defs = &with_dummy_defs();
     let x = process_w_nil("Point 1 { \\ 3 }", defs);
     if let Ok(Value::Ogma(x)) = x {
-        assert_eq!(x.ty.name().str(), "Point");
-        assert_eq!(&x.data, &[Value::Num(1.into()), Value::Num(3.into())]);
+        assert_eq!(x.ty().name().str(), "Point");
+        assert_eq!(x.data(), &[Value::Num(1.into()), Value::Num(3.into())]);
     } else {
         panic!("not right variant")
     }
 
     let x = process_w_nil("\\ 1 | let $x | \\ 3 | let $y | Point $x $y", defs);
     if let Ok(Value::Ogma(x)) = x {
-        assert_eq!(x.ty.name().str(), "Point");
-        assert_eq!(&x.data, &[Value::Num(1.into()), Value::Num(3.into())]);
+        assert_eq!(x.ty().name().str(), "Point");
+        assert_eq!(x.data(), &[Value::Num(1.into()), Value::Num(3.into())]);
     } else {
         panic!("not right variant")
     }
@@ -323,4 +323,3 @@ fn field_does_not_exist() {
 "
     );
 }
-

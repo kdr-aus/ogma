@@ -549,4 +549,3 @@ fn sub_testing() {
     let x = process_w_num("let $x | \\ 1 | - 1 2 $x", defs);
     assert_eq!(x, Ok(Value::Num((-5).into()))); // 1 - 1 - 2 - 3
 }
-

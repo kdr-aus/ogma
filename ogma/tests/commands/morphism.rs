@@ -1371,4 +1371,3 @@ fn take_testing() {
     let x = process_w_str("take 5", defs);
     assert_eq!(x, Ok(Value::Str("Hello".into())));
 }
-

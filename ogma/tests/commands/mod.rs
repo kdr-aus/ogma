@@ -1,6 +1,13 @@
-use ogma::{lang::{ast::*, *, help::*}, eng::*};
-use std::{sync::Arc, path::Path};
 use libs::divvy::Str;
+use ogma::{
+    eng::*,
+    lang::{ast::*, *},
+    output::*,
+    parse::expression,
+    rt::*,
+};
+use std::{path::Path, sync::Arc};
+use table::Entry;
 
 type Result<T> = std::result::Result<T, ogma::Error>;
 
@@ -10,8 +17,8 @@ mod diagnostics;
 mod io;
 mod logic;
 mod morphism;
-mod types;
 mod pipeline;
+mod types;
 
 fn n<N: Into<::kserd::Number>>(n: N) -> Entry<Value> {
     Entry::Num(n.into())
@@ -69,6 +76,14 @@ fn check_is_table(r: Result<Value>, table: Vec<Vec<Entry<Value>>>) {
         }
         x => panic!("not a table: {:?}", x),
     }
+}
+
+fn print_help(src: &str, defs: &Definitions) -> String {
+    let x = eng::handle_help(&expression(src, Location::Shell, defs).unwrap(), defs)
+        .unwrap_err()
+        .to_string();
+    println!("{}", x);
+    x
 }
 
 // ------ Multiline Expressions ------------------------------------------------
