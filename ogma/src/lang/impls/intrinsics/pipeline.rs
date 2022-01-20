@@ -167,7 +167,7 @@ impl FieldAccessor {
         Ok(if let Some(x) = x.get_mut() {
             x.data.remove(self.0)
         } else {
-            x.data[self.0].clone()
+            x.data()[self.0].clone()
         })
     }
 }

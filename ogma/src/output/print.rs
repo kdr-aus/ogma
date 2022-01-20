@@ -138,3 +138,113 @@ pub fn print_ogma_data(data: types::OgmaData) -> String {
     use kserd::ToKserd;
     data.into_kserd().unwrap().as_str()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+fn o(s: &str) -> Entry<Value> {
+    Entry::Obj(Value::Str(Str::new(s)))
+}
+
+fn check_table(table: &[u8], chk: &str) {
+    let table = std::str::from_utf8(table).unwrap();
+    println!("{}", table);
+    assert_eq!(table, chk);
+}
+
+#[test]
+fn table_printing() {
+    use Entry::*;
+
+    let mut table = Table::default();
+    let mut wtr = Vec::new();
+
+    // empty table
+    print_table(&table, &mut wtr).unwrap();
+    assert_eq!(
+        std::str::from_utf8(&wtr).unwrap().to_string(),
+        format!("{}\n", "table is empty".bright_yellow())
+    );
+
+    let t = table.make_mut();
+    // do table on bounds of constraints (30row, 7col)
+    t.add_row(
+        once(o("idx"))
+            .chain(once(o("one")))
+            .chain(once(o("two")))
+            .chain(once(o("three")))
+            .chain(once(o("four")))
+            .chain(once(o("five")))
+            .chain(once(o("six"))),
+    );
+    t.add_rows((0..29).map(|n| once(Num(n.into())).chain(repeat_with(|| Nil).take(6))));
+
+    wtr.clear();
+    print_table(&table, &mut wtr).unwrap();
+    check_table(
+        &wtr,
+        "┌──────┬─────┬─────┬───────┬──────┬──────┬─────┐
+│ idx  ┆ one ┆ two ┆ three ┆ four ┆ five ┆ six │
+╞══════╪═════╪═════╪═══════╪══════╪══════╪═════╡
+│ 0    ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 1.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 2.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 3.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 4.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 5.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 6.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 7.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 8.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 9.0  ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 10.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 11.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 12.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 13.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 14.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 15.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 16.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 17.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 18.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 19.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 20.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 21.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 22.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 23.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 24.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 25.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 26.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 27.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+│ 28.0 ┆ -   ┆ -   ┆ -     ┆ -    ┆ -    ┆ -   │
+└──────┴─────┴─────┴───────┴──────┴──────┴─────┘
+",
+    );
+
+    let t = table.make_mut();
+    // do table outside bounds of constraints (21row, 8col)
+    t.add_row(once(Num(29.into())).chain(repeat_with(|| Nil).take(7)));
+
+    wtr.clear();
+    print_table(&table, &mut wtr).unwrap();
+    check_table(
+        &wtr,
+        "┌────────────────┬─────┬─────┬───────────────┬──────┬─────┬─────┐
+│ idx            ┆ one ┆ two ┆ 2 cols elided ┆ five ┆ six ┆ -   │
+╞════════════════╪═════╪═════╪═══════════════╪══════╪═════╪═════╡
+│ 0              ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 1.0            ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 2.0            ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 3.0            ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 4.0            ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 20 rows elided ┆ ... ┆ ... ┆ ...           ┆ ...  ┆ ... ┆ ... │
+│ 25.0           ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 26.0           ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 27.0           ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 28.0           ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+│ 29.0           ┆ -   ┆ -   ┆ ...           ┆ -    ┆ -   ┆ -   │
+└────────────────┴─────┴─────┴───────────────┴──────┴─────┴─────┘
+",
+    );
+}
+
+}

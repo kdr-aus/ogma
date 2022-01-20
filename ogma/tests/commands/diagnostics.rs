@@ -1,5 +1,47 @@
 use super::*;
 
+// ------ Benchmark ------------------------------------------------------------
+#[test]
+fn benchmark_help_msg() {
+    let src = "benchmark --help";
+    let x = print_help(src, &Definitions::new());
+    assert_eq!(
+        &x,
+        "Help: `benchmark`
+--> shell:0
+ | time the expression evaluation
+ | pipes <input> to <expr>
+ | 
+ | Usage:
+ |  => benchmark expr
+ | 
+ | Examples:
+ |  time loading in a file
+ |  => benchmark { open file.csv }
+ | 
+ |  time filtering a table
+ |  => \\ file.csv | benchmark filter = col 1
+"
+    );
+}
+
+#[test]
+fn benchmark_test() {
+    let defs = &Definitions::new();
+    // filter out the row to just get the headers
+    let x = process_w_num(
+        "eq 3 | benchmark and { \\ 2 | > 1 } | filter duration = 2",
+        defs,
+    );
+    let exp = vec![vec![
+        o("duration"),
+        o("seconds"),
+        o("milliseconds"),
+        o("microseconds"),
+    ]];
+    check_is_table(x, exp);
+}
+
 // ------ Typify ---------------------------------------------------------------
 #[test]
 fn typify_help_msg() {

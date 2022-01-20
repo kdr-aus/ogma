@@ -101,7 +101,10 @@ impl fmt::Display for Type {
     }
 }
 
+// TODO constify this??
+/// This Rust type represents an ogma type.
 pub trait AsType {
+    /// The ogma type.
     fn as_type() -> Type;
 }
 
@@ -136,14 +139,14 @@ impl Value {
             Str(_) => Type::Str,
             Tab(_) => Type::Tab,
             TabRow(_) => Type::TabRow,
-            Ogma(x) => Type::Def(x.ty.clone()),
+            Ogma(x) => Type::Def(Arc::clone(x.ty())),
         }
     }
 
     /// Returns the variant index **IF** the value is a user-defined _sum_ type.
     pub fn variant_idx(&self) -> Option<usize> {
         match self {
-            Value::Ogma(x) if matches!(x.ty.ty, TypeVariant::Sum(_)) => Some(x.variant_idx),
+            Value::Ogma(x) if matches!(x.ty().ty, TypeVariant::Sum(_)) => Some(x.variant_idx()),
             _ => None,
         }
     }
@@ -523,24 +526,19 @@ impl PrimTyDef {
 }
 
 // ###### DATA #################################################################
+/// A non-primitive data structure.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OgmaData(Arc<OgmaDataInner>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct OgmaDataInner {
-    pub(crate) ty: Arc<TypeDef>,
-    pub(crate) variant_idx: usize,
-    pub(crate) data: Vec<Value>,
-}
-
-impl std::ops::Deref for OgmaData {
-    type Target = OgmaDataInner;
-    fn deref(&self) -> &OgmaDataInner {
-        &*self.0
-    }
+    pub ty: Arc<TypeDef>,
+    pub variant_idx: usize,
+    pub data: Vec<Value>,
 }
 
 impl OgmaData {
+    /// Build a new [`OgmaData`].
     pub fn new<V>(ty: Arc<TypeDef>, variant_idx: V, data: Vec<Value>) -> Self
     where
         V: Into<Option<usize>>,
@@ -552,12 +550,29 @@ impl OgmaData {
         }))
     }
 
+    /// Get a mutable reference to the inner data.
     pub fn get_mut(&mut self) -> Option<&mut OgmaDataInner> {
         Arc::get_mut(&mut self.0)
     }
 
+    /// Make a mutable reference to the inner data by clone-on-write.
     pub fn make_mut(&mut self) -> &mut OgmaDataInner {
         Arc::make_mut(&mut self.0)
+    }
+
+    /// The type definition for this type.
+    pub fn ty(&self) -> &Arc<TypeDef> {
+        &self.0.ty
+    }
+
+    /// The variant index for a Sum type.
+    pub fn variant_idx(&self) -> usize {
+        self.0.variant_idx
+    }
+
+    /// The backing data field values.
+    pub fn data(&self) -> &[Value] {
+        self.0.data.as_slice()
     }
 }
 

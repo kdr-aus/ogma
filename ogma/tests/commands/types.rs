@@ -1,5 +1,68 @@
 use super::*;
 
+// ------ Booleans -------------------------------------------------------------
+#[test]
+fn boolean_test() {
+    let defs = &Definitions::new();
+    let x = process_w_nil("\\ #t", defs);
+    assert_eq!(x, Ok(Value::Bool(true)));
+    let x = process_w_nil("\\ #f", defs);
+    assert_eq!(x, Ok(Value::Bool(false)));
+    let x = process_w_nil("\\#t", defs);
+    assert_eq!(x, Ok(Value::Bool(true)));
+    let x = process_w_nil("\\#f", defs);
+    assert_eq!(x, Ok(Value::Bool(false)));
+    let x = process_w_nil("\\ #f | = #t", defs);
+    assert_eq!(x, Ok(Value::Bool(false)));
+
+    let x = process_w_nil("\\ #tf", defs).unwrap_err().to_string();
+    println!("{}", x);
+    assert_eq!(
+        &x,
+        r#"Parsing Error: could not parse input line
+--> shell:3
+ | \ #tf
+ |    ^^ special literals only have one character
+"#
+    );
+}
+
+// ------ Infinity -------------------------------------------------------------
+#[test]
+fn inf_testing() {
+    let defs = &Definitions::new();
+    let inf = Ok(Value::Num(std::f64::INFINITY.into()));
+    let x = process_w_num("+ ∞", defs);
+    assert_eq!(x, inf);
+    let x = process_w_num("+ inf", defs);
+    assert_eq!(x, inf);
+    let x = process_w_num("+ - inf", defs);
+    assert_eq!(x, Ok(Value::Num(std::f64::NEG_INFINITY.into())));
+}
+
+// ------ Nan ------------------------------------------------------------------
+#[test]
+fn nan_testing() {
+    let defs = &Definitions::new();
+    let nan = Ok(Value::Num(std::f64::NAN.into()));
+    let x = process_w_num("+ nan", defs);
+    assert_eq!(x, nan);
+    let x = process_w_num("- nan", defs);
+    assert_eq!(x, nan);
+}
+
+// ------ Nil ------------------------------------------------------------------
+#[test]
+fn nil_test() {
+    let defs = &Definitions::new();
+    let x = process_w_nil("\\ #n", defs);
+    assert_eq!(x, Ok(Value::Nil));
+    let x = process_w_nil("\\ #n | = #n", defs);
+    assert_eq!(x, Ok(Value::Bool(true)));
+    let x = process_w_nil("\\ #n | cmp #n | = Ord::Eq", defs);
+    assert_eq!(x, Ok(Value::Bool(true)));
+}
+
 // ------ Table ctor -----------------------------------------------------------
 #[test]
 fn table_help_msg() {
@@ -179,6 +242,85 @@ fn tuples_in_tables_work() {
             vec![n(1), n(20), o("b"), n(1)],
             vec![n(-30), n(100), o("z"), n(-30)],
         ],
+    );
+}
+
+// ------ User Type Interactions -----------------------------------------------
+// as an example we can test the struct defining and implementing custom add
+#[test]
+fn point_construction() {
+    // this is a verbose check for typedefs, just as an initial check
+    let defs = &with_dummy_defs();
+    let x = process_w_nil("Point 1 { \\ 3 }", defs);
+    if let Ok(Value::Ogma(x)) = x {
+        assert_eq!(x.ty.name().str(), "Point");
+        assert_eq!(&x.data, &[Value::Num(1.into()), Value::Num(3.into())]);
+    } else {
+        panic!("not right variant")
+    }
+
+    let x = process_w_nil("\\ 1 | let $x | \\ 3 | let $y | Point $x $y", defs);
+    if let Ok(Value::Ogma(x)) = x {
+        assert_eq!(x.ty.name().str(), "Point");
+        assert_eq!(&x.data, &[Value::Num(1.into()), Value::Num(3.into())]);
+    } else {
+        panic!("not right variant")
+    }
+}
+
+#[test]
+fn invalid_point_construction() {
+    let defs = &with_dummy_defs();
+    let x = process_w_nil("Point 1", defs).unwrap_err().to_string();
+    assert_eq!(
+        &x,
+        "Semantics Error: expecting more than 1 arguments
+--> shell:0
+ | Point 1
+ | ^^^^^^^ expecting additional argument(s)
+--> help: try using the `--help` flag to view requirements
+"
+    );
+}
+
+#[test]
+fn point_construction_help() {
+    let defs = &with_dummy_defs();
+    let x = process_w_nil("Point --help", defs).unwrap_err().to_string();
+    assert_eq!(
+        &x,
+        "Help: `Point`
+--> shell:0
+ | initialise a `Point`
+ | 
+ | Usage:
+ |  => Point x:Number y:Number
+"
+    );
+}
+
+#[test]
+fn getting_a_field() {
+    let defs = &with_dummy_defs();
+    let x = process_w_nil("Point 1 3 | get x", defs);
+    assert_eq!(x, Ok(Value::Num(1.into())));
+    let x = process_w_nil("Point 1 3 | get y", defs);
+    assert_eq!(x, Ok(Value::Num(3.into())));
+}
+
+#[test]
+fn field_does_not_exist() {
+    let defs = &with_dummy_defs();
+    let x = process_w_nil("Point 1 3 | get z", defs)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        &x,
+        "Semantics Error: `Point` does not contain field `z`
+--> shell:16
+ | Point 1 3 | get z
+ |                 ^ `z` not found
+"
     );
 }
 

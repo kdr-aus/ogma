@@ -1240,7 +1240,7 @@ fn cmp_table_entries(a: &Entry<Value>, b: &Entry<Value>) -> std::cmp::Ordering {
         (O(V::Str(lhs)), O(V::Str(rhs))) => lhs.cmp(rhs),
         (O(V::Tab(_)), _) => Equal,
         (O(V::TabRow(_)), _) => Equal,
-        (O(V::Ogma(lhs)), O(V::Ogma(rhs))) => lhs.ty.name().str().cmp(rhs.ty.name().str()),
+        (O(V::Ogma(lhs)), O(V::Ogma(rhs))) => lhs.ty().name().str().cmp(rhs.ty().name().str()),
         _ => unreachable!("should not reach here given all equal cases are done"),
     }
 }

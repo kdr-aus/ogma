@@ -10,4 +10,4 @@ pub(crate) mod types;
 
 pub use defs::{process_definition, recognise_definition, Definitions};
 pub use syntax::{ast, parse};
-pub use types::Value;
+pub use types::{AsType, Value, OgmaData};

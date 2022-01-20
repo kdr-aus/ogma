@@ -69,3 +69,64 @@ pub struct HelpExample {
     pub desc: &'static str,
     pub code: &'static str,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+#[test]
+fn help_msg() {
+    use HelpParameter::*;
+
+    let h = HelpMessage {
+        desc: "this is a description".into(),
+        params: vec![Required("required1".into()), Required("req2".into())],
+        ..HelpMessage::new("cmd-name")
+    };
+    let s = help_as_error(&h).to_string();
+    assert_eq!(
+        &s,
+        "Help: `cmd-name`
+--> shell:0
+ | this is a description
+ | 
+ | Usage:
+ |  => cmd-name required1 req2
+"
+    );
+
+    let h = HelpMessage {
+        desc: "this is a description".into(),
+        examples: vec![
+            HelpExample {
+                desc: "example 1",
+                code: "cmd-name this is a thingo",
+            },
+            HelpExample {
+                desc: "example 2",
+                code: "cmd-name ",
+            },
+        ],
+        ..HelpMessage::new("cmd-name")
+    };
+    let s = help_as_error(&h).to_string();
+    assert_eq!(
+        &s,
+        "Help: `cmd-name`
+--> shell:0
+ | this is a description
+ | 
+ | Usage:
+ |  => cmd-name
+ | 
+ | Examples:
+ |  example 1
+ |  => cmd-name this is a thingo
+ | 
+ |  example 2
+ |  => cmd-name 
+"
+    );
+}
+}
+
