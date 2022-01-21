@@ -1,15 +1,4 @@
-This release fixed mostly bugs and some crate maintenance.
-The `typify` command was introduced, paving the way for type inferencing.
-
-**🔬 New Features**
-- `typify` command: output type annotations on argument <https://github.com/kdr-aus/ogma/pull/27>
-
-**🐛 Bug Fixes**
-- Handle BOM: https://github.com/kdr-aus/ogma/pull/12
-- Binary now builds as `ogma` rather than `ogma-bin`: https://github.com/kdr-aus/ogma/pull/18
-- Remove panic when batch directives are parsed: <https://github.com/kdr-aus/ogma/pull/22>
 
 **✨ Other Updates**
-- Track `Cargo.lock` file: <https://github.com/kdr-aus/ogma/pull/21>
-- Aggressive crate restructure: <https://github.com/kdr-aus/ogma/pull/25>
-- Move `benchmark` to `diagnostics` category
+- Modularise the `impls` module
+- Modularise the testing and extract it into an API test

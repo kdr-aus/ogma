@@ -4,6 +4,7 @@ use super::*;
 use std::{borrow::Cow, fmt};
 
 impl Type {
+    /// Display this type for type annotation.
     pub fn fmt_annotation(&self) -> Display {
         Display(self)
     }

@@ -1,3 +1,5 @@
+//! Error infrastructure.
+
 use crate::lang::{
     help::*,
     syntax::ast::*,
@@ -56,15 +58,22 @@ pub struct Error {
     pub help_msg: Option<String>,
 }
 
+/// A single trace item for error messages.
 #[derive(Debug, PartialEq)]
 pub struct Trace {
+    /// The defined location.
     pub loc: Location,
+    /// The source code.
     pub source: String,
+    /// Description of trace.
     pub desc: Option<String>,
+    /// Starting position in `source`.
     pub start: usize,
+    /// Length of trace element.
     pub len: usize,
 }
 
+/// Represent a help message using the [`Error`] infrastructure.
 pub fn help_as_error(msg: &HelpMessage) -> Error {
     use fmt::Write;
 
@@ -433,6 +442,7 @@ impl Default for Trace {
 }
 
 impl Trace {
+    /// Build the error trace from a tag.
     pub fn from_tag<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Self {
         Self {
             loc: tag.anchor.clone(),
@@ -536,13 +546,20 @@ fn trace_code_lines(code: &str, start: usize, end: usize) -> Vec<(&str, usize, u
 }
 
 // ###### STRUCTS ##############################################################
+/// Error catgories.
 #[derive(Debug, PartialEq)]
 pub enum Category {
+    /// Parsign error.
     Parsing,
+    /// Command is not recognised.
     UnknownCommand,
+    /// Semantic error at comp-time.
     Semantics,
+    /// A run-time evaluation error.
     Evaluation,
+    /// A definition error.
     Definitions,
+    /// A help message (built atop the error infrastructure).
     Help,
 }
 

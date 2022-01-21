@@ -2,13 +2,11 @@
 #![warn(missing_docs)]
 #![recursion_limit = "256"]
 
-mod common;
+pub mod common;
 pub mod eng;
 pub mod lang;
 pub mod output;
 pub mod rt;
-#[cfg(test)]
-mod tests;
 
 pub use common::err::Error;
 

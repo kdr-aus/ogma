@@ -439,6 +439,7 @@ fn assert_all_ops_defined(def: &ast::DefinitionImpl, defs: &Implementations) -> 
     Ok(())
 }
 
+/// Construct a table comprising of the various definitions in `defs`.
 pub fn construct_def_table(defs: &Definitions) -> Table {
     use ::table::Entry::*;
     fn location(im: &Implementation) -> Str {
