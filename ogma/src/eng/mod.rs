@@ -10,7 +10,7 @@ mod var;
 
 pub(crate) use self::{
     eval::{DefImplEvaluator, Evaluator},
-    hir::{handle_help, Context},
+    hir::Context,
     var::{Environment, Local, Locals, Variable},
 };
 

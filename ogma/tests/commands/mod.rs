@@ -1,18 +1,18 @@
 use libs::divvy::Str;
 use ogma::{
-    eng::*,
     lang::{ast::*, *},
     output::*,
-    parse::expression,
     rt::*,
+    *,
 };
 use std::{path::Path, sync::Arc};
-use table::Entry;
+use table::Entry::{self, Nil};
 
 type Result<T> = std::result::Result<T, ogma::Error>;
 
 mod arithmetic;
 mod cmp;
+mod definitions;
 mod diagnostics;
 mod io;
 mod logic;
@@ -79,11 +79,81 @@ fn check_is_table(r: Result<Value>, table: Vec<Vec<Entry<Value>>>) {
 }
 
 fn print_help(src: &str, defs: &Definitions) -> String {
-    let x = eng::handle_help(&expression(src, Location::Shell, defs).unwrap(), defs)
-        .unwrap_err()
-        .to_string();
+    let x = rt::handle_help(
+        &lang::parse::expression(src, Location::Shell, defs).unwrap(),
+        defs,
+    )
+    .unwrap_err()
+    .to_string();
     println!("{}", x);
     x
+}
+
+fn with_dummy_defs() -> Definitions {
+    let mut defs = Definitions::new();
+    assert_eq!(
+        process_definition("def num5 () { \\ 5 }", Location::Shell, None, &mut defs),
+        Ok((Value::Nil, None))
+    );
+    assert_eq!(
+        process_definition(
+            "def gt10 (n) { get $n | > 10 }",
+            Location::file("some/file", 12),
+            None,
+            &mut defs
+        ),
+        Ok((Value::Nil, None))
+    );
+    assert_eq!(
+        process_definition(
+            "def pos-tab () { filter first > 0 }",
+            Location::file("source-file", 101),
+            None,
+            &mut defs
+        ),
+        Ok((Value::Nil, None))
+    );
+    assert_eq!(
+        process_definition(
+            "def-ty Point { x:Num y:Num }",
+            Location::Shell,
+            None,
+            &mut defs,
+        ),
+        Ok((Value::Nil, None))
+    );
+    assert_eq!(
+        process_definition(
+            "def ls-files () { ls | filter type > f }",
+            Location::Shell,
+            None,
+            &mut defs
+        ),
+        Ok((Value::Nil, None))
+    );
+
+    defs
+}
+
+fn is_ord(res: Result<Value>, s: &'static str, idx: usize) {
+    if let Err(e) = &res {
+        println!("{}", e);
+    }
+    let res = res.unwrap();
+    assert!(
+        matches!(res, Value::Ogma(y) if y.variant_idx() == idx),
+        "{}",
+        s
+    );
+}
+fn is_lt(res: Result<Value>) {
+    is_ord(res, "expecting Ord::Lt", 0);
+}
+fn is_eq(res: Result<Value>) {
+    is_ord(res, "expecting Ord::Eq", 1);
+}
+fn is_gt(res: Result<Value>) {
+    is_ord(res, "expecting Ord::Gt", 2);
 }
 
 // ------ Multiline Expressions ------------------------------------------------

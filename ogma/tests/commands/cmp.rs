@@ -41,27 +41,6 @@ fn ord_init_help_test() {
     );
 }
 
-fn is_ord(res: Result<Value>, s: &'static str, idx: usize) {
-    if let Err(e) = &res {
-        println!("{}", e);
-    }
-    let res = res.unwrap();
-    assert!(
-        matches!(res, Value::Ogma(y) if y.variant_idx() == idx),
-        "{}",
-        s
-    );
-}
-fn is_lt(res: Result<Value>) {
-    is_ord(res, "expecting Ord::Lt", 0);
-}
-fn is_eq(res: Result<Value>) {
-    is_ord(res, "expecting Ord::Eq", 1);
-}
-fn is_gt(res: Result<Value>) {
-    is_ord(res, "expecting Ord::Gt", 2);
-}
-
 #[test]
 fn ord_init_testing() {
     let defs = &Definitions::new();

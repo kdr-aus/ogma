@@ -1,1 +1,1 @@
-pub(crate) mod err;
+pub mod err;

@@ -1,48 +1,5 @@
-fn with_dummy_defs() -> Definitions {
-    let mut defs = Definitions::new();
-    assert_eq!(
-        process_definition("def num5 () { \\ 5 }", Location::Shell, None, &mut defs),
-        Ok((Value::Nil, None))
-    );
-    assert_eq!(
-        process_definition(
-            "def gt10 (n) { get $n | > 10 }",
-            Location::file("some/file", 12),
-            None,
-            &mut defs
-        ),
-        Ok((Value::Nil, None))
-    );
-    assert_eq!(
-        process_definition(
-            "def pos-tab () { filter first > 0 }",
-            Location::file("source-file", 101),
-            None,
-            &mut defs
-        ),
-        Ok((Value::Nil, None))
-    );
-    assert_eq!(
-        process_definition(
-            "def-ty Point { x:Num y:Num }",
-            Location::Shell,
-            None,
-            &mut defs,
-        ),
-        Ok((Value::Nil, None))
-    );
-    assert_eq!(
-        process_definition(
-            "def ls-files () { ls | filter type > f }",
-            Location::Shell,
-            None,
-            &mut defs
-        ),
-        Ok((Value::Nil, None))
-    );
-
-    defs
-}
+use super::*;
+use ogma::common::err::*;
 
 #[test]
 fn defs_help_msg() {
@@ -178,7 +135,7 @@ fn list_defs() {
 
 #[test]
 fn add_from_str_and_clearing() {
-    use lang::defs::construct_def_table;
+    use lang::construct_def_table;
 
     let mut defs = with_dummy_defs();
     let mut tab = construct_def_table(&defs);

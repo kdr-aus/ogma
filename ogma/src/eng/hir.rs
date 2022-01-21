@@ -1,24 +1,6 @@
 use super::*;
-use ast::{Expression, Tag, Term};
+use ast::{Tag, Term};
 use std::fmt;
-
-pub fn handle_help(expr: &Expression, definitions: &Definitions) -> Result<()> {
-    // rejig on new proc
-    if let Some(block) = expr.blocks.get(0) {
-        let help = definitions.impls().get_help(&block.op())?;
-        if block
-            .terms()
-            .iter()
-            .any(|x| matches!(x, Term::Flag(f) if f.str() == "help"))
-        {
-            Err(err::help_as_error(help))
-        } else {
-            Ok(())
-        }
-    } else {
-        Ok(())
-    }
-}
 
 // ###### CONTEXT ##############################################################
 #[derive(Clone)]

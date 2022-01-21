@@ -2,7 +2,7 @@
 #![warn(missing_docs)]
 #![recursion_limit = "256"]
 
-mod common;
+pub mod common;
 pub mod eng;
 pub mod lang;
 pub mod output;

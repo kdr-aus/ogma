@@ -1,3 +1,11 @@
+use libs::divvy::ProgressTx;
+use ogma::rt;
+use std::path::Path;
+
+fn paths() -> (&'static Path, &'static Path) {
+    (Path::new("."), Path::new("../ogma"))
+}
+
 #[test]
 fn batch_success_testing() {
     use rt::bat::*;
