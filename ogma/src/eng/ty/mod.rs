@@ -2,3 +2,4 @@
 use super::*;
 
 mod annotate;
+mod infer;
