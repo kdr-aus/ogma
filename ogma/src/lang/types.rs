@@ -18,10 +18,12 @@ type TrTable = ::table::Table<Value>;
 pub struct Table(pub Arc<TrTable>);
 
 impl Table {
+    /// If this table reference is unique, get a mutable alias to it.
     pub fn get_mut(&mut self) -> Option<&mut TrTable> {
         Arc::get_mut(&mut self.0)
     }
 
+    /// Make a unique reference to this table by cloning if required.
     pub fn make_mut(&mut self) -> &mut TrTable {
         Arc::make_mut(&mut self.0)
     }
@@ -54,18 +56,29 @@ impl Drop for Table {
 }
 
 // ###### TYPE #################################################################
+/// Ogma data types.
+///
+/// Primitive types with support for ogma defined types ([`TypeDef`]).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Type {
+    /// A nil, or nothing, type.
     Nil,
+    /// A boolean type.
     Bool,
+    /// A numeric type.
     Num,
+    /// A string type.
     Str,
+    /// A table type.
     Tab,
+    /// A table row type.
     TabRow,
+    /// An ogma-defined type.
     Def(Arc<TypeDef>),
 }
 
 impl Type {
+    /// Output the help message of a type.
     pub fn help(&self) -> HelpMessage {
         use Type::*;
         let desc = match self {
