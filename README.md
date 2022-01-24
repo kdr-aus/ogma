@@ -1,5 +1,7 @@
 # ogma
 
+[]!(logo.png)
+
 Welcome to the `ogma` project!
 `ogma` is a scripting language focused on _ergonomically_ and _efficiently_ 
 processing tabular data, with _batteries included_.
