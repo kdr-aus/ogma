@@ -1,6 +1,8 @@
 # ogma
 
-<img src="./logo.png" height="250px"/>
+<img 
+src="./docs/assets/logo.png?raw=true"
+style="height: 200px; display:block; margin: auto; padding-top: 30px"/>
 
 Welcome to the `ogma` project!
 `ogma` is a scripting language focused on _ergonomically_ and _efficiently_ 
