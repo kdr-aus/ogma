@@ -1,5 +1,11 @@
 # ogma
 
+<p align="center">
+<img 
+src="./docs/assets/logo.png?raw=true"
+style="height: 200px; display:block; margin: auto; padding-top: 30px"/>
+</p>
+
 Welcome to the `ogma` project!
 `ogma` is a scripting language focused on _ergonomically_ and _efficiently_ 
 processing tabular data, with _batteries included_.
