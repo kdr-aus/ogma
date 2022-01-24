@@ -2,7 +2,7 @@ use crate::prelude::*;
 use kserd::Number;
 
 type AstGraphInner = petgraph::graph::Graph<AstNode, ()>;
-type TypeGraphInner = petgraph::graph::Graph<(), ()>;
+type TypeGraphInner = petgraph::graph::Graph<TyNode, ()>;
 #[derive(Debug)]
 struct AstGraph(AstGraphInner);
 #[derive(Debug)]
@@ -71,7 +71,7 @@ fn init_graphs(expr: ast::Expression) -> (AstGraph, TypeGraph) {
     }
 
     // clone the nodes of the graph, but do not care about the edges
-    let mut ty = TypeGraph(g.map(|_, _| (), |_, _| ()));
+    let mut ty = TypeGraph(g.map(|_, _| TyNode::Unknown, |_, _| ()));
     ty.0.clear_edges();
 
     let ast = AstGraph(g);
@@ -79,16 +79,59 @@ fn init_graphs(expr: ast::Expression) -> (AstGraph, TypeGraph) {
     (ast, ty)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum TyNode {
+    Known(Type),
+    Unknown,
+}
+
+impl TypeGraph {
+    /// Apply _known_ types from the AST nodes.
+    ///
+    /// For instance, a number variant node can be assigned the type number.
+    fn apply_ast_types(&mut self, ag: &AstGraph) {
+        let ag = &ag.0;
+
+        for nidx in ag.node_indices() {
+            let node = &ag[nidx];
+
+            use AstNode::*;
+            let ty = match node {
+                Op(_) | Flag(_) => None,
+                Ident(_) => Some(Type::Str),
+                Num { .. } => Some(Type::Num),
+                Pound { ch: 'n', .. } => Some(Type::Nil),
+                Pound { ch: 't', .. } | Pound { ch: 'f', .. } => Some(Type::Bool),
+                Pound { .. } => None,
+                Var(_) => None,
+                Expr(_) => None
+            };
+
+            if let Some(ty) = ty.map(TyNode::Known) {
+                let current = self
+                    .0
+                    .node_weight_mut(nidx)
+                    .expect("Type and Ast graphs should have same indices");
+                assert!(
+                    matches!(current, TyNode::Unknown),
+                    "overwriting a non-unknown type node"
+                );
+                *current = ty;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn expression_decomposition_checks() {
         fn expr(s: &str) -> ast::Expression {
             lang::parse::expression(s, Default::default(), &Default::default()).unwrap()
         }
 
+    #[test]
+    fn expression_decomposition_checks() {
         let expr = expr("filter foo < 3 | len");
 
         let (ag, tg) = init_graphs(expr);
@@ -108,5 +151,27 @@ mod tests {
         assert!(ag.contains_edge(1.into(), 3.into())); // filter -> < 3
         assert!(ag.contains_edge(3.into(), 5.into())); // < 3 -> <
         assert!(ag.contains_edge(5.into(), 6.into())); // < -> 3
+    }
+
+    #[test]
+    fn assigning_ast_types() {
+        let expr = expr("filter foo < 3 | len | = #t");
+
+        let (ag, mut tg) = init_graphs(expr);
+        tg.apply_ast_types(&ag);
+
+        let tg = tg.0;
+
+        assert_eq!(tg.node_count(), 9);
+
+        assert_eq!(tg.node_weight(0.into()), Some(&TyNode::Unknown)); // root
+        assert_eq!(tg.node_weight(1.into()), Some(&TyNode::Unknown)); // filter
+        assert_eq!(tg.node_weight(2.into()), Some(&TyNode::Known(Type::Str))); // foo
+        assert_eq!(tg.node_weight(3.into()), Some(&TyNode::Unknown)); // < 3
+        assert_eq!(tg.node_weight(4.into()), Some(&TyNode::Unknown)); // len
+        assert_eq!(tg.node_weight(5.into()), Some(&TyNode::Unknown)); // =
+        assert_eq!(tg.node_weight(6.into()), Some(&TyNode::Known(Type::Bool))); // #t
+        assert_eq!(tg.node_weight(7.into()), Some(&TyNode::Unknown)); // <
+        assert_eq!(tg.node_weight(8.into()), Some(&TyNode::Known(Type::Num))); // 3
     }
 }
