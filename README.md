@@ -1,6 +1,6 @@
 # ogma
 
-![](logo.png | height=250)
+<img src="./logo.png" height="250px"/>
 
 Welcome to the `ogma` project!
 `ogma` is a scripting language focused on _ergonomically_ and _efficiently_ 
