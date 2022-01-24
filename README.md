@@ -1,6 +1,6 @@
 # ogma
 
-[]!(logo.png)
+![](logo.png)
 
 Welcome to the `ogma` project!
 `ogma` is a scripting language focused on _ergonomically_ and _efficiently_ 
