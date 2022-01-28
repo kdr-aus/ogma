@@ -1,3 +1,5 @@
+//! Evaluation.
+
 use super::*;
 
 /// Evaluator of an expression.

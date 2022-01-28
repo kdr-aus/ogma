@@ -3,6 +3,7 @@
 use crate::prelude::*;
 
 mod arg;
+mod comp;
 mod eval;
 mod hir;
 mod ty;
