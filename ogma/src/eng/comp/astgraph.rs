@@ -95,6 +95,17 @@ impl AstGraph {
 
     /// Returns `true` if definitions were found and expanded.
     fn expand_defs(&mut self, defs: &Definitions) -> bool {
-        todo!()
+        // TODO wire in
+        false
+    }
+}
+
+impl AstNode {
+    /// If this is an expression node, returns the tag as Some.
+    pub fn expr(&self) -> Option<&Tag> {
+        match self {
+            AstNode::Expr(x) => Some(x),
+            _ => None,
+        }
     }
 }
