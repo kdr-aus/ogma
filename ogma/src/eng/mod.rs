@@ -11,6 +11,7 @@ mod ty;
 mod var;
 
 pub(crate) use self::{
+    comp::compile,
     eval::{DefImplEvaluator, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals, Variable},

@@ -195,6 +195,14 @@ impl TypeGraph {
 
         chgd
     }
+
+    /// Set the _output_ field of the `node` to `Known(ty)`.
+    ///
+    /// # Panics
+    /// - If the node does not exist,
+    pub fn add_known_output(&mut self, node: NodeIndex, ty: Type) {
+        self.0[node].output = Knowledge::Known(ty);
+    }
 }
 
 impl Knowledge {

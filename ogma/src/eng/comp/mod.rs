@@ -123,11 +123,16 @@ impl<'d> Compiler<'d> {
             match Step::compile(defs.impls(), block) {
                 Ok(step) => {
                     succeed = true;
+                    let out_ty = step.out_ty.clone();
                     let _is_empty = self.compiled_nodes.insert(node.index(), step).is_none();
                     debug_assert!(
                         _is_empty,
                         "just replaced an already compiled step which should not happen"
                     );
+
+                    // since this compilation was successful, the output type is known!
+                    // the TG is updated with this information
+                    self.tg.add_known_output(node, out_ty);
                 }
                 Err(_) => (),
             }
