@@ -1,7 +1,7 @@
 use super::*;
 use std::ops::Deref;
 
-type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow>;
+type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Node {
@@ -9,7 +9,7 @@ pub struct Node {
     pub output: Knowledge,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Knowledge {
     Unknown,
     Known(Type),
@@ -64,7 +64,7 @@ impl TypeGraph {
 
             use AstNode::*;
             let ty = match node {
-                Op(_) | Flag(_) => None,
+                Op { .. } | Flag(_) => None,
                 Ident(_) => Some(Type::Str),
                 Num { .. } => Some(Type::Num),
                 Pound { ch: 'n', .. } => Some(Type::Nil),
@@ -126,5 +126,98 @@ impl TypeGraph {
         }
 
         // TODO: handle defs
+    }
+
+    pub fn set_root_input_ty(&mut self, ty: Type) {
+        if let Some(n) = self.0.node_weight_mut(0.into()) {
+            n.input = Knowledge::Known(ty);
+        }
+    }
+
+    /// Returns if the graph was changed.
+    pub fn flow_types(&mut self, completed_indices: &mut IndexSet) -> bool {
+        let mut chgd = false;
+
+        let edges = self
+            .edge_indices()
+            .filter(|e| !completed_indices.contains(&e.index()))
+            .collect::<Vec<_>>();
+
+        for edge in edges {
+            let flow = &self[edge];
+            let (from, to) = self
+                .edge_endpoints(edge)
+                .expect("edge would exist in graph");
+            let from = &self[from];
+            let known_out = from.output.known().is_some();
+            let known_in = from.input.known().is_some();
+
+            match flow {
+                Flow::II if known_in => {
+                    debug_assert!(
+                        matches!(&self[to].input, Knowledge::Unknown),
+                        "expecting to flow into Unknown"
+                    );
+                    self.0[to].input = from.input.clone();
+                    completed_indices.insert(edge.index());
+                    chgd = true;
+                }
+                Flow::OI if known_out => {
+                    debug_assert!(
+                        matches!(&self[to].input, Knowledge::Unknown),
+                        "expecting to flow into Unknown"
+                    );
+                    self.0[to].input = from.output.clone();
+                    completed_indices.insert(edge.index());
+                    chgd = true;
+                }
+                Flow::IO if known_in => {
+                    debug_assert!(
+                        matches!(&self[to].output, Knowledge::Unknown),
+                        "expecting to flow into Unknown"
+                    );
+                    self.0[to].output = from.input.clone();
+                    completed_indices.insert(edge.index());
+                    chgd = true;
+                }
+                Flow::OO if known_out => {
+                    debug_assert!(
+                        matches!(&self[to].output, Knowledge::Unknown),
+                        "expecting to flow into Unknown"
+                    );
+                    self.0[to].output = from.output.clone();
+                    completed_indices.insert(edge.index());
+                    chgd = true;
+                }
+                Flow::II | Flow::IO | Flow::OI | Flow::OO => (),
+            }
+        }
+
+        chgd
+    }
+}
+
+impl Knowledge {
+    /// If the type is known, returns `Some`.
+    pub fn known(&self) -> Option<&Type> {
+        match self {
+            Knowledge::Known(ty) => Some(ty),
+            _ => None,
+        }
+    }
+
+    /// If the type there is knowledge of some type, say if it is known or inferred, returns that
+    /// knowledge.
+    pub fn ty(&self) -> Option<&Type> {
+        use Knowledge::*;
+        match self {
+            Known(ty) | Inferred(ty) | Obliged(ty) => Some(ty),
+            _ => None,
+        }
+    }
+
+    /// `Knowledge::Unknown` variant.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Knowledge::Unknown)
     }
 }

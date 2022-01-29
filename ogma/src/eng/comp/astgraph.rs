@@ -2,7 +2,7 @@ use crate::prelude::*;
 use kserd::Number;
 use std::ops::Deref;
 
-type Inner = petgraph::stable_graph::StableGraph<AstNode, ()>;
+type Inner = petgraph::stable_graph::StableGraph<AstNode, (), petgraph::Directed, u32>;
 
 #[derive(Debug)]
 pub struct AstGraph(Inner);
@@ -17,7 +17,7 @@ impl Deref for AstGraph {
 
 #[derive(Debug)]
 pub enum AstNode {
-    Op(Tag),
+    Op { op: Tag, blk: Tag },
     Flag(Tag),
     Ident(Tag),
     Num { val: Number, tag: Tag },
@@ -59,9 +59,10 @@ impl AstGraph {
         // FIFO -- breadth-first
         while let Some((root, blocks)) = q.pop_front() {
             for blk in blocks {
+                let blk_tag = blk.block_tag();
                 let (op, terms) = blk.parts();
 
-                let op = g.add_node(AstNode::Op(op));
+                let op = g.add_node(AstNode::Op { op, blk: blk_tag });
                 g.add_edge(root, op, ()); // edge from the expression root to the op
 
                 for term in terms {
@@ -101,6 +102,22 @@ impl AstGraph {
 }
 
 impl AstNode {
+    /// If this is an op node, returns the `(op, blk)` tags.
+    pub fn op(&self) -> Option<(&Tag, &Tag)> {
+        match self {
+            AstNode::Op { op, blk } => Some((op, blk)),
+            _ => None,
+        }
+    }
+
+    /// If this is a flag node, returns the tag as Some.
+    pub fn flag(&self) -> Option<&Tag> {
+        match self {
+            AstNode::Flag(x) => Some(x),
+            _ => None,
+        }
+    }
+
     /// If this is an expression node, returns the tag as Some.
     pub fn expr(&self) -> Option<&Tag> {
         match self {

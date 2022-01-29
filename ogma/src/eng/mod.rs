@@ -6,6 +6,7 @@ mod arg;
 mod comp;
 mod eval;
 mod hir;
+mod step;
 mod ty;
 mod var;
 
