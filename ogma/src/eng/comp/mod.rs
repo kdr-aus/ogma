@@ -168,7 +168,6 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    // TODO remove this in favour of an index based system in future
     fn create_block_args(&self, opnode_idx: NodeIndex) -> Option<Vec<ast::Argument>> {
         use ast::Argument as Arg;
         use AstNode::*;
@@ -354,6 +353,13 @@ mod tests {
 
     #[test]
     fn compilation_test_03() {
+        // tests a nested expression
+        assert!(compile("range 0 { \\ 3 } | len").is_ok());
+        assert!(compile("ls | range 0 { len } | len").is_ok());
+    }
+
+    #[test]
+    fn compilation_test_04() {
         // tests an inferred input, no defs or variables
         assert!(compile("ls | filter foo eq 'bar' | len").is_ok());
     }
