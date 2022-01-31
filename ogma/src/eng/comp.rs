@@ -13,8 +13,9 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         defs,
         ag,
         tg,
-        flowed_edges: IndexSet::default(),
-        compiled_nodes: Default::default(),
+        flowed_edges: Default::default(),
+        compiled_ops: Default::default(),
+        compiled_exprs: Default::default(),
     };
 
     compiler.init_tg(); // initialise TG
@@ -26,6 +27,13 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
     while !compiler.finished() {
         eprintln!("resolving");
         compiler.resolve_tg()?;
+
+        eprintln!("populating compiled expressions");
+        if compiler.populate_compiled_expressions() {
+            eprintln!("success");
+            continue;
+        }
+
         eprintln!("compiling blocks");
         match compiler.compile_blocks() {
             Ok(()) => {
@@ -34,11 +42,13 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
             }
             Err(e) => err = Some(e),
         }
+
         eprintln!("inferring inputs");
         if compiler.infer_inputs() {
             eprintln!("success");
             continue;
         }
+
         eprintln!("inferring outputs");
         if compiler.infer_outputs() {
             eprintln!("success");
@@ -69,8 +79,10 @@ struct Compiler<'d> {
     tg: TypeGraph,
     /// The edges in the `tg` that have been resolved and flowed.
     flowed_edges: IndexSet,
-    /// A map of op nodes which have succesfully compiled into a `Step`.
-    compiled_nodes: IndexMap<Step>,
+    /// A map of **Op** nodes which have succesfully compiled into a `Step`.
+    compiled_ops: IndexMap<Step>,
+    /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
+    compiled_exprs: IndexMap<eval::Stack>,
 }
 
 impl<'d> Compiler<'d> {
@@ -80,10 +92,9 @@ impl<'d> Compiler<'d> {
         self.tg.apply_ast_edges(&self.ag);
     }
 
+    /// We can determine if compilation is finished by seeing if there is a root evaluation stack.
     fn finished(&self) -> bool {
-        self.ag
-            .neighbors(0.into())
-            .all(|i| self.compiled_nodes.contains_key(&i.index()))
+        self.compiled_exprs.contains_key(&0)
     }
 
     fn resolve_tg(&mut self) -> Result<()> {
@@ -116,7 +127,7 @@ impl<'d> Compiler<'d> {
             .node_indices()
             .filter(|&idx| {
                 // not already compiled
-                !self.compiled_nodes.contains_key(&idx.index())
+                !self.compiled_ops.contains_key(&idx.index())
                 // and is a Op variant
             && self.ag[idx].op().is_some()
             // and the input has a type
@@ -143,7 +154,7 @@ impl<'d> Compiler<'d> {
                 Ok(step) => {
                     goto_resolve = true;
                     let out_ty = step.out_ty.clone();
-                    let _is_empty = self.compiled_nodes.insert(node.index(), step).is_none();
+                    let _is_empty = self.compiled_ops.insert(node.index(), step).is_none();
                     debug_assert!(
                         _is_empty,
                         "just replaced an already compiled step which should not happen"
@@ -216,6 +227,37 @@ impl<'d> Compiler<'d> {
             None
         }
     }
+
+    /// Populate the compiled expression map.
+    ///
+    /// Loops through incomplete expressions and tries to make an entry in the map if all blocks in
+    /// the expression have a compiled step.
+    ///
+    /// Returns if the map gets updated.
+    fn populate_compiled_expressions(&mut self) -> bool {
+        let exprs = self
+            .ag
+            .node_indices()
+            .filter(|&n| self.ag[n].expr().is_some())
+            .filter(|n| !self.compiled_exprs.contains_key(&n.index()))
+            .filter(|&n| self.tg[n].has_types())
+            .collect::<Vec<_>>();
+
+        let mut chgd = false;
+
+        for expr in exprs {
+            if let Some(stack) = eval::Stack::build(&self, expr) {
+                chgd = true;
+                let _is_empty = self.compiled_exprs.insert(expr.index(), stack).is_none();
+                debug_assert!(
+                    _is_empty,
+                    "just replaced an already compiled expression stack which should not happen"
+                );
+            }
+        }
+
+        chgd
+    }
 }
 
 impl<'a> Block<'a> {
@@ -242,11 +284,65 @@ impl<'a> Block<'a> {
             args_count: 0,
             ag: &compiler.ag,
             tg: &compiler.tg,
+            compiled_exprs: &compiler.compiled_exprs,
             tg_chgs: chgs,
             defs,
             #[cfg(debug_assertions)]
             output_ty: None,
         }
+    }
+}
+
+impl eval::Stack {
+    fn build(compiler: &Compiler, expr_node: NodeIndex) -> Option<Self> {
+        let Compiler {
+            ag, compiled_ops, ..
+        } = compiler;
+
+        let just_op = |n: &NodeIndex| ag[*n].op().is_some();
+
+        let mut count = 0;
+        let all_have_step = ag.neighbors(expr_node).filter(just_op).all(|op| {
+            count += 1;
+            compiled_ops.contains_key(&op.index())
+        });
+
+        if !all_have_step {
+            return None;
+        }
+
+        let mut steps = Vec::with_capacity(count);
+        steps.extend(
+            ag.neighbors(expr_node)
+                .filter(just_op)
+                .map(|op| {
+                    compiled_ops
+                        .get(&op.index())
+                        .expect("just checked it exists")
+                })
+                .cloned(),
+        );
+
+        let mut stack = Self::new(steps);
+
+        #[cfg(debug_assertions)]
+        stack.add_types(&compiler.tg[expr_node]);
+
+        Some(stack)
+    }
+
+    #[cfg(debug_assertions)]
+    fn add_types(&mut self, tynode: &graphs::tygraph::Node) {
+        self.in_ty = tynode
+            .input
+            .ty()
+            .expect("expressions input type should be known at this point")
+            .clone();
+        self.out_ty = tynode
+            .output
+            .ty()
+            .expect("expressions output type should be known at this point")
+            .clone();
     }
 }
 
@@ -425,6 +521,6 @@ mod tests {
     #[test]
     fn compilation_test_05() {
         // tests an inferred input, no defs or variables
-        assert!(compile("ls | filter foo eq 'bar' | len").is_ok());
+        compile("ls | filter foo eq 'bar' | len").unwrap();
     }
 }

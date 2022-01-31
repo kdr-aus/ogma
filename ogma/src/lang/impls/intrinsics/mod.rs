@@ -74,7 +74,7 @@ fn variadic_intrinsic<T, F>(mut blk: Block, aggfn: F) -> Result<Step>
 where
     T: AsType + Into<Value> + 'static,
     T: TryFrom<Value, Error = Error>,
-    F: Fn(Option<T>, T) -> (T, bool) + Sync + 'static,
+    F: Fn(Option<T>, T) -> (T, bool) + Send + Sync + 'static,
 {
     let len = blk.args_len();
     let ty = T::as_type();

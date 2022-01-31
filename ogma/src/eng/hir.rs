@@ -34,11 +34,12 @@ impl<'a> Block<'a> {
             A::Pound('t', tag) => (Hold::Lit(true.into()), tag, Type::Bool),
             A::Pound('f', tag) => (Hold::Lit(false.into()), tag, Type::Bool),
             A::Pound('n', tag) => (Hold::Lit(Value::Nil), tag, Type::Nil),
-            A::Pound('i', tag) => (
-                Hold::Expr(make_input_pound_expr(in_ty.clone(), tag.clone())),
-                tag,
-                in_ty.clone(),
-            ),
+            A::Pound('i', tag) => todo!(),
+            //                 (
+            //                 Hold::Expr(make_input_pound_expr(in_ty.clone(), tag.clone())),
+            //                 tag,
+            //                 in_ty.clone(),
+            //             ),
             A::Pound(ch, tag) => return Err(Error::unknown_spec_literal(ch, &tag)),
             A::Var(var) => {
                 match locals
@@ -66,7 +67,8 @@ impl<'a> Block<'a> {
                 let eval = Evaluator::construct(in_ty.clone(), expr, self.defs, locals.clone())
                     .map_err(|e| e.add_trace(self.blk_tag()))?;
                 let out_ty = eval.ty().clone();
-                (Hold::Expr(eval), tag, out_ty)
+                todo!()
+                //                 (Hold::Expr(eval), tag, out_ty)
             }
         };
 
@@ -168,12 +170,13 @@ impl<'a> Block<'a> {
     /// be built with `Type::Nil` and `Value::Nil` can be passed on through!
     pub fn eval<F>(self, out_ty: Type, f: F) -> Result<Step>
     where
-        F: Fn(Value, Context) -> StepR + Sync + 'static,
+        F: Fn(Value, Context) -> StepR,
+        F: Func<StepR>,
     {
         self.finalise(&out_ty)?;
         Ok(Step {
             out_ty,
-            f: Box::new(f),
+            f: Arc::new(f),
             type_annotation: String::new(),
         })
     }
@@ -183,7 +186,8 @@ impl<'a> Block<'a> {
     /// This supplies the [`Value`] input but uses type inference on `O` to get the output type.
     pub fn eval_o<F, O>(self, f: F) -> Result<Step>
     where
-        F: Fn(Value, Context) -> Result<(O, Environment)> + Sync + 'static,
+        F: Fn(Value, Context) -> Result<(O, Environment)>,
+        F: Func<Result<(O, Environment)>>,
         O: AsType + Into<Value>,
     {
         self.eval(O::as_type(), move |v, c| {

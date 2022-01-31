@@ -15,7 +15,7 @@ impl Step {
 
                     Step {
                         out_ty: evaluator.ty().clone(),
-                        f: Box::new(move |input, cx| evaluator.eval(input, cx)),
+                        f: Arc::new(move |input, cx| evaluator.eval(input, cx)),
                         type_annotation: Default::default(),
                     }
                 })
@@ -23,5 +23,15 @@ impl Step {
         }?;
 
         Ok(step)
+    }
+}
+
+impl Clone for Step {
+    fn clone(&self) -> Self {
+        Step {
+            out_ty: self.out_ty.clone(),
+            f: Arc::clone(&self.f),
+            type_annotation: self.type_annotation.clone(),
+        }
     }
 }

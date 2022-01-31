@@ -2,6 +2,31 @@
 
 use super::*;
 
+#[derive(Clone)]
+pub struct Stack {
+    #[cfg(debug_assertions)]
+    pub in_ty: Type,
+
+    #[cfg(debug_assertions)]
+    pub out_ty: Type,
+
+    /// Each block converted into a function.
+    steps: Vec<Step>,
+}
+
+impl Stack {
+    pub fn new(steps: Vec<Step>) -> Self {
+        Self {
+            steps,
+            #[cfg(debug_assertions)]
+            in_ty: Type::Nil,
+
+            #[cfg(debug_assertions)]
+            out_ty: Type::Nil,
+        }
+    }
+}
+
 /// Evaluator of an expression.
 #[derive(Debug)]
 pub struct Evaluator {
@@ -64,7 +89,7 @@ impl Evaluator {
 
                         Step {
                             out_ty: evaluator.ty().clone(),
-                            f: Box::new(move |input, cx| evaluator.eval(input, cx)),
+                            f: Arc::new(move |input, cx| evaluator.eval(input, cx)),
                             type_annotation,
                         }
                     })
@@ -244,7 +269,7 @@ pub fn make_input_pound_expr(in_ty: Type, tag: Tag) -> Evaluator {
         out_ty: out_ty.clone(),
         steps: vec![Step {
             out_ty,
-            f: Box::new(|i, cx| cx.done(i)),
+            f: Arc::new(|i, cx| cx.done(i)),
             type_annotation: tyan.clone(),
         }],
         type_annotation: tyan,

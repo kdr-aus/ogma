@@ -127,17 +127,22 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
     fn map_astnode_into_hold(blk: &Block, node: NodeIndex) -> Result<Hold> {
         use graphs::astgraph::AstNode::*;
 
-        Ok(match &blk.ag[node] {
+        match &blk.ag[node] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
-            Ident(s) => Hold::Lit(Str::new(s.str()).into()),
-            Num { val, tag: _ } => Hold::Lit((*val).into()),
-            Pound { ch: 't', tag: _ } => Hold::Lit(true.into()),
-            Pound { ch: 'f', tag: _ } => Hold::Lit(false.into()),
-            Pound { ch, tag } => return Err(Error::unknown_spec_literal(*ch, tag)),
+            Ident(s) => Ok(Hold::Lit(Str::new(s.str()).into())),
+            Num { val, tag: _ } => Ok(Hold::Lit((*val).into())),
+            Pound { ch: 't', tag: _ } => Ok(Hold::Lit(true.into())),
+            Pound { ch: 'f', tag: _ } => Ok(Hold::Lit(false.into())),
+            Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
             Var(tag) => todo!(),
-            Expr(tag) => todo!(),
-        })
+            Expr(tag) => blk
+                .compiled_exprs
+                .get(&node.index())
+                .cloned()
+                .map(Hold::Expr)
+                .ok_or_else(|| Error::incomplete_expr_compilation(tag)),
+        }
     }
 }
 
@@ -222,11 +227,12 @@ impl Argument {
     where
         F: FnOnce() -> Value,
     {
-        match &self.hold {
-            Hold::Lit(x) => Ok(x.clone()),
-            Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
-            Hold::Expr(e) => resolve_expr(e, &self.in_ty, input(), cx.clone()).map(|x| x.0),
-        }
+        todo!();
+        //         match &self.hold {
+        //             Hold::Lit(x) => Ok(x.clone()),
+        //             Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
+        //             Hold::Expr(e) => resolve_expr(e, &self.in_ty, input(), cx.clone()).map(|x| x.0),
+        //         }
     }
 
     /// Transform this argument into a `resolve` function.
@@ -241,6 +247,8 @@ impl Argument {
         &'a self,
         cx: &'a Context<'a>,
     ) -> impl Fn(Value) -> Result<Value> + Sync + 'a {
+        todo!();
+
         use std::borrow::Cow;
         enum R<'r> {
             V(Cow<'r, Value>),
@@ -249,7 +257,7 @@ impl Argument {
         let r = match &self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
             Hold::Var(x) => R::V(Cow::Owned(x.fetch(&cx.env).clone())),
-            Hold::Expr(e) => R::E(e),
+            Hold::Expr(e) => todo!(), //R::E(e),
         };
 
         let inty = self.in_ty.clone();

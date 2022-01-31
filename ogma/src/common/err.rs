@@ -460,6 +460,19 @@ expected `{}`, found `{}`",
     }
 }
 
+/// Type Errors
+impl Error {
+    pub(crate) fn incomplete_expr_compilation(expr: &Tag) -> Self {
+        Error {
+            // TODO - change to Type???
+            cat: Category::Semantics,
+            desc: "expression is yet to be compiled".into(),
+            traces: trace(expr, Some("this expression has not finished compiling".into())),
+            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = Vec::new();

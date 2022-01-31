@@ -266,6 +266,14 @@ impl TypeGraph {
     }
 }
 
+impl Node {
+    /// Returns true if both the input and output both have types available to them.
+    /// That is, either one will return `Some` when a `.ty()` call is made.
+    pub fn has_types(&self) -> bool {
+        self.input.ty().and(self.output.ty()).is_some()
+    }
+}
+
 impl Knowledge {
     /// If the type is known, returns `Some`.
     pub fn known(&self) -> Option<&Type> {

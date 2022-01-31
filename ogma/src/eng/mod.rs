@@ -44,7 +44,7 @@ enum Hold {
     // TODO -- this needs some thought,
     Var(Variable),
     // TODO -- this needs some thought,
-    Expr(Evaluator),
+    Expr(eval::Stack),
 }
 
 // ###### BLOCK ################################################################
@@ -82,6 +82,9 @@ pub struct Block<'a> {
     ag: &'a graphs::astgraph::AstGraph,
     /// The compiler's type graph.
     tg: &'a graphs::tygraph::TypeGraph, // notice the immutability!
+    /// The compiler's compiled expressions.
+    compiled_exprs: &'a IndexMap<eval::Stack>,
+
     /// A list of changes to be made to the type graph.
     ///
     /// This is stored as a mutable reference since the block is usually passed by value to
@@ -126,10 +129,14 @@ impl<'a> Block<'a> {
 }
 
 // ###### STEP #################################################################
+
+pub trait Func<O>: Fn(Value, Context) -> O + Send + Sync + 'static {}
+impl<T, O> Func<O> for T where T: Fn(Value, Context) -> O + Send + Sync + 'static {}
+
 /// A compiled block, ready for evaluation.
 pub struct Step {
     out_ty: Type,
-    f: Box<dyn Fn(Value, Context) -> StepR + Sync>,
+    f: Arc<dyn Func<StepR>>,
 
     /// A tracked type annotation code representation.
     /// This comes directly off the block when transforming into a `Step`.
