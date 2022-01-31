@@ -36,22 +36,22 @@ macro_rules! add {
     ($impls:expr,) => {{}}
 }
 
-mod arithmetic;
-mod cmp;
-mod diagnostics;
+// mod arithmetic;
+// mod cmp;
+// mod diagnostics;
 mod io;
-mod logic;
-mod morphism;
+// mod logic;
+// mod morphism;
 mod pipeline;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
-    arithmetic::add_intrinsics(impls);
-    cmp::add_intrinsics(impls);
-    diagnostics::add_intrinsics(impls);
+    //     arithmetic::add_intrinsics(impls);
+    //     cmp::add_intrinsics(impls);
+    //     diagnostics::add_intrinsics(impls);
     io::add_intrinsics(impls);
-    morphism::add_intrinsics(impls);
+    //     logic::add_intrinsics(impls);
+    //     morphism::add_intrinsics(impls);
     pipeline::add_intrinsics(impls);
-    logic::add_intrinsics(impls);
 }
 
 // ------ Helpers --------------------------------------------------------------
@@ -81,11 +81,17 @@ where
     let args = {
         let mut a = Vec::with_capacity(len);
         for _ in 0..len {
-            a.push(blk.next_arg(None)?.returns(&ty)?); // use blocks input type
+            // use blocks input type
+            let arg = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(ty.clone())?
+                .concrete()?;
+            a.push(arg);
         }
         a
     };
-    let err_tag = blk.blk_tag.clone();
+    let err_tag = blk.blk_tag().clone();
 
     // we have an interesting position here.
     // given blk.in_ty() == ty we can assert that input: T
@@ -138,19 +144,20 @@ fn n<N: Into<Number>>(n: N) -> Entry<Value> {
 
 /// Used to get a type flag such as `--Str` or `--Num`. `default` is used if no flag existing.
 fn type_flag(blk: &mut Block, default: Type) -> Result<Type> {
-    blk.get_flag(None)
-        .map(|ty| {
-            let x = if ty.str().starts_with("U_") {
-                Tuple::parse_name(ty.str(), blk.defs.types())
-            } else {
-                None
-            };
-            match x {
-                Some(x) => Ok(x),
-                None => blk.defs.types().get_using_tag(&ty).map(|x| x.clone()),
-            }
-        })
-        .unwrap_or(Ok(default))
+    todo!()
+    //     blk.get_flag(None)
+    //         .map(|ty| {
+    //             let x = if ty.str().starts_with("U_") {
+    //                 Tuple::parse_name(ty.str(), blk.defs.types())
+    //             } else {
+    //                 None
+    //             };
+    //             match x {
+    //                 Some(x) => Ok(x),
+    //                 None => blk.defs.types().get_using_tag(&ty).map(|x| x.clone()),
+    //             }
+    //         })
+    //         .unwrap_or(Ok(default))
 }
 
 /// Iterator over buf in a parallel fashion, invoking the callback `f` on each item of `buf`.
@@ -194,12 +201,17 @@ impl ColNameArgs {
     fn build(blk: &mut Block) -> Result<Self> {
         let len = blk.args_len();
         if len == 0 {
-            return Err(Error::insufficient_args(&blk.blk_tag, 0));
+            return Err(Error::insufficient_args(blk.blk_tag(), 0));
         }
 
         let mut x = Vec::with_capacity(blk.args_len());
         for _ in 0..blk.args_len() {
-            x.push(blk.next_arg(Ty::Nil)?.returns(&Ty::Str)?);
+            let arg = blk
+                .next_arg()?
+                .supplied(Ty::Nil)?
+                .returns(Ty::Str)?
+                .concrete()?;
+            x.push(arg);
         }
         Ok(Self { names: x })
     }
@@ -324,7 +336,7 @@ impl<T> BinaryOp<T> {
             })?;
 
         if evaluator.ty() != out_ty {
-            let mut err = Error::unexp_arg_ty(out_ty, evaluator.ty(), evaluator.tag());
+            let mut err = Error::unexp_arg_output_ty(out_ty, evaluator.ty(), evaluator.tag());
             err.traces.push(err::Trace::from_tag(
                 errtag,
                 format!("`{}`'s {} impl returns `{}`", ty, cmd, evaluator.ty()),

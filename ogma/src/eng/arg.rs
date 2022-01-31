@@ -1,5 +1,179 @@
 use super::*;
+use graphs::tygraph::{Chg, Knowledge};
 use std::convert::TryInto;
+
+enum Kn {
+    Unknown,
+    Any,
+    Ty(Type),
+}
+
+impl From<&Knowledge> for Kn {
+    fn from(kn: &Knowledge) -> Self {
+        match kn {
+            Knowledge::Unknown => Kn::Unknown,
+            Knowledge::Any => Kn::Any,
+            Knowledge::Known(t) | Knowledge::Obliged(t) | Knowledge::Inferred(t) => {
+                Kn::Ty(t.clone())
+            }
+        }
+    }
+}
+
+pub struct ArgBuilder<'a, 'b> {
+    blk: &'a mut Block<'b>,
+    node: NodeIndex,
+    in_ty: Kn,
+    out_ty: Kn,
+}
+
+impl<'a, 'b> ArgBuilder<'a, 'b> {
+    /// The arguments tag.
+    fn tag(&self) -> &Tag {
+        self.blk.ag[self.node].tag()
+    }
+
+    /// Assert that this argument will be supplied an input of type `ty`.
+    ///
+    /// > Since the **blocks's** input type is used often, and trying to pass this through is
+    /// > difficult with mutable aliasing, the type argument is an `Option`, where the `None`
+    /// > variant represents _using the block's input type_.
+    pub fn supplied<T: Into<Option<Type>>>(mut self, ty: T) -> Result<Self> {
+        let ty = ty.into().unwrap_or_else(|| self.blk.in_ty.clone());
+
+        if matches!(self.in_ty, Kn::Any) {
+            self.in_ty = Kn::Ty(ty.clone());
+        }
+
+        match &self.in_ty {
+            Kn::Ty(tg) if tg == &ty => {
+                // The TG input type matches what is going to be supplied,
+                // nothing needs to be done!
+                Ok(self)
+            }
+            Kn::Ty(tg) => {
+                // The TG input type DOES NOT match what is going to be supplied,
+                // error out
+                Err(Error::unexp_arg_input_ty(&ty, tg, self.tag()))
+            }
+            Kn::Unknown => {
+                // There is currently no knowledge about the input type
+                // add to the TG that this node will be supplied a type `ty`
+                self.blk.tg_chgs.push(Chg::KnownInput(self.node, ty));
+                Err(Error::unknown_arg_input_type(self.tag()))
+            }
+            Kn::Any => unreachable!("any is reset to Kn::Ty"),
+        }
+    }
+
+    /// Assert that this argument returns a value of type `ty`.
+    pub fn returns(self, ty: Type) -> Result<Self> {
+        debug_assert!(
+            !matches!(self.out_ty, Kn::Any),
+            "logic error if output is Any type"
+        );
+
+        match &self.out_ty {
+            Kn::Ty(tg) if tg == &ty => {
+                // The TG output type matches what is going to be returned.
+                // nothing needs to be done!
+                Ok(self)
+            }
+            Kn::Ty(tg) => {
+                // The TG output type DOES NOT match what is going to be supplied,
+                // error out
+                Err(Error::unexp_arg_output_ty(&ty, tg, self.tag()))
+            }
+            Kn::Unknown => {
+                // There is currently no knowledge about the output type
+                // add to the TG that this node is obliged to return the output type
+                self.blk.tg_chgs.push(Chg::ObligeOutput(self.node, ty));
+                Err(Error::unknown_arg_output_type(self.tag()))
+            }
+            Kn::Any => unreachable!("logic error if output is Any type"),
+        }
+    }
+
+    /// Asserts that the arguments input and output types are known, and if so, returns a concrete
+    /// [`Argument`] with the ability to evaluate.
+    pub fn concrete(self) -> Result<Argument> {
+        use Kn::*;
+
+        let tag = self.tag().clone();
+
+        let Self {
+            blk,
+            node,
+            in_ty,
+            out_ty,
+        } = self;
+
+        match (in_ty, out_ty) {
+            (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
+            (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
+            (Ty(in_ty), Ty(out_ty)) => {
+                let hold = Self::map_astnode_into_hold(blk, node)?;
+
+                Ok(Argument {
+                    tag,
+                    in_ty,
+                    out_ty,
+                    hold,
+                })
+            }
+        }
+    }
+
+    fn map_astnode_into_hold(blk: &Block, node: NodeIndex) -> Result<Hold> {
+        use graphs::astgraph::AstNode::*;
+
+        Ok(match &blk.ag[node] {
+            Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
+            Flag(_) => unreachable!("an argument cannot be a Flag variant"),
+            Ident(s) => Hold::Lit(Str::new(s.str()).into()),
+            Num { val, tag: _ } => Hold::Lit((*val).into()),
+            Pound { ch: 't', tag: _ } => Hold::Lit(true.into()),
+            Pound { ch: 'f', tag: _ } => Hold::Lit(false.into()),
+            Pound { ch, tag } => return Err(Error::unknown_spec_literal(*ch, tag)),
+            Var(tag) => todo!(),
+            Expr(tag) => todo!(),
+        })
+    }
+}
+
+impl<'a> Block<'a> {
+    fn pop_index(&mut self) -> Result<NodeIndex> {
+        let arg = self
+            .args
+            .pop()
+            .ok_or_else(|| Error::insufficient_args(self.blk_tag(), self.args_count))?;
+        self.args_count += 1;
+        Ok(arg)
+    }
+
+    /// Get the [`Block`]'s next argument.
+    ///
+    /// The argument is agnostic to whether it is a variable, literal, or expression.
+    /// The return type is an argument builder, which can be used to assert type information
+    /// about the argument.
+    /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
+    /// an [`Argument`] is produced.
+    pub fn next_arg(&mut self) -> Result<ArgBuilder<'_, 'a>> {
+        let node = self.pop_index()?;
+        // see if the input and/or output types are known
+        let tys = &self.tg[node]; // node should exist
+        dbg!(tys);
+        let in_ty = Kn::from(&tys.input);
+        let out_ty = Kn::from(&tys.output);
+
+        Ok(ArgBuilder {
+            blk: self,
+            node,
+            in_ty,
+            out_ty,
+        })
+    }
+}
 
 impl Argument {
     /// The arguments input type.
@@ -32,24 +206,11 @@ impl Argument {
                         .map_err(|_| ())
                         .expect("tested types, should cnv fine"))
                 } else {
-                    Err(Error::unexp_arg_ty(&exp_ty, &self.out_ty, tag))
+                    Err(Error::unexp_arg_output_ty(&exp_ty, &self.out_ty, tag))
                 }
             }
             Hold::Var(_) => Err(Error::unexp_arg_variant(tag, "variable")),
             Hold::Expr(_) => Err(Error::unexp_arg_variant(tag, "expression")),
-        }
-    }
-
-    /// Asserts that the Argument returns the type `ty` once resolved.
-    pub fn returns(self, ty: &Type) -> Result<Self> {
-        if &self.out_ty == ty {
-            Ok(self)
-        } else {
-            let mut err = Error::unexp_arg_ty(ty, &self.out_ty, &self.tag);
-            if let Hold::Expr(e) = self.hold {
-                err = err.add_trace(e.tag());
-            };
-            Err(err)
         }
     }
 

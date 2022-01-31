@@ -36,6 +36,8 @@ impl Evaluator {
         defs: &Definitions,
         mut variables: Locals,
     ) -> Result<Evaluator> {
+        todo!("not necessary?");
+
         let type_annotation = String::from("{");
 
         let mut evaluator = Evaluator::new(in_ty, expr.tag, expr.blocks.len());
@@ -49,7 +51,7 @@ impl Evaluator {
                 .push_str(&evaluator.ty().fmt_annotation().to_string());
 
             let im = defs.impls().get_impl(&block.op(), evaluator.ty())?;
-            let mut block = Block::new(evaluator.ty().clone(), defs, &mut variables, block);
+            let mut block = todo!();
             let step = match im {
                 Implementation::Intrinsic { f, .. } => f(block),
                 Implementation::Definition(def) => {
@@ -59,7 +61,6 @@ impl Evaluator {
                         // this has the effect of updating the blocks type annotation
                         // NOTE that the evaluator's type annotation is the type annotation of the
                         // inner definition (which might be useful!)
-                        let type_annotation = block.type_annotation.clone();
 
                         Step {
                             out_ty: evaluator.ty().clone(),
@@ -107,7 +108,7 @@ impl Evaluator {
         if &self.out_ty == ty {
             Ok(self)
         } else {
-            Err(Error::unexp_arg_ty(ty, &self.out_ty, &self.tag))
+            Err(Error::unexp_arg_output_ty(ty, &self.out_ty, &self.tag))
         }
     }
 
@@ -147,16 +148,17 @@ impl DefImplEvaluator {
     /// impls), but should be uesd with care as the [`DefinitionImpl`] must be defined on the fly and
     /// might not have the same checking as going through the regular parsing system.
     pub fn build(blk: &mut Block, def: &ast::DefinitionImpl) -> Result<Self> {
-        let defs = blk.defs;
+        todo!();
+        //         let defs = blk.defs;
         // calls into users defs should not have visibility of current variables, so we construct
         // a new variables map, where the known variables are the parameters
         let (vars, params) = Self::construct_params(blk, def)?;
 
-        let in_ty = blk.in_ty().clone();
-        let expr_eval = Evaluator::construct(in_ty, def.expr.clone(), defs, vars)
-            .map_err(|e| e.add_trace(&blk.blk_tag))?;
-
-        Ok(Self { params, expr_eval })
+        //         let in_ty = blk.in_ty().clone();
+        //         let expr_eval = Evaluator::construct(in_ty, def.expr.clone(), defs, vars)
+        //             .map_err(|e| e.add_trace(&blk.blk_tag))?;
+        //
+        //         Ok(Self { params, expr_eval })
     }
 
     /// The output type of this expression.
@@ -192,42 +194,43 @@ impl DefImplEvaluator {
         blk: &mut Block,
         def: &ast::DefinitionImpl,
     ) -> Result<(Locals, Vec<ParamEval>)> {
-        use ast::Argument as A;
-        let mut locals = blk.vars.enter_impl();
-        let mut params = Vec::with_capacity(def.params.len());
-
-        for param in &def.params {
-            let ast::Parameter { ident, ty } = param;
-            let name = Str::new(ident.str());
-            if ty.as_ref().map(|x| x.str() == "Expr").unwrap_or(false) {
-                match blk.next_arg_raw()? {
-                    A::Var(var) => match blk
-                        .vars
-                        .get(var.str())
-                        .cloned()
-                        .ok_or_else(|| Error::var_not_found(&var))?
-                    {
-                        Local::Var(v) => locals.add_var(name, v),
-                        Local::Param(a, l) => locals.add_param(name, a, l),
-                    },
-                    x => locals.add_param(name, x, blk.vars.clone()),
-                }
-            } else {
-                let arg = blk.next_arg(None)?;
-                let arg = if let Some(ty) = ty {
-                    let ty = blk.defs.types().get_using_tag(ty)?;
-                    arg.returns(ty)?
-                } else {
-                    arg
-                };
-                let var = locals.add_new_var(name, arg.out_ty().clone(), ident.clone());
-                params.push((var, arg));
-            }
-        }
-
-        blk.finalise()?;
-
-        Ok((locals, params))
+        todo!();
+        //         use ast::Argument as A;
+        //         let mut locals = blk.vars.enter_impl();
+        //         let mut params = Vec::with_capacity(def.params.len());
+        //
+        //         for param in &def.params {
+        //             let ast::Parameter { ident, ty } = param;
+        //             let name = Str::new(ident.str());
+        //             if ty.as_ref().map(|x| x.str() == "Expr").unwrap_or(false) {
+        //                 match blk.next_arg_raw()? {
+        //                     A::Var(var) => match blk
+        //                         .vars
+        //                         .get(var.str())
+        //                         .cloned()
+        //                         .ok_or_else(|| Error::var_not_found(&var))?
+        //                     {
+        //                         Local::Var(v) => locals.add_var(name, v),
+        //                         Local::Param(a, l) => locals.add_param(name, a, l),
+        //                     },
+        //                     x => locals.add_param(name, x, blk.vars.clone()),
+        //                 }
+        //             } else {
+        //                 let arg = blk.next_arg(None)?;
+        //                 let arg = if let Some(ty) = ty {
+        //                     let ty = blk.defs.types().get_using_tag(ty)?;
+        //                     arg.returns(ty)?
+        //                 } else {
+        //                     arg
+        //                 };
+        //                 let var = locals.add_new_var(name, arg.out_ty().clone(), ident.clone());
+        //                 params.push((var, arg));
+        //             }
+        //         }
+        //
+        //         blk.finalise()?;
+        //
+        //         Ok((locals, params))
     }
 }
 

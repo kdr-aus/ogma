@@ -1,4 +1,5 @@
 use super::*;
+use astgraph::*;
 use std::ops::Deref;
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
@@ -12,6 +13,7 @@ pub struct Node {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Knowledge {
     Unknown,
+    Any,
     Known(Type),
     Obliged(Type),
     Inferred(Type),
@@ -27,6 +29,25 @@ pub enum Flow {
     OO,
     /// Input knowledge flows into the output.
     IO,
+}
+
+/// A specific alteration to be made to the type graph.
+#[derive(Debug)]
+pub enum Chg {
+    KnownInput(NodeIndex, Type),
+    KnownOutput(NodeIndex, Type),
+    ObligeOutput(NodeIndex, Type),
+}
+
+pub enum Conflict {
+    /// The source is `Unknown`.
+    UnknownSrc,
+}
+
+pub struct ResolutionError {
+    pub from: NodeIndex,
+    pub to: NodeIndex,
+    pub conflict: Conflict,
 }
 
 #[derive(Debug)]
@@ -83,6 +104,7 @@ impl TypeGraph {
                     matches!(current.output, Knowledge::Unknown),
                     "overwriting a non-unknown type node"
                 );
+                current.input = Knowledge::Any; // all these nodes take any input
                 current.output = ty;
             }
         }
@@ -135,7 +157,10 @@ impl TypeGraph {
     }
 
     /// Returns if the graph was changed.
-    pub fn flow_types(&mut self, completed_indices: &mut IndexSet) -> bool {
+    pub fn flow_types(
+        &mut self,
+        completed_indices: &mut IndexSet,
+    ) -> std::result::Result<bool, ResolutionError> {
         let mut chgd = false;
 
         let edges = self
@@ -145,55 +170,53 @@ impl TypeGraph {
 
         for edge in edges {
             let flow = &self[edge];
-            let (from, to) = self
+            let (from_idx, to_idx) = self
                 .edge_endpoints(edge)
                 .expect("edge would exist in graph");
-            let from = &self[from];
+            let from = &self[from_idx];
+            let to = &self.0[to_idx];
             let known_out = from.output.known().is_some();
             let known_in = from.input.known().is_some();
 
-            match flow {
+            let reserr = |conflict| ResolutionError {
+                from: from_idx,
+                to: to_idx,
+                conflict,
+            };
+
+            let x = match flow {
                 Flow::II if known_in => {
-                    debug_assert!(
-                        matches!(&self[to].input, Knowledge::Unknown),
-                        "expecting to flow into Unknown"
-                    );
-                    self.0[to].input = from.input.clone();
-                    completed_indices.insert(edge.index());
-                    chgd = true;
+                    from.input.can_flow(&to.input).map_err(reserr)?;
+                    Some((true, from.input.clone()))
                 }
                 Flow::OI if known_out => {
-                    debug_assert!(
-                        matches!(&self[to].input, Knowledge::Unknown),
-                        "expecting to flow into Unknown"
-                    );
-                    self.0[to].input = from.output.clone();
-                    completed_indices.insert(edge.index());
-                    chgd = true;
+                    from.output.can_flow(&to.input).map_err(reserr)?;
+                    Some((true, from.output.clone()))
                 }
                 Flow::IO if known_in => {
-                    debug_assert!(
-                        matches!(&self[to].output, Knowledge::Unknown),
-                        "expecting to flow into Unknown"
-                    );
-                    self.0[to].output = from.input.clone();
-                    completed_indices.insert(edge.index());
-                    chgd = true;
+                    from.input.can_flow(&to.output).map_err(reserr)?;
+                    Some((false, from.input.clone()))
                 }
                 Flow::OO if known_out => {
-                    debug_assert!(
-                        matches!(&self[to].output, Knowledge::Unknown),
-                        "expecting to flow into Unknown"
-                    );
-                    self.0[to].output = from.output.clone();
-                    completed_indices.insert(edge.index());
-                    chgd = true;
+                    from.output.can_flow(&to.output).map_err(reserr)?;
+                    Some((false, from.output.clone()))
                 }
-                Flow::II | Flow::IO | Flow::OI | Flow::OO => (),
+                Flow::II | Flow::IO | Flow::OI | Flow::OO => None,
+            };
+
+            if let Some((update_input, with)) = x {
+                if update_input {
+                    self.0[to_idx].input = with;
+                } else {
+                    self.0[to_idx].output = with;
+                }
+
+                completed_indices.insert(edge.index());
+                chgd = true;
             }
         }
 
-        chgd
+        Ok(chgd)
     }
 
     /// Set the _output_ field of the `node` to `Known(ty)`.
@@ -202,6 +225,44 @@ impl TypeGraph {
     /// - If the node does not exist,
     pub fn add_known_output(&mut self, node: NodeIndex, ty: Type) {
         self.0[node].output = Knowledge::Known(ty);
+    }
+
+    /// Apply the `chg` to the graph. Returns if the graph is actually altered (if the `chg` has
+    /// already been applied, nothing would change).
+    pub fn apply_chg(&mut self, chg: Chg) -> bool {
+        // TODO test this code.
+        fn set(k: &mut Knowledge, exp: Knowledge) -> bool {
+            if k == &exp {
+                false
+            } else {
+                *k = exp;
+                true
+            }
+        }
+
+        fn apply<F>(tg: &mut TypeGraph, node: NodeIndex, setfn: F) -> bool
+        where
+            F: FnOnce(&mut Node) -> bool,
+        {
+            if let Some(node) = tg.0.node_weight_mut(node) {
+                setfn(node)
+            } else {
+                false
+            }
+        }
+
+        match chg {
+            // set the input to `Known`.
+            Chg::KnownInput(node, ty) => {
+                apply(self, node, |n| set(&mut n.input, Knowledge::Known(ty)))
+            }
+            Chg::KnownOutput(node, ty) => {
+                apply(self, node, |n| set(&mut n.output, Knowledge::Known(ty)))
+            }
+            Chg::ObligeOutput(node, ty) => {
+                apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
+            }
+        }
     }
 }
 
@@ -227,5 +288,35 @@ impl Knowledge {
     /// `Knowledge::Unknown` variant.
     pub fn is_unknown(&self) -> bool {
         matches!(self, Knowledge::Unknown)
+    }
+
+    /// `Knowledge::Any` variant.
+    pub fn is_any(&self) -> bool {
+        matches!(self, Knowledge::Any)
+    }
+
+    /// Checks that the this knowledge can 'flow' into the knowledged at `into`.
+    ///
+    /// Flow is driven by two aspects:
+    /// 1. The ranking of the knowledge (`Known` is the strongest garauntee),
+    /// 2. The types match.
+    ///
+    /// If there is a conflict between the two pieces of knowledge, a `Err(Conflict)` is returned.
+    pub fn can_flow(&self, into: &Knowledge) -> std::result::Result<(), Conflict> {
+        // TODO implement this properly
+        // For now we basically disallow many of the flow types
+        // This is to test the TG flow and to ensure that the TG's flow is something that makes
+        // sense but is also not overly constrained.
+        use Knowledge::*;
+
+        match (self, into) {
+            // Unknown source cannot flow into anything!
+            (Unknown, _) => Err(Conflict::UnknownSrc),
+            // A known source can flow into an unknown or any dest
+            (Known(_), Unknown | Any) => Ok(()),
+            // A known source can flow into itself or lower ranked items if the types match
+            (Known(t1), Known(t2) | Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
+            (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
+        }
     }
 }

@@ -2,7 +2,7 @@ use super::*;
 
 impl Step {
     pub fn compile(impls: &Implementations, mut block: Block) -> Result<Step> {
-        let im = impls.get_impl(&block.op_tag, &block.in_ty)?;
+        let im = impls.get_impl(block.op_tag(), &block.in_ty)?;
         let step = match im {
             Implementation::Intrinsic { f, .. } => f(block),
             Implementation::Definition(def) => {
@@ -12,12 +12,11 @@ impl Step {
                     // this has the effect of updating the blocks type annotation
                     // NOTE that the evaluator's type annotation is the type annotation of the
                     // inner definition (which might be useful!)
-                    let type_annotation = block.type_annotation.clone();
 
                     Step {
                         out_ty: evaluator.ty().clone(),
                         f: Box::new(move |input, cx| evaluator.eval(input, cx)),
-                        type_annotation,
+                        type_annotation: Default::default(),
                     }
                 })
             }

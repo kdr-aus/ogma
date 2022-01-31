@@ -125,4 +125,18 @@ impl AstNode {
             _ => None,
         }
     }
+
+    pub fn tag(&self) -> &Tag {
+        use AstNode::*;
+
+        match self {
+            Op { op, blk: _ } => op,
+            Flag(f) => f,
+            Ident(s) => s,
+            Num { val: _, tag } => tag,
+            Pound { ch: _, tag } => tag,
+            Var(v) => v,
+            Expr(e) => e,
+        }
+    }
 }

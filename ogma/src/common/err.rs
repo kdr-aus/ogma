@@ -187,6 +187,18 @@ impl Error {
         }
     }
 
+    pub(crate) fn unknown_input_type(op: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("unable to infer input type for op `{}`", op),
+            traces: trace(op, None),
+            help_msg: Some(format!(
+                "use `{0} --help` to view requirements. consider implementing `def {0}`",
+                op
+            )),
+        }
+    }
+
     pub(crate) fn wrong_input_type(ty: &Type, op: &Tag) -> Self {
         Error {
             cat: Category::Semantics,
@@ -199,7 +211,52 @@ impl Error {
         }
     }
 
-    pub(crate) fn insufficient_args(block_tag: &Tag, args_count: usize) -> Self {
+    pub(crate) fn unknown_arg_input_type(arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer argument's input type".into(),
+            traces: trace(arg, None),
+            help_msg: None,
+        }
+    }
+
+    pub(crate) fn unknown_arg_output_type(arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer argument's output type".into(),
+            traces: trace(arg, None),
+            help_msg: None,
+        }
+    }
+
+    pub(crate) fn unexp_arg_input_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!(
+                "expecting argument to take input type `{}`, accepts `{}`",
+                exp, found
+            ),
+            traces: trace(arg, format!("this argument accepts type `{}`", found)),
+            help_msg: None,
+        }
+    }
+
+    pub(crate) fn unexp_arg_output_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!(
+                "expecting argument with output type `{}`, found `{}`",
+                exp, found
+            ),
+            traces: trace(arg, format!("this argument returns type `{}`", found)),
+            help_msg: Some(
+                "commands may require specific argument types, use `--help` to view requirements"
+                    .into(),
+            ),
+        }
+    }
+
+    pub(crate) fn insufficient_args(block_tag: &Tag, args_count: u8) -> Self {
         Error {
             cat: Category::Semantics,
             desc: format!("expecting more than {} arguments", args_count),
@@ -235,18 +292,6 @@ impl Error {
                 tag,
                 format!("argument variant `{}` is not supported here", variant),
             ),
-            help_msg: Some(
-                "commands may require specific argument types, use `--help` to view requirements"
-                    .into(),
-            ),
-        }
-    }
-
-    pub(crate) fn unexp_arg_ty(exp: &Type, found: &Type, tag: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("expecting argument with type `{}`, found `{}`", exp, found),
-            traces: trace(tag, format!("this argument returns type `{}`", found)),
             help_msg: Some(
                 "commands may require specific argument types, use `--help` to view requirements"
                     .into(),

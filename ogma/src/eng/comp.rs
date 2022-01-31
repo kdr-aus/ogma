@@ -1,16 +1,9 @@
 //! Compilation.
 
 use super::*;
-
-mod astgraph;
-mod tygraph;
-
-use ::petgraph::graph::NodeIndex;
 use astgraph::{AstGraph, AstNode};
+use graphs::*;
 use tygraph::TypeGraph;
-
-type IndexSet = crate::HashSet<usize>;
-type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Result<()> {
     let ag = astgraph::init(expr, defs); // flatten and expand expr/defs
@@ -28,20 +21,39 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
 
     compiler.tg.set_root_input_ty(input_ty); // set the root input
 
+    let mut err = None;
+
     while !compiler.finished() {
-        compiler.resolve_tg();
-        if compiler.compile_blocks() {
-            continue;
+        eprintln!("resolving");
+        compiler.resolve_tg()?;
+        eprintln!("compiling blocks");
+        match compiler.compile_blocks() {
+            Ok(()) => {
+                eprintln!("success");
+                continue;
+            }
+            Err(e) => err = Some(e),
         }
+        eprintln!("inferring inputs");
         if compiler.infer_inputs() {
+            eprintln!("success");
             continue;
         }
+        eprintln!("inferring outputs");
         if compiler.infer_outputs() {
+            eprintln!("success");
             continue;
         }
 
         // if we get here we should error, could not progress on any steps
-        todo!("error!")
+        return Err(err.unwrap_or_else(||
+                Error {
+                    cat: err::Category::Semantics,
+                    desc: "compilation failed with no other errors".into(),
+                    traces: vec![],
+                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+        }
+        ));
     }
 
     // TODO better output
@@ -74,11 +86,30 @@ impl<'d> Compiler<'d> {
             .all(|i| self.compiled_nodes.contains_key(&i.index()))
     }
 
-    fn resolve_tg(&mut self) {
-        while self.tg.flow_types(&mut self.flowed_edges) {}
+    fn resolve_tg(&mut self) -> Result<()> {
+        loop {
+            match self.tg.flow_types(&mut self.flowed_edges) {
+                Ok(true) => (), // keep going!
+                Ok(false) => break Ok(()),
+                Err(reserr) => {
+                    todo!("need to handle resolution error properly")
+                }
+            }
+        }
     }
 
-    fn compile_blocks(&mut self) -> bool {
+    /// Compile blocks step.
+    ///
+    /// Compiles blocks that are:
+    /// - Not yet compiled.
+    /// - Have a known input type.
+    ///
+    /// The return type indicates if the compiler loop should return to resolving stage.
+    /// - If any block succeeds, `Ok(())` is returned.
+    /// - If all blocks fail but the TG gets updated in the process (as in, it gains more
+    /// knowledge), `Ok(())` is also returned.
+    /// - If all blocks fail, the _last_ error message is returned.
+    fn compile_blocks(&mut self) -> Result<()> {
         // get indices which have known input types
         let nodes = self
             .ag
@@ -93,36 +124,24 @@ impl<'d> Compiler<'d> {
             })
             .collect::<Vec<_>>();
 
-        let mut succeed = false;
+        let mut goto_resolve = false;
+        let mut err = None;
 
         for node in nodes {
+            let mut chgs = Vec::new();
             let in_ty = self.tg[node]
                 .input
                 .ty()
-                .expect("filtered to NOT unknown")
-                .clone();
-            let x = self.ag[node].op().expect("filtered to OP node");
-            let (op_tag, blk_tag) = (x.0.clone(), x.1.clone());
-            let vars = &mut Locals::default();
-            let flags = self.create_block_flags(node).expect("filtered to OP node");
-            let args = self.create_block_args(node).expect("filtered to OP node");
-            let defs = self.defs;
+                .cloned()
+                .expect("known input at this point");
 
-            let block = Block {
-                in_ty,
-                blk_tag,
-                op_tag,
-                defs,
-                vars,
-                flags,
-                args,
-                args_count: 0,
-                type_annotation: String::new(),
-            };
+            let block = Block::construct(self, node, in_ty, &mut chgs);
 
-            match Step::compile(defs.impls(), block) {
+            dbg!(block.op_tag());
+
+            match Step::compile(self.defs.impls(), block) {
                 Ok(step) => {
-                    succeed = true;
+                    goto_resolve = true;
                     let out_ty = step.out_ty.clone();
                     let _is_empty = self.compiled_nodes.insert(node.index(), step).is_none();
                     debug_assert!(
@@ -134,11 +153,21 @@ impl<'d> Compiler<'d> {
                     // the TG is updated with this information
                     self.tg.add_known_output(node, out_ty);
                 }
-                Err(_) => (),
+                Err(e) => err = Some(e),
             }
+
+            dbg!(goto_resolve);
+            dbg!(&chgs);
+            goto_resolve = chgs.into_iter().fold(goto_resolve, |g, chg| {
+                let chgd = self.tg.apply_chg(chg);
+                g | chgd
+            });
+            dbg!(goto_resolve);
         }
 
-        succeed
+        goto_resolve
+            .then(|| ())
+            .ok_or_else(|| err.expect("error should be some if unsuccesful"))
     }
 
     fn infer_inputs(&mut self) -> bool {
@@ -168,27 +197,55 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    fn create_block_args(&self, opnode_idx: NodeIndex) -> Option<Vec<ast::Argument>> {
-        use ast::Argument as Arg;
+    fn create_block_args(&self, opnode_idx: NodeIndex) -> Option<Vec<NodeIndex>> {
         use AstNode::*;
 
         if self.ag[opnode_idx].op().is_some() {
             // neighbours are in reversed order, which matches the block args order
             self.ag
                 .neighbors(opnode_idx)
-                .filter_map(|i| match &self.ag[i] {
-                    Op { .. } | Flag(_) => None,
-                    Ident(s) => Some(Arg::Ident(s.clone())),
-                    Num { val, tag } => Some(Arg::Num(*val, tag.clone())),
-                    Pound { ch, tag } => Some(Arg::Pound(*ch, tag.clone())),
-                    Var(t) => Some(Arg::Var(t.clone())),
-                    // note that expression would instead reference the AG/TG
-                    Expr(e) => todo!("expressions are not support in this prototype: {}", e),
+                .filter(|&i| {
+                    matches!(
+                        &self.ag[i],
+                        Ident(_) | Num { .. } | Pound { .. } | Var(_) | Expr(_)
+                    )
                 })
                 .collect::<Vec<_>>()
                 .into()
         } else {
             None
+        }
+    }
+}
+
+impl<'a> Block<'a> {
+    fn construct(
+        compiler: &'a Compiler,
+        opnode: NodeIndex,
+        in_ty: Type,
+        chgs: &'a mut Vec<tygraph::Chg>,
+    ) -> Self {
+        let node = opnode;
+        let flags = compiler
+            .create_block_flags(node)
+            .expect("filtered to OP node");
+        let args = compiler
+            .create_block_args(node)
+            .expect("filtered to OP node");
+        let defs = &compiler.defs;
+
+        Block {
+            node,
+            in_ty,
+            flags,
+            args,
+            args_count: 0,
+            ag: &compiler.ag,
+            tg: &compiler.tg,
+            tg_chgs: chgs,
+            defs,
+            #[cfg(debug_assertions)]
+            output_ty: None,
         }
     }
 }
@@ -354,12 +411,19 @@ mod tests {
     #[test]
     fn compilation_test_03() {
         // tests a nested expression
-        assert!(compile("range 0 { \\ 3 } | len").is_ok());
-        assert!(compile("ls | range 0 { len } | len").is_ok());
+        compile("range 0 { \\ 3 } | len").unwrap();
+        println!("Test 02 ----------------------------");
+        compile("ls | range 0 { len } | len").unwrap();
     }
 
     #[test]
     fn compilation_test_04() {
+        // tests argument resolving
+        compile("range 0 3").unwrap();
+    }
+
+    #[test]
+    fn compilation_test_05() {
         // tests an inferred input, no defs or variables
         assert!(compile("ls | filter foo eq 'bar' | len").is_ok());
     }
