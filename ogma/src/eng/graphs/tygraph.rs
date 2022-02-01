@@ -35,6 +35,7 @@ pub enum Flow {
 #[derive(Debug)]
 pub enum Chg {
     KnownInput(NodeIndex, Type),
+    InferInput(NodeIndex, Type),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
 }
@@ -161,6 +162,12 @@ impl TypeGraph {
         &mut self,
         completed_indices: &mut IndexSet,
     ) -> std::result::Result<bool, ResolutionError> {
+        enum Update {
+            ToInput,
+            ToOutput,
+            FromInput,
+        }
+
         let mut chgd = false;
 
         let edges = self
@@ -185,30 +192,39 @@ impl TypeGraph {
             };
 
             let x = match flow {
+                // Directed flow of input -> input
                 Flow::II if known_in => {
                     from.input.can_flow(&to.input).map_err(reserr)?;
-                    Some((true, from.input.clone()))
+                    Some((Update::ToInput, from.input.clone()))
                 }
+                // Directed flow of output -> input
                 Flow::OI if known_out => {
                     from.output.can_flow(&to.input).map_err(reserr)?;
-                    Some((true, from.output.clone()))
+                    Some((Update::ToInput, from.output.clone()))
                 }
+                // Directed flow of input -> output
                 Flow::IO if known_in => {
                     from.input.can_flow(&to.output).map_err(reserr)?;
-                    Some((false, from.input.clone()))
+                    Some((Update::ToOutput, from.input.clone()))
                 }
+                // Directed flow of output -> output
                 Flow::OO if known_out => {
                     from.output.can_flow(&to.output).map_err(reserr)?;
-                    Some((false, from.output.clone()))
+                    Some((Update::ToOutput, from.output.clone()))
+                }
+                // Backpropagate flow if to.input:Inferred -> from.input
+                Flow::II if matches!(to.input, Knowledge::Inferred(_)) => {
+                    to.input.can_flow(&from.input).map_err(reserr)?;
+                    Some((Update::FromInput, to.input.clone()))
                 }
                 Flow::II | Flow::IO | Flow::OI | Flow::OO => None,
             };
 
-            if let Some((update_input, with)) = x {
-                if update_input {
-                    self.0[to_idx].input = with;
-                } else {
-                    self.0[to_idx].output = with;
+            if let Some((update, with)) = x {
+                match update {
+                    Update::ToInput => self.0[to_idx].input = with,
+                    Update::ToOutput => self.0[to_idx].output = with,
+                    Update::FromInput => self.0[from_idx].input = with,
                 }
 
                 completed_indices.insert(edge.index());
@@ -217,14 +233,6 @@ impl TypeGraph {
         }
 
         Ok(chgd)
-    }
-
-    /// Set the _output_ field of the `node` to `Known(ty)`.
-    ///
-    /// # Panics
-    /// - If the node does not exist,
-    pub fn add_known_output(&mut self, node: NodeIndex, ty: Type) {
-        self.0[node].output = Knowledge::Known(ty);
     }
 
     /// Apply the `chg` to the graph. Returns if the graph is actually altered (if the `chg` has
@@ -255,6 +263,9 @@ impl TypeGraph {
             // set the input to `Known`.
             Chg::KnownInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Known(ty)))
+            }
+            Chg::InferInput(node, ty) => {
+                apply(self, node, |n| set(&mut n.input, Knowledge::Inferred(ty)))
             }
             Chg::KnownOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Known(ty)))
@@ -320,10 +331,17 @@ impl Knowledge {
         match (self, into) {
             // Unknown source cannot flow into anything!
             (Unknown, _) => Err(Conflict::UnknownSrc),
+
             // A known source can flow into an unknown or any dest
             (Known(_), Unknown | Any) => Ok(()),
             // A known source can flow into itself or lower ranked items if the types match
             (Known(t1), Known(t2) | Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
+
+            // An inferred source can flow into an unknown or any dest
+            (Inferred(_), Unknown | Any) => Ok(()),
+            // An inferred source can flow into itself if the types match
+            (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
+
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }
     }

@@ -282,6 +282,7 @@ impl Types {
         map.insert(Str::from("Num"), Type::Num);
         map.insert(Str::from("Str"), Type::Str);
         map.insert(Str::from("Table"), Type::Tab);
+        map.insert(Str::from("TableRow"), Type::TabRow);
 
         let mut types = Self { map };
 
@@ -373,6 +374,10 @@ impl Types {
 
     pub fn help_iter(&self) -> impl Iterator<Item = (&Str, HelpMessage)> {
         self.map.iter().map(|(n, t)| (n, t.help()))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&str, &Type)> {
+        self.map.iter().map(|(k, v)| (k.as_str(), v))
     }
 }
 

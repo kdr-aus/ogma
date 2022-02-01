@@ -37,20 +37,20 @@ macro_rules! add {
 }
 
 // mod arithmetic;
-// mod cmp;
+mod cmp;
 // mod diagnostics;
 mod io;
 // mod logic;
-// mod morphism;
+mod morphism;
 mod pipeline;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     //     arithmetic::add_intrinsics(impls);
-    //     cmp::add_intrinsics(impls);
+    cmp::add_intrinsics(impls);
     //     diagnostics::add_intrinsics(impls);
     io::add_intrinsics(impls);
     //     logic::add_intrinsics(impls);
-    //     morphism::add_intrinsics(impls);
+    morphism::add_intrinsics(impls);
     pipeline::add_intrinsics(impls);
 }
 
@@ -144,20 +144,22 @@ fn n<N: Into<Number>>(n: N) -> Entry<Value> {
 
 /// Used to get a type flag such as `--Str` or `--Num`. `default` is used if no flag existing.
 fn type_flag(blk: &mut Block, default: Type) -> Result<Type> {
-    todo!()
-    //     blk.get_flag(None)
-    //         .map(|ty| {
-    //             let x = if ty.str().starts_with("U_") {
-    //                 Tuple::parse_name(ty.str(), blk.defs.types())
-    //             } else {
-    //                 None
-    //             };
-    //             match x {
-    //                 Some(x) => Ok(x),
-    //                 None => blk.defs.types().get_using_tag(&ty).map(|x| x.clone()),
-    //             }
-    //         })
-    //         .unwrap_or(Ok(default))
+    // TODO: should this be removed in favour of defining types using a ':' syntax?
+    // For now it shall remain and it can be phased out once the new syntax lands
+
+    blk.get_flag(None)
+        .map(|ty| {
+            let x = if ty.str().starts_with("U_") {
+                Tuple::parse_name(ty.str(), blk.defs.types())
+            } else {
+                None
+            };
+            match x {
+                Some(x) => Ok(x),
+                None => blk.defs.types().get_using_tag(&ty).map(|x| x.clone()),
+            }
+        })
+        .unwrap_or(Ok(default))
 }
 
 /// Iterator over buf in a parallel fashion, invoking the callback `f` on each item of `buf`.

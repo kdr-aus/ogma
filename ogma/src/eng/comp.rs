@@ -25,33 +25,33 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
     let mut err = None;
 
     while !compiler.finished() {
-        eprintln!("resolving");
+        eprintln!("Resolving TG");
         compiler.resolve_tg()?;
 
-        eprintln!("populating compiled expressions");
+        eprintln!("Populating compiled expressions");
         if compiler.populate_compiled_expressions() {
-            eprintln!("success");
+            eprintln!("✅ SUCCESS");
             continue;
         }
 
-        eprintln!("compiling blocks");
+        eprintln!("Compiling blocks");
         match compiler.compile_blocks() {
             Ok(()) => {
-                eprintln!("success");
+                eprintln!("✅ SUCCESS");
                 continue;
             }
             Err(e) => err = Some(e),
         }
 
-        eprintln!("inferring inputs");
+        eprintln!("Inferring inputs");
         if compiler.infer_inputs() {
-            eprintln!("success");
+            eprintln!("✅ SUCCESS");
             continue;
         }
 
-        eprintln!("inferring outputs");
+        eprintln!("Inferring outputs");
         if compiler.infer_outputs() {
-            eprintln!("success");
+            eprintln!("✅ SUCCESS");
             continue;
         }
 
@@ -73,8 +73,8 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
     Ok(())
 }
 
-struct Compiler<'d> {
-    defs: &'d Definitions,
+pub struct Compiler<'d> {
+    pub defs: &'d Definitions,
     ag: AstGraph,
     tg: TypeGraph,
     /// The edges in the `tg` that have been resolved and flowed.
@@ -137,20 +137,16 @@ impl<'d> Compiler<'d> {
 
         let mut goto_resolve = false;
         let mut err = None;
+        let mut chgs = Vec::new();
 
         for node in nodes {
-            let mut chgs = Vec::new();
             let in_ty = self.tg[node]
                 .input
                 .ty()
                 .cloned()
                 .expect("known input at this point");
 
-            let block = Block::construct(self, node, in_ty, &mut chgs);
-
-            dbg!(block.op_tag());
-
-            match Step::compile(self.defs.impls(), block) {
+            match self.compile_block(node, in_ty, &mut chgs) {
                 Ok(step) => {
                     goto_resolve = true;
                     let out_ty = step.out_ty.clone();
@@ -162,28 +158,54 @@ impl<'d> Compiler<'d> {
 
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
-                    self.tg.add_known_output(node, out_ty);
+                    chgs.push(tygraph::Chg::KnownOutput(node, out_ty));
                 }
                 Err(e) => err = Some(e),
             }
-
-            dbg!(goto_resolve);
-            dbg!(&chgs);
-            goto_resolve = chgs.into_iter().fold(goto_resolve, |g, chg| {
-                let chgd = self.tg.apply_chg(chg);
-                g | chgd
-            });
-            dbg!(goto_resolve);
         }
 
-        goto_resolve
+        let tg_chgd = self.apply_tg_chgs(chgs.into_iter());
+
+        (goto_resolve | tg_chgd)
             .then(|| ())
             .ok_or_else(|| err.expect("error should be some if unsuccesful"))
     }
 
+    pub fn compile_block(
+        &self,
+        opnode: NodeIndex,
+        in_ty: Type,
+        chgs: &mut Vec<tygraph::Chg>,
+    ) -> Result<Step> {
+        let block = Block::construct(self, opnode, in_ty, chgs);
+
+        dbg!(block.op_tag());
+
+        Step::compile(self.defs.impls(), block)
+    }
+
     fn infer_inputs(&mut self) -> bool {
-        // TODO wire in
-        false
+        // we get _lowest_ nodes that are:
+        // 1. Op variants,
+        // 2. are not compiled,
+        // 3. have unknown inputs
+
+        let infer_nodes = self.ag.sinks(|n| {
+            // 1. op variants
+            self.ag[n].op().is_some()
+            // 2. not compiled
+            && !self.compiled_ops.contains_key(&n.index())
+            // 3. unknown input
+            && self.tg[n].input.is_unknown()
+        });
+
+        let mut chgs = infer_nodes
+            .into_iter()
+            .filter_map(|n| ty::infer::input(n, self).map(|t| (n, t)))
+            .map(|(node, ty)| tygraph::Chg::InferInput(node, ty))
+            .collect::<Vec<_>>();
+
+        self.apply_tg_chgs(chgs.into_iter())
     }
 
     fn infer_outputs(&mut self) -> bool {
@@ -257,6 +279,15 @@ impl<'d> Compiler<'d> {
         }
 
         chgd
+    }
+
+    /// Returns if the TG was altered when applying the changes.
+    fn apply_tg_chgs<C>(&mut self, chgs: C) -> bool
+    where
+        C: Iterator<Item = tygraph::Chg>,
+    {
+        chgs.map(|c| self.tg.apply_chg(c))
+            .fold(false, std::ops::BitOr::bitor)
     }
 }
 
@@ -489,7 +520,10 @@ mod tests {
         let defs = &Definitions::default();
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
-        super::compile(expr, defs, Type::Nil)
+        super::compile(expr, defs, Type::Nil).map_err(|e| {
+            eprintln!("{}", e);
+            e
+        })
     }
 
     #[test]

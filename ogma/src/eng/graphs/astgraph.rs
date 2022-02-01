@@ -1,8 +1,9 @@
 use crate::prelude::*;
 use kserd::Number;
+use petgraph::prelude::*;
 use std::ops::Deref;
 
-type Inner = petgraph::stable_graph::StableGraph<AstNode, (), petgraph::Directed, u32>;
+type Inner = StableGraph<AstNode, (), Directed, u32>;
 
 #[derive(Debug)]
 pub struct AstGraph(Inner);
@@ -98,6 +99,54 @@ impl AstGraph {
     fn expand_defs(&mut self, defs: &Definitions) -> bool {
         // TODO wire in
         false
+    }
+
+    /// Returns an iterator over the leaves of the graph.
+    ///
+    /// `filter` is used to specify a predicate for which nodes should be considered a 'sink'.
+    /// So, if the filter is just `true` for any node, all nodes which do not have an outgoing
+    /// edges would be returned.
+    ///
+    /// However, if the filter were to only return true for a `Op` variant node, the sinks would be
+    /// the nodes which do not flow to another `Op` variant.
+    ///
+    /// This way, the sinks of a AST node variant can be found.
+    pub fn sinks<F>(&self, filter: F) -> HashSet<NodeIndex>
+    where
+        F: Fn(NodeIndex) -> bool,
+    {
+        // TODO -- test this!
+
+        fn find_last_match<'a, F>(
+            g: &'a AstGraph,
+            sink: NodeIndex,
+            filter: F,
+        ) -> impl Iterator<Item = NodeIndex> + 'a
+        where
+            F: 'a + Fn(NodeIndex) -> bool + Copy,
+        {
+            let srcs = g.externals(Incoming);
+
+            srcs.flat_map(move |src| {
+                petgraph::algo::all_simple_paths::<Vec<_>, _>(&g.0, src, sink, 0, None)
+                    .filter_map(move |v| v.into_iter().rev().find(|&n| filter(n)))
+            })
+        }
+
+        let sinks = self.externals(Outgoing);
+
+        let mut set = HashSet::default();
+
+        for sink in sinks {
+            if filter(sink) {
+                // a sink matched the predicate, no need to walk path
+                set.insert(sink);
+            } else {
+                set.extend(find_last_match(self, sink, &filter));
+            }
+        }
+
+        set
     }
 }
 
