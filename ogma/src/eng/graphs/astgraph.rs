@@ -1,9 +1,10 @@
+use super::*;
 use crate::prelude::*;
 use kserd::Number;
 use petgraph::prelude::*;
 use std::ops::Deref;
 
-type Inner = StableGraph<AstNode, (), Directed, u32>;
+type Inner = StableGraph<AstNode, Relation, Directed, u32>;
 
 #[derive(Debug)]
 pub struct AstGraph(Inner);
@@ -19,6 +20,8 @@ impl Deref for AstGraph {
 #[derive(Debug)]
 pub enum AstNode {
     Op { op: Tag, blk: Tag },
+    Intrinsic { op: Tag },
+    Def(Vec<ast::Parameter>),
     Flag(Tag),
     Ident(Tag),
     Num { val: Number, tag: Tag },
@@ -27,23 +30,40 @@ pub enum AstNode {
     Expr(Tag),
 }
 
+// TODO note that this is a mechanism for allowing transitive flags through the defs
+/// The edges of the AST graph.
+///
+/// Most edges are `Normal`.
+/// Ops connect to the various implementations through a `Keyed(Option<Type>)`.
+/// Ops' terms connect to the various implementations using `Term(index)` where `index` _is the
+/// position index in the block`.
+/// Note that this position is a set for each flags and args, so if there were 2 terms, one flag
+/// and one arg, each term would be connected with `Term(0)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Relation {
+    Normal,
+    Keyed(Option<Type>),
+    Term(u8),
+}
+
 /// Initialises the syntax graph decomposing the expression.
 ///
 /// This:
 /// 1. Flattens the [`ast::Expression`],
 /// 2. Expands any _defs_,
 /// 3. Repeats at 1. if defs are found.
-pub fn init(expr: ast::Expression, defs: &Definitions) -> AstGraph {
+pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<AstGraph> {
     let mut graph = AstGraph(Default::default());
 
     graph.flatten_expr(expr);
-    while graph.expand_defs(defs) {}
+    while graph.expand_defs(defs.impls())? {}
 
-    graph
+    Ok(graph)
 }
 
 impl AstGraph {
-    fn flatten_expr(&mut self, expr: ast::Expression) {
+    /// Returns the NodeIndex that the `expr` becomes.
+    fn flatten_expr(&mut self, expr: ast::Expression) -> NodeIndex {
         use ast::*;
 
         let g = &mut self.0;
@@ -64,7 +84,7 @@ impl AstGraph {
                 let (op, terms) = blk.parts();
 
                 let op = g.add_node(AstNode::Op { op, blk: blk_tag });
-                g.add_edge(root, op, ()); // edge from the expression root to the op
+                g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 
                 for term in terms {
                     use ast::Argument::*;
@@ -85,7 +105,7 @@ impl AstGraph {
                     };
 
                     let term = g.add_node(node);
-                    g.add_edge(op, term, ()); // add a directed edge from op to the term
+                    g.add_edge(op, term, Relation::Normal); // add a directed edge from op to the term
 
                     if let Some(blks) = blks {
                         q.push_back((term, blks));
@@ -93,12 +113,111 @@ impl AstGraph {
                 }
             }
         }
+
+        root
     }
 
     /// Returns `true` if definitions were found and expanded.
-    fn expand_defs(&mut self, defs: &Definitions) -> bool {
-        // TODO wire in
-        false
+    fn expand_defs(&mut self, impls: &Implementations) -> Result<bool> {
+        // it should be fastest just to filter the nodes and test edges rather than going through
+        // .sinks
+
+        let ops = self
+            .node_indices()
+            .filter_map(|n| {
+                // is an Op
+                self[n].op().is_some().then(|| n).map(OpNode)
+            })
+            .filter(|&n| {
+                // have not already expanded it
+                !self.op_expanded(n)
+            })
+            .collect::<Vec<_>>();
+
+        let mut expanded = false;
+
+        for op in ops {
+            expanded = true;
+            self.expand_def(op, impls)?;
+        }
+
+        Ok(expanded)
+    }
+
+    fn expand_def(&mut self, opnode: OpNode, impls: &Implementations) -> Result<()> {
+        let opnode = NodeIndex::from(opnode);
+
+        let op = self[opnode]
+            .op()
+            .expect("opnode must be an Op variant")
+            .0
+            .clone();
+
+        if !impls.contains_op(op.str()) {
+            return Err(Error::op_not_found(&op));
+        }
+
+        let op_impls = impls
+            .iter()
+            .filter(|(name, _, _)| op.str() == name.as_str());
+
+        for (_, key, im) in op_impls {
+            // sub-root
+            let cmd = match im {
+                Implementation::Intrinsic { loc, f } => {
+                    self.0.add_node(AstNode::Intrinsic { op: op.clone() })
+                }
+                Implementation::Definition(def) => {
+                    let cmd = self.0.add_node(AstNode::Def(def.params.clone()));
+                    let expr = self.flatten_expr(def.expr.clone());
+                    // link cmd to expr
+                    self.0.add_edge(cmd, expr, Relation::Normal);
+                    cmd
+                }
+            };
+
+            let g = &mut self.0;
+
+            // link the op with this subroot, keyed by the key!
+            g.add_edge(opnode, cmd, Relation::Keyed(key.cloned()));
+
+            // link the op's terms to this subroot
+            // REVERSED since the neighbors are returned in reverse add order
+            // flags first
+            for (i, flag) in g
+                .edges(opnode)
+                .filter(|e| e.weight().is_normal())
+                .filter(|e| g[e.target()].flag().is_some())
+                .map(|e| e.target())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .enumerate()
+            {
+                g.add_edge(flag, cmd, Relation::Term(i as u8));
+            }
+            // now args, normal connections that aren't flags
+            for (i, arg) in g
+                .edges(opnode)
+                .filter(|e| e.weight().is_normal())
+                .filter(|e| g[e.target()].flag().is_none())
+                .map(|e| e.target())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .enumerate()
+            {
+                g.add_edge(arg, cmd, Relation::Term(i as u8));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns if the op has been expanded already, that is, it has children with keyed types.
+    fn op_expanded(&self, opnode: OpNode) -> bool {
+        self.edges(opnode.into())
+            .any(|e| matches!(e.weight(), Relation::Keyed(_)))
     }
 
     /// Returns an iterator over the leaves of the graph.
@@ -148,6 +267,106 @@ impl AstGraph {
 
         set
     }
+
+    /// Matches a specific implementation of a command (op) with the given input type.
+    ///
+    /// Uses type specificity to rank the matches.
+    /// If `opnode` does not point to an Op variant, returns `None`.
+    pub fn get_impl(&self, opnode: OpNode, in_ty: &Type) -> Option<CmdNode> {
+        let opnode = NodeIndex::from(opnode);
+
+        if self[opnode].op().is_none() {
+            return None;
+        }
+
+        let mut fallback = None;
+
+        for edge in self.edges(opnode) {
+            let wgt = edge.weight();
+            if wgt == &Relation::Keyed(None) {
+                fallback = Some(CmdNode(edge.target()));
+            } else if matches!(wgt, Relation::Keyed(Some(t)) if t == in_ty) {
+                return Some(CmdNode(edge.target())); // found a specific impl
+            }
+        }
+
+        fallback
+    }
+
+    /// Get the arguments into a command node _in positional order_.
+    pub fn get_args<N: Into<CmdNode>>(&self, node: N) -> Vec<ArgNode> {
+        self.get_terms(node.into(), false).map(ArgNode).collect()
+    }
+
+    /// Get the flags into a command node _in positional order_.
+    pub fn get_flags<N: Into<CmdNode>>(&self, node: N) -> Vec<Tag> {
+        self.get_terms(node.into(), true)
+            .map(|n| self[n].flag().expect("should be a flag variant"))
+            .cloned()
+            .collect()
+    }
+
+    fn get_terms(&self, node: CmdNode, flag: bool) -> impl Iterator<Item = NodeIndex> {
+        debug_assert!(self.is_cmd_node(node.idx()), "expecting a command node");
+
+        // the terms are the ones going _into_ the node, using the `Term` edge.
+        // the process here is to construct a vec that gets filled in.
+        // we PANIC if a position is not filled, that should be an internal logic error,
+        let mut v = Vec::new();
+
+        let terms = self
+            .edges_directed(node.idx(), Incoming)
+            .filter(|e| !(flag ^ self[e.source()].flag().is_some()))
+            .filter_map(|e| e.weight().term().map(|i| (i, e.source())));
+
+        for (i, node) in terms {
+            dbg!(i, node);
+            let i = i as usize;
+            if i >= v.len() {
+                v.resize(i + 1, None);
+            }
+            v[i] = Some(node);
+        }
+
+        v.into_iter()
+            .map(|x| x.expect("all positions should be populated"))
+    }
+
+    /// This node is a command node, that is, there exists an edge from an OpNode with a Keyed
+    /// type.
+    fn is_cmd_node(&self, node: NodeIndex) -> bool {
+        self.edges_directed(node, Incoming)
+            .any(|e| e.weight().is_key() && self[e.source()].op().is_some())
+    }
+
+    /// Fetch the parent OpNode from this command node.
+    ///
+    /// # Panics
+    /// Panics if the node is not a command node.
+    pub fn parent_opnode(&self, node: CmdNode) -> OpNode {
+        debug_assert!(self.is_cmd_node(node.idx()), "expecting a command node");
+
+        self.edges_directed(node.idx(), Incoming)
+            .find_map(|e| e.weight().is_key().then(|| e.source()))
+            .map(OpNode)
+            .expect("command nodes should have a parent op node")
+    }
+
+    /// Fetch the def's expression from a definition node.
+    ///
+    /// # Panics
+    /// Panics if the node is not a def node.
+    pub fn def_expr(&self, node: DefNode) -> ExprNode {
+        debug_assert!(
+            matches!(self[node.idx()], AstNode::Def(_)),
+            "expecting a def node"
+        );
+
+        self.neighbors(node.idx())
+            .next()
+            .map(ExprNode)
+            .expect("definition node should have a sub expression")
+    }
 }
 
 impl AstNode {
@@ -180,12 +399,31 @@ impl AstNode {
 
         match self {
             Op { op, blk: _ } => op,
+            Intrinsic { op } => op,
+            Def(_) => panic!("should not call tag on a CmdNode"),
             Flag(f) => f,
             Ident(s) => s,
             Num { val: _, tag } => tag,
             Pound { ch: _, tag } => tag,
             Var(v) => v,
             Expr(e) => e,
+        }
+    }
+}
+
+impl Relation {
+    pub fn is_normal(&self) -> bool {
+        matches!(self, Relation::Normal)
+    }
+
+    pub fn is_key(&self) -> bool {
+        matches!(self, Relation::Keyed(_))
+    }
+
+    pub fn term(&self) -> Option<u8> {
+        match self {
+            Relation::Term(x) => Some(*x),
+            _ => None,
         }
     }
 }

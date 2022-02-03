@@ -1,5 +1,8 @@
 use super::*;
-use graphs::tygraph::{Chg, Knowledge};
+use graphs::{
+    tygraph::{Chg, Knowledge},
+    *,
+};
 use std::convert::TryInto;
 
 enum Kn {
@@ -22,7 +25,7 @@ impl From<&Knowledge> for Kn {
 
 pub struct ArgBuilder<'a, 'b> {
     blk: &'a mut Block<'b>,
-    node: NodeIndex,
+    node: ArgNode,
     in_ty: Kn,
     out_ty: Kn,
 }
@@ -30,7 +33,7 @@ pub struct ArgBuilder<'a, 'b> {
 impl<'a, 'b> ArgBuilder<'a, 'b> {
     /// The arguments tag.
     fn tag(&self) -> &Tag {
-        self.blk.ag[self.node].tag()
+        self.blk.ag[self.node.idx()].tag()
     }
 
     /// Assert that this argument will be supplied an input of type `ty`.
@@ -59,7 +62,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Kn::Unknown => {
                 // There is currently no knowledge about the input type
                 // add to the TG that this node will be supplied a type `ty`
-                self.blk.tg_chgs.push(Chg::KnownInput(self.node, ty));
+                self.blk.tg_chgs.push(Chg::KnownInput(self.node.idx(), ty));
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
             Kn::Any => unreachable!("any is reset to Kn::Ty"),
@@ -87,7 +90,9 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Kn::Unknown => {
                 // There is currently no knowledge about the output type
                 // add to the TG that this node is obliged to return the output type
-                self.blk.tg_chgs.push(Chg::ObligeOutput(self.node, ty));
+                self.blk
+                    .tg_chgs
+                    .push(Chg::ObligeOutput(self.node.idx(), ty));
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
             Kn::Any => unreachable!("logic error if output is Any type"),
@@ -108,11 +113,17 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             out_ty,
         } = self;
 
+        dbg!("here");
+
         match (in_ty, out_ty) {
             (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
             (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
+                dbg!(&in_ty, &out_ty);
+
                 let hold = Self::map_astnode_into_hold(blk, node)?;
+
+                dbg!("hold should not fail");
 
                 Ok(Argument {
                     tag,
@@ -124,14 +135,17 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
         }
     }
 
-    fn map_astnode_into_hold(blk: &Block, node: NodeIndex) -> Result<Hold> {
+    fn map_astnode_into_hold(blk: &Block, node: ArgNode) -> Result<Hold> {
         use graphs::astgraph::AstNode::*;
 
-        match &blk.ag[node] {
+        match &blk.ag[node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
+            Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
+            Def { .. } => unreachable!("an argument cannot be a Def variant"),
             Ident(s) => Ok(Hold::Lit(Str::new(s.str()).into())),
             Num { val, tag: _ } => Ok(Hold::Lit((*val).into())),
+            Pound { ch: 'n', tag: _ } => Ok(Hold::Lit(Value::Nil)),
             Pound { ch: 't', tag: _ } => Ok(Hold::Lit(true.into())),
             Pound { ch: 'f', tag: _ } => Ok(Hold::Lit(false.into())),
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
@@ -147,7 +161,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
 }
 
 impl<'a> Block<'a> {
-    fn pop_index(&mut self) -> Result<NodeIndex> {
+    fn pop_index(&mut self) -> Result<ArgNode> {
         let arg = self
             .args
             .pop()
@@ -166,7 +180,7 @@ impl<'a> Block<'a> {
     pub fn next_arg(&mut self) -> Result<ArgBuilder<'_, 'a>> {
         let node = self.pop_index()?;
         // see if the input and/or output types are known
-        let tys = &self.tg[node]; // node should exist
+        let tys = &self.tg[node.idx()]; // node should exist
         dbg!(tys);
         let in_ty = Kn::from(&tys.input);
         let out_ty = Kn::from(&tys.output);

@@ -3,12 +3,18 @@ use super::*;
 impl<'a> Block<'a> {
     /// The operation (command) tag.
     pub fn op_tag(&self) -> &Tag {
-        self.ag[self.node].op().expect("blocks node is an OP").0
+        self.ag[self.node.idx()]
+            .op()
+            .expect("blocks node is an OP")
+            .0
     }
 
     /// The entire block tag.
     pub fn blk_tag(&self) -> &Tag {
-        self.ag[self.node].op().expect("blocks node is an OP").1
+        self.ag[self.node.idx()]
+            .op()
+            .expect("blocks node is an OP")
+            .1
     }
 
     /// Assert that this block will return the given type.
@@ -32,6 +38,6 @@ impl<'a> Block<'a> {
         }
 
         self.tg_chgs
-            .push(graphs::tygraph::Chg::KnownOutput(self.node, ty));
+            .push(graphs::tygraph::Chg::KnownOutput(self.node.idx(), ty));
     }
 }

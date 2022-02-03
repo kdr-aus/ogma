@@ -1,9 +1,10 @@
 use super::*;
 use comp::Compiler;
+use graphs::*;
 use types::Types;
 
 /// Infer the input of an Op node by testing various input types to see if it compiles.
-pub fn input(op: NodeIndex, compiler: &Compiler) -> Option<Type> {
+pub fn input(op: OpNode, compiler: &Compiler) -> Option<Type> {
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
     let types = compiler.defs.types().iter();

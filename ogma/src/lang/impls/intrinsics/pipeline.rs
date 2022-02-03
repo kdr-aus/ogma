@@ -579,12 +579,15 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
         Table::from(::table::Table::from(t))
     }
 
+    blk.assert_output(Type::Tab);
+
     let from = blk
         .next_arg()?
         .supplied(None)?
         .returns(Type::Num)?
         .concrete()?;
     let alen = blk.args_len();
+    dbg!(alen);
     match (alen, blk.in_ty()) {
         (0, Ty::Num) => {
             let blktag = blk.blk_tag().clone();
@@ -597,11 +600,13 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         _ => {
+            dbg!("here");
             let to = blk
                 .next_arg()?
                 .supplied(None)?
                 .returns(Type::Num)?
                 .concrete()?;
+            dbg!("got next arg");
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)

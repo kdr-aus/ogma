@@ -1,4 +1,5 @@
 use super::*;
+use ::petgraph::prelude::*;
 use astgraph::*;
 use std::ops::Deref;
 
@@ -86,7 +87,7 @@ impl TypeGraph {
 
             use AstNode::*;
             let ty = match node {
-                Op { .. } | Flag(_) => None,
+                Op { .. } | Flag(_) | Intrinsic { .. } | Def { .. } => None,
                 Ident(_) => Some(Type::Str),
                 Num { .. } => Some(Type::Num),
                 Pound { ch: 'n', .. } => Some(Type::Nil),
@@ -122,31 +123,47 @@ impl TypeGraph {
         // NOTE: The graph .neighbors call returns items in the _reverse_ order they were added.
         // It also does not support a .rev() call.
 
+        let exprs = ag
+            .node_indices()
+            .filter(|&n| ag[n].expr().is_some())
+            .collect::<Vec<_>>();
+
+        // Be careful here since the expression may be an argument and link to an command node
+        let op_neighbors = |expr| ag.neighbors(expr).filter(|&n| ag[n].op().is_some());
+
+        dbg!(self.edge_count());
+
         // The input of an expression goes to the input of the first op
-        for expr in ag.node_indices().filter(|&n| ag[n].expr().is_some()) {
-            if let Some(op) = ag.neighbors(expr).last() {
+        for &expr in &exprs {
+            if let Some(op) = op_neighbors(expr).last() {
                 // last, since this would have been the first op to add
                 self.0.add_edge(expr, op, Flow::II); // input -> input
             }
         }
 
+        dbg!(self.edge_count());
+
         // the output of the last op in an expression to the output of the expression
-        for expr in ag.node_indices().filter(|&n| ag[n].expr().is_some()) {
-            if let Some(op) = ag.neighbors(expr).next() {
+        for &expr in &exprs {
+            if let Some(op) = op_neighbors(expr).next() {
                 // first, since this would have been the last op to add
                 self.0.add_edge(op, expr, Flow::OO); // output -> output
             }
         }
 
+        dbg!(self.edge_count());
+
         // the output of a block into the input of the next block
-        for expr in ag.node_indices().filter(|&n| ag[n].expr().is_some()) {
-            let froms = ag.neighbors(expr).skip(1); // starts at nth-1 op
-            let tos = ag.neighbors(expr); // starts at last op
+        for &expr in &exprs {
+            let froms = op_neighbors(expr).skip(1); // starts at nth-1 op
+            let tos = op_neighbors(expr); // starts at last op
 
             for (from, to) in froms.zip(tos) {
                 self.0.add_edge(from, to, Flow::OI); // output -> input
             }
         }
+
+        dbg!(self.edge_count());
 
         // TODO: handle defs
     }

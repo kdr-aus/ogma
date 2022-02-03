@@ -6,7 +6,7 @@ use graphs::*;
 use tygraph::TypeGraph;
 
 pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Result<()> {
-    let ag = astgraph::init(expr, defs); // flatten and expand expr/defs
+    let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
 
     let mut compiler = Compiler {
@@ -128,10 +128,12 @@ impl<'d> Compiler<'d> {
             .filter(|&idx| {
                 // not already compiled
                 !self.compiled_ops.contains_key(&idx.index())
-                // and is a Op variant
-            && self.ag[idx].op().is_some()
             // and the input has a type
             && !self.tg[idx].input.is_unknown()
+            })
+            .filter_map(|idx| {
+                // and is a Op variant
+                self.ag[idx].op().map(|_| OpNode(idx))
             })
             .collect::<Vec<_>>();
 
@@ -140,7 +142,7 @@ impl<'d> Compiler<'d> {
         let mut chgs = Vec::new();
 
         for node in nodes {
-            let in_ty = self.tg[node]
+            let in_ty = self.tg[node.idx()]
                 .input
                 .ty()
                 .cloned()
@@ -158,7 +160,7 @@ impl<'d> Compiler<'d> {
 
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
-                    chgs.push(tygraph::Chg::KnownOutput(node, out_ty));
+                    chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty));
                 }
                 Err(e) => err = Some(e),
             }
@@ -173,15 +175,40 @@ impl<'d> Compiler<'d> {
 
     pub fn compile_block(
         &self,
-        opnode: NodeIndex,
+        opnode: OpNode,
         in_ty: Type,
         chgs: &mut Vec<tygraph::Chg>,
     ) -> Result<Step> {
-        let block = Block::construct(self, opnode, in_ty, chgs);
+        let cmd_node = self
+            .ag
+            .get_impl(opnode, &in_ty)
+            .ok_or_else(|| Error::op_not_found(self.ag[opnode.idx()].tag()))?;
 
-        dbg!(block.op_tag());
+        match &self.ag[cmd_node.idx()] {
+            AstNode::Intrinsic { op } => {
+                let block = Block::construct(self, IntrinsicNode(cmd_node.into()), in_ty, chgs);
 
-        Step::compile(self.defs.impls(), block)
+                dbg!(block.op_tag());
+
+                // TODO -- rather store the func in Intrinsic,
+                Step::compile(self.defs.impls(), block)
+            }
+            AstNode::Def(params) => {
+                // check if there exists an entry for the sub-expression,
+                // if so, wrap that in a Step and call it done!
+                let expr = self.ag.def_expr(DefNode(cmd_node.into()));
+                match self.compiled_exprs.get(&expr.index()) {
+                    Some(stack) => todo!("wrap in a step"),
+                    None => Err(Error::incomplete_expr_compilation(
+                        self.ag[expr.idx()].tag(),
+                    )),
+                }
+            }
+            x => unreachable!(
+                "impl nodes are expected to be Intrinsic or Def, found: {:?}",
+                x
+            ),
+        }
     }
 
     fn infer_inputs(&mut self) -> bool {
@@ -201,8 +228,9 @@ impl<'d> Compiler<'d> {
 
         let mut chgs = infer_nodes
             .into_iter()
+            .map(OpNode) // we filter to just Ops
             .filter_map(|n| ty::infer::input(n, self).map(|t| (n, t)))
-            .map(|(node, ty)| tygraph::Chg::InferInput(node, ty))
+            .map(|(node, ty)| tygraph::Chg::InferInput(node.idx(), ty))
             .collect::<Vec<_>>();
 
         self.apply_tg_chgs(chgs.into_iter())
@@ -211,43 +239,6 @@ impl<'d> Compiler<'d> {
     fn infer_outputs(&mut self) -> bool {
         // TODO wire in properly
         false
-    }
-
-    // TODO maybe remove this?
-    // note that order returned is reversed (as a stack).
-    fn create_block_flags(&self, opnode_idx: NodeIndex) -> Option<Vec<Tag>> {
-        if self.ag[opnode_idx].op().is_some() {
-            // neighbours are in reversed order, which matches the block flags order
-
-            self.ag
-                .neighbors(opnode_idx)
-                .filter_map(|i| self.ag[i].flag())
-                .cloned()
-                .collect::<Vec<_>>()
-                .into()
-        } else {
-            None
-        }
-    }
-
-    fn create_block_args(&self, opnode_idx: NodeIndex) -> Option<Vec<NodeIndex>> {
-        use AstNode::*;
-
-        if self.ag[opnode_idx].op().is_some() {
-            // neighbours are in reversed order, which matches the block args order
-            self.ag
-                .neighbors(opnode_idx)
-                .filter(|&i| {
-                    matches!(
-                        &self.ag[i],
-                        Ident(_) | Num { .. } | Pound { .. } | Var(_) | Expr(_)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .into()
-        } else {
-            None
-        }
     }
 
     /// Populate the compiled expression map.
@@ -260,9 +251,9 @@ impl<'d> Compiler<'d> {
         let exprs = self
             .ag
             .node_indices()
-            .filter(|&n| self.ag[n].expr().is_some())
+            .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
             .filter(|n| !self.compiled_exprs.contains_key(&n.index()))
-            .filter(|&n| self.tg[n].has_types())
+            .filter(|n| self.tg[n.idx()].has_types())
             .collect::<Vec<_>>();
 
         let mut chgd = false;
@@ -294,21 +285,20 @@ impl<'d> Compiler<'d> {
 impl<'a> Block<'a> {
     fn construct(
         compiler: &'a Compiler,
-        opnode: NodeIndex,
+        node: IntrinsicNode,
         in_ty: Type,
         chgs: &'a mut Vec<tygraph::Chg>,
     ) -> Self {
-        let node = opnode;
-        let flags = compiler
-            .create_block_flags(node)
-            .expect("filtered to OP node");
-        let args = compiler
-            .create_block_args(node)
-            .expect("filtered to OP node");
+        let opnode = compiler.ag.parent_opnode(node.into());
+        let mut flags = compiler.ag.get_flags(node);
+        let mut args = compiler.ag.get_args(node);
         let defs = &compiler.defs;
 
+        flags.reverse();
+        args.reverse();
+
         Block {
-            node,
+            node: opnode,
             in_ty,
             flags,
             args,
@@ -325,15 +315,16 @@ impl<'a> Block<'a> {
 }
 
 impl eval::Stack {
-    fn build(compiler: &Compiler, expr_node: NodeIndex) -> Option<Self> {
+    fn build(compiler: &Compiler, expr_node: ExprNode) -> Option<Self> {
         let Compiler {
             ag, compiled_ops, ..
         } = compiler;
+        let expr_node = expr_node.idx();
 
-        let just_op = |n: &NodeIndex| ag[*n].op().is_some();
+        let just_op = |n: petgraph::prelude::NodeIndex| ag[n].op().map(|_| OpNode(n));
 
         let mut count = 0;
-        let all_have_step = ag.neighbors(expr_node).filter(just_op).all(|op| {
+        let all_have_step = ag.neighbors(expr_node).filter_map(just_op).all(|op| {
             count += 1;
             compiled_ops.contains_key(&op.index())
         });
@@ -345,7 +336,7 @@ impl eval::Stack {
         let mut steps = Vec::with_capacity(count);
         steps.extend(
             ag.neighbors(expr_node)
-                .filter(just_op)
+                .filter_map(just_op)
                 .map(|op| {
                     compiled_ops
                         .get(&op.index())
@@ -380,140 +371,6 @@ impl eval::Stack {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn init_graphs(expr: &str) -> (AstGraph, TypeGraph) {
-        let defs = &Definitions::default();
-        let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
-
-        let ag = astgraph::init(expr, defs);
-        let tg = TypeGraph::build(&ag);
-        (ag, tg)
-    }
-
-    #[test]
-    fn expression_decomposition_checks() {
-        let (ag, tg) = init_graphs("filter foo eq 3 | len");
-
-        dbg!(&ag);
-
-        assert_eq!(ag.node_count(), 7);
-        assert_eq!(ag.edge_count(), 6);
-
-        assert_eq!(tg.node_count(), 7);
-        assert_eq!(tg.edge_count(), 0);
-
-        assert!(ag.contains_edge(0.into(), 1.into())); // root -> filter
-        assert!(ag.contains_edge(0.into(), 4.into())); // root -> len
-        assert!(ag.contains_edge(1.into(), 2.into())); // filter -> foo
-        assert!(ag.contains_edge(1.into(), 3.into())); // filter -> eq 3
-        assert!(ag.contains_edge(3.into(), 5.into())); // < 3 -> eq
-        assert!(ag.contains_edge(5.into(), 6.into())); // eq -> 3
-    }
-
-    #[test]
-    fn assigning_ast_types() {
-        let (ag, mut tg) = init_graphs("filter foo eq 3 | len | = #t");
-
-        tg.apply_ast_types(&ag);
-
-        assert_eq!(tg.node_count(), 9);
-
-        use tygraph::{Knowledge, Node};
-        let def = || Node {
-            input: Knowledge::Unknown,
-            output: Knowledge::Unknown,
-        };
-
-        assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
-        assert_eq!(tg.node_weight(1.into()), Some(&def())); // filter
-        assert_eq!(
-            tg.node_weight(2.into()),
-            Some(&Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Known(Type::Str)
-            })
-        ); // foo
-        assert_eq!(tg.node_weight(3.into()), Some(&def())); // < 3
-        assert_eq!(tg.node_weight(4.into()), Some(&def())); // len
-        assert_eq!(tg.node_weight(5.into()), Some(&def())); // =
-        assert_eq!(
-            tg.node_weight(6.into()),
-            Some(&Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Known(Type::Bool),
-            })
-        ); // #t
-        assert_eq!(tg.node_weight(7.into()), Some(&def())); // eq
-        assert_eq!(
-            tg.node_weight(8.into()),
-            Some(&Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Known(Type::Num)
-            })
-        ); // 3
-    }
-
-    #[test]
-    fn ag_and_tg_with_tg_initialised() {
-        let (ag, mut tg) = init_graphs("ls | filter foo eq 0 | len");
-
-        tg.apply_ast_types(&ag);
-        tg.apply_ast_edges(&ag);
-
-        assert_eq!(ag.node_count(), 8);
-        assert_eq!(ag.edge_count(), 7);
-
-        assert_eq!(tg.node_count(), 8);
-        assert_eq!(tg.edge_count(), 6);
-
-        // Check AST graph edges
-        assert!(ag.contains_edge(0.into(), 1.into())); // root -> ls
-        assert!(ag.contains_edge(0.into(), 2.into())); // root -> filter
-        assert!(ag.contains_edge(0.into(), 5.into())); // root -> len
-
-        assert!(ag.contains_edge(2.into(), 3.into())); // filter -> foo
-        assert!(ag.contains_edge(2.into(), 4.into())); // filter -> eq 0
-
-        assert!(ag.contains_edge(4.into(), 6.into())); // eq 0 -> eq
-        assert!(ag.contains_edge(6.into(), 7.into())); // eq -> 0
-
-        // Type graph nodes
-        use tygraph::{Flow, Knowledge, Node};
-        let def = || Node {
-            input: Knowledge::Unknown,
-            output: Knowledge::Unknown,
-        };
-
-        assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
-        assert_eq!(tg.node_weight(1.into()), Some(&def())); // ls
-        assert_eq!(tg.node_weight(2.into()), Some(&def())); // filter
-        assert_eq!(
-            tg.node_weight(3.into()),
-            Some(&Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Known(Type::Str)
-            })
-        ); // foo
-        assert_eq!(tg.node_weight(4.into()), Some(&def())); // eq 0
-        assert_eq!(tg.node_weight(5.into()), Some(&def())); // len
-        assert_eq!(tg.node_weight(6.into()), Some(&def())); // eq
-        assert_eq!(
-            tg.node_weight(7.into()),
-            Some(&Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Known(Type::Num),
-            })
-        ); // 0
-
-        dbg!(tg
-            .edge_indices()
-            .map(|i| tg.edge_endpoints(i))
-            .collect::<Vec<_>>());
-
-        // Type graph edges
-        let getedge = |a: u32, b: u32| &tg[tg.find_edge(a.into(), b.into()).unwrap()];
-        assert_eq!(getedge(0, 1), &Flow::II); // root -> ls: II
-    }
 
     /// Always uses input type of `Nil`.
     fn compile(expr: &str) -> Result<()> {
@@ -556,5 +413,26 @@ mod tests {
     fn compilation_test_05() {
         // tests an inferred input, no defs or variables
         compile("ls | filter foo eq 'bar' | len").unwrap();
+        compile("ls | filter foo eq 3 | len").unwrap();
+        compile("ls | filter foo eq #n | len").unwrap();
+        compile("ls | filter foo eq #t | len").unwrap();
+        compile("ls | filter foo eq #f | len").unwrap();
+
+        // now to test more complex expressions
+        // TODO these expressions SHOULD fail the inferer, since `\\` takes _any_ type, it can not
+        // infer what type `filter` is should be passing through.
+        // This is interesting, and it would be good to get decent error messages explaining why
+        // the inference failed and where to put a type
+        //         compile("ls | filter foo eq { \\ #n } | len").unwrap();
+        //         compile("ls | filter foo eq { \\ #t } | len").unwrap();
+        //         compile("ls | filter foo eq { \\ #f } | len").unwrap();
+        //         compile("ls | filter foo eq { \\ 3 } | len").unwrap();
+        //         compile("ls | filter foo eq { \\ 'bar' } | len").unwrap();
+    }
+
+    #[test]
+    fn compilation_test_06() {
+        // lets test a def!
+        compile("\\ 3 | > 2").unwrap();
     }
 }

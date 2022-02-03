@@ -12,9 +12,6 @@ mod step;
 mod ty;
 mod var;
 
-// This is used regularly to index into the compiler graphs.
-use ::petgraph::graph::NodeIndex;
-
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
 
@@ -56,7 +53,7 @@ enum Hold {
 /// scenes.
 pub struct Block<'a> {
     /// The OP node index from the compiler graphs.
-    node: NodeIndex,
+    node: graphs::OpNode,
 
     // NOTE that the input type is not referenced via the TG.
     // This is done so that this block can be tested against differing input types for InferInput
@@ -73,7 +70,7 @@ pub struct Block<'a> {
     /// Must be empty upon finalisation, unused args return error.
     ///
     /// > Stored in reverse order as a stack.
-    args: Vec<NodeIndex>,
+    args: Vec<graphs::ArgNode>,
     /// Counter of the arguments used.
     ///
     /// Only 255 arguments are supported.
