@@ -339,6 +339,19 @@ impl AstGraph {
             .any(|e| e.weight().is_key() && self[e.source()].op().is_some())
     }
 
+    /// This node is an argument node, that is, matches the node type of an argument and has a
+    /// single edge coming into it (from the op node).
+    fn is_arg_node(&self, node: NodeIndex) -> bool {
+        use AstNode::*;
+
+        match self[node] {
+            Ident(_) | Num { .. } | Pound { .. } | Var(_) | Expr(_) => {
+                self.edges_directed(node, Incoming).count() == 1
+            }
+            Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
+        }
+    }
+
     /// Fetch the parent OpNode from this command node.
     ///
     /// # Panics
@@ -350,6 +363,32 @@ impl AstGraph {
             .find_map(|e| e.weight().is_key().then(|| e.source()))
             .map(OpNode)
             .expect("command nodes should have a parent op node")
+    }
+
+    /// Fetch the parent ExprNode from this op node.
+    ///
+    /// # Panics
+    /// Panics if the node is not an op node.
+    pub fn parent_expr(&self, node: OpNode) -> ExprNode {
+        debug_assert!(self[node.idx()].op().is_some(), "expecting an op node");
+
+        self.edges_directed(node.idx(), Incoming)
+            .filter(|e| e.weight().is_normal())
+            .find_map(|e| self[e.source()].expr().map(|_| ExprNode(e.source())))
+            .expect("op nodes should have a parent expr node")
+    }
+
+    /// Fetch the block's OpNode from this argument node.
+    ///
+    /// # Panics
+    /// Panics if the node is not an argument node.
+    pub fn arg_opnode(&self, node: ArgNode) -> OpNode {
+        debug_assert!(self.is_arg_node(node.idx()), "expecting an argument node");
+
+        self.edges_directed(node.idx(), Incoming)
+            .find_map(|e| e.weight().is_normal().then(|| e.source()))
+            .map(OpNode)
+            .expect("argument nodes should have a parent op node")
     }
 
     /// Fetch the def's expression from a definition node.
@@ -367,6 +406,30 @@ impl AstGraph {
             .map(ExprNode)
             .expect("definition node should have a sub expression")
     }
+
+    /// Get the next op after `op` in the expression, if there is one.
+    pub fn next_op(&self, op: OpNode) -> Option<OpNode> {
+        // TODO -- test this..
+        debug_assert!(&self[op.idx()].op().is_some(), "expecting Op node");
+
+        let mut f = None;
+        let mut found = false;
+
+        // in reverse order, so break if found
+        for next in self
+            .neighbors(self.parent_expr(op).idx())
+            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
+        {
+            if next == op {
+                found = true;
+                break;
+            }
+
+            f = Some(next);
+        }
+
+        found.then(|| ()).and(f)
+    }
 }
 
 impl AstNode {
@@ -382,6 +445,14 @@ impl AstNode {
     pub fn flag(&self) -> Option<&Tag> {
         match self {
             AstNode::Flag(x) => Some(x),
+            _ => None,
+        }
+    }
+
+    /// If this is a variable node, returns the tag as `Some`.
+    pub fn var(&self) -> Option<&Tag> {
+        match self {
+            AstNode::Var(x) => Some(x),
             _ => None,
         }
     }

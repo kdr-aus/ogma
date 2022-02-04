@@ -333,44 +333,42 @@ variables are scoped to within the expression they are defined"
 }
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!();
+    type Binding = (eng::Variable, eng::Argument);
+    let mut bindings = Vec::with_capacity(blk.args_len() / 2);
 
-    //     type Binding = (eng::Variable, eng::Argument);
-    //     let mut bindings = Vec::with_capacity(blk.args_len() / 2);
-    //
-    //     while blk.args_len() > 1 {
-    //         let e = blk.next_arg(None)?;
-    //         let v = blk.create_var_ref(e.out_ty().clone())?;
-    //         bindings.push((v, e));
-    //     }
-    //
-    //     // if there is a trailing binding, the input is bound to that variable, and passed through the
-    //     // block as the output. if not, `let` returns the input type!
-    //
-    //     let ty = blk.in_ty().clone();
-    //
-    //     let trailing_binding = if blk.args_len() > 0 {
-    //         let v = blk.create_var_ref(ty.clone())?;
-    //         Some(v)
-    //     } else {
-    //         None
-    //     };
-    //
-    //     fn bind_vars(bindings: &[Binding], value: &Value, cx: &mut Context) -> Result<()> {
-    //         for (var, e) in bindings {
-    //             let v = e.resolve(|| value.clone(), cx)?;
-    //             var.set_data(&mut cx.env, v);
-    //         }
-    //         Ok(())
-    //     }
-    //
-    //     blk.eval(ty, move |value, mut cx| {
-    //         bind_vars(&bindings, &value, &mut cx)?;
-    //         if let Some(trailing_var) = &trailing_binding {
-    //             trailing_var.set_data(&mut cx.env, value.clone());
-    //         }
-    //         cx.done(value)
-    //     })
+    while blk.args_len() > 1 {
+        let e = blk.next_arg()?.supplied(None)?.concrete()?;
+        let v = blk.next_arg()?.create_var_ref(e.out_ty().clone())?;
+        bindings.push((v, e));
+    }
+
+    // if there is a trailing binding, the input is bound to that variable, and passed through the
+    // block as the output. if not, `let` returns the input type!
+
+    let ty = blk.in_ty().clone();
+
+    let trailing_binding = if blk.args_len() > 0 {
+        let v = blk.next_arg()?.create_var_ref(ty.clone())?;
+        Some(v)
+    } else {
+        None
+    };
+
+    fn bind_vars(bindings: &[Binding], value: &Value, cx: &mut Context) -> Result<()> {
+        for (var, e) in bindings {
+            let v = e.resolve(|| value.clone(), cx)?;
+            var.set_data(&mut cx.env, v);
+        }
+        Ok(())
+    }
+
+    blk.eval(ty, move |value, mut cx| {
+        bind_vars(&bindings, &value, &mut cx)?;
+        if let Some(trailing_var) = &trailing_binding {
+            trailing_var.set_data(&mut cx.env, value.clone());
+        }
+        cx.done(value)
+    })
 }
 
 // ------ Nth ------------------------------------------------------------------

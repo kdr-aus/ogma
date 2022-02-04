@@ -16,11 +16,22 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         flowed_edges: Default::default(),
         compiled_ops: Default::default(),
         compiled_exprs: Default::default(),
+        locals: Default::default(),
     };
 
-    compiler.init_tg(); // initialise TG
+    compiler.init_tg(input_ty); // initialise TG
 
-    compiler.tg.set_root_input_ty(input_ty); // set the root input
+    // initialise an empty Locals into the first op node
+    compiler.locals.insert(
+        compiler
+            .ag
+            .neighbors(0.into())
+            .filter(|&x| compiler.ag[x].op().is_some())
+            .last()
+            .expect("there should be a root Op node")
+            .index(),
+        Locals::default(),
+    );
 
     let mut err = None;
 
@@ -31,6 +42,11 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         eprintln!("Populating compiled expressions");
         if compiler.populate_compiled_expressions() {
             eprintln!("✅ SUCCESS");
+            continue;
+        }
+
+        eprintln!("Assigning variable types");
+        if compiler.assign_variable_types() {
             continue;
         }
 
@@ -83,13 +99,17 @@ pub struct Compiler<'d> {
     compiled_ops: IndexMap<Step>,
     /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
     compiled_exprs: IndexMap<eval::Stack>,
+    /// A map of **Op** nodes which have a _known **input** `Locals`_.
+    locals: IndexMap<Locals>,
 }
 
 impl<'d> Compiler<'d> {
-    fn init_tg(&mut self) {
+    fn init_tg(&mut self, root_ty: Type) {
         // apply ast known types and link edges
         self.tg.apply_ast_types(&self.ag);
         self.tg.apply_ast_edges(&self.ag);
+
+        self.tg.set_root_input_ty(root_ty); // set the root input
     }
 
     /// We can determine if compilation is finished by seeing if there is a root evaluation stack.
@@ -149,14 +169,29 @@ impl<'d> Compiler<'d> {
                 .expect("known input at this point");
 
             match self.compile_block(node, in_ty, &mut chgs) {
-                Ok(step) => {
+                Ok((step, locals)) => {
                     goto_resolve = true;
                     let out_ty = step.out_ty.clone();
+
+                    // insert the compiled step into the map
                     let _is_empty = self.compiled_ops.insert(node.index(), step).is_none();
                     debug_assert!(
                         _is_empty,
                         "just replaced an already compiled step which should not happen"
                     );
+
+                    // insert the returned, mutated, locals into the locals map (if it is some).
+                    // need to insert it into the **next** op after this one.
+                    if let Some(locals) = locals {
+                        if let Some(next) = self.ag.next_op(node) {
+                            dbg!(node, next, &self.ag[next.idx()]);
+                            let _is_empty = self.locals.insert(next.index(), locals).is_none();
+                            debug_assert!(
+                        _is_empty,
+                        "just replaced an already populated locals, which should not happen"
+                    );
+                        }
+                    }
 
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
@@ -178,7 +213,7 @@ impl<'d> Compiler<'d> {
         opnode: OpNode,
         in_ty: Type,
         chgs: &mut Vec<tygraph::Chg>,
-    ) -> Result<Step> {
+    ) -> Result<(Step, Option<Locals>)> {
         let cmd_node = self
             .ag
             .get_impl(opnode, &in_ty)
@@ -186,12 +221,20 @@ impl<'d> Compiler<'d> {
 
         match &self.ag[cmd_node.idx()] {
             AstNode::Intrinsic { op } => {
-                let block = Block::construct(self, IntrinsicNode(cmd_node.into()), in_ty, chgs);
+                let mut locals = self.locals.get(&opnode.index()).cloned();
+
+                let block = Block::construct(
+                    self,
+                    IntrinsicNode(cmd_node.into()),
+                    in_ty,
+                    locals.as_mut(),
+                    chgs,
+                );
 
                 dbg!(block.op_tag());
 
                 // TODO -- rather store the func in Intrinsic,
-                Step::compile(self.defs.impls(), block)
+                Step::compile(self.defs.impls(), block).map(|step| (step, locals))
             }
             AstNode::Def(params) => {
                 // check if there exists an entry for the sub-expression,
@@ -199,9 +242,15 @@ impl<'d> Compiler<'d> {
                 let expr = self.ag.def_expr(DefNode(cmd_node.into()));
                 match self.compiled_exprs.get(&expr.index()) {
                     Some(stack) => todo!("wrap in a step"),
-                    None => Err(Error::incomplete_expr_compilation(
-                        self.ag[expr.idx()].tag(),
-                    )),
+                    None => {
+                        // there is not, but we can add to the TG that this sub-expression will
+                        // have input of `in_ty`.
+                        chgs.push(tygraph::Chg::KnownInput(expr.idx(), in_ty));
+
+                        Err(Error::incomplete_expr_compilation(
+                            self.ag[expr.idx()].tag(),
+                        ))
+                    }
                 }
             }
             x => unreachable!(
@@ -272,6 +321,37 @@ impl<'d> Compiler<'d> {
         chgd
     }
 
+    /// Assign types to variables by looking in the block's `Locals`.
+    ///
+    /// Assigns types to variables by seeing there is an input `Locals` for the block's Op, and
+    /// checking for the variable in that locals.
+    ///
+    /// Errors if a variable wasn't found.
+    /// If the TG is altered, returns `Ok(true)`.
+    fn assign_variable_types(&mut self) -> bool {
+        let chgs = self
+            .ag
+            .node_indices()
+            // just get the variables
+            .filter_map(|n| self.ag[n].var().map(|v| (n, v)))
+            // output type is unknown
+            .filter(|(n, _)| self.tg[*n].output.is_unknown())
+            // map in if has a Locals
+            .filter_map(|(n, v)| {
+                let opnode = self.ag.arg_opnode(ArgNode(n));
+                self.locals.get(&opnode.index()).map(|l| (n, v, l))
+            })
+            .filter_map(|(n, v, l)| {
+                l.get(v.str()).map(|v| match v {
+                    Local::Var(v) => tygraph::Chg::KnownOutput(n, v.ty().clone()),
+                    _ => todo!("haven't handled params yet!"),
+                })
+            })
+            .collect::<Vec<tygraph::Chg>>();
+
+        self.apply_tg_chgs(chgs.into_iter())
+    }
+
     /// Returns if the TG was altered when applying the changes.
     fn apply_tg_chgs<C>(&mut self, chgs: C) -> bool
     where
@@ -287,6 +367,7 @@ impl<'a> Block<'a> {
         compiler: &'a Compiler,
         node: IntrinsicNode,
         in_ty: Type,
+        locals: Option<&'a mut Locals>,
         chgs: &'a mut Vec<tygraph::Chg>,
     ) -> Self {
         let opnode = compiler.ag.parent_opnode(node.into());
@@ -303,6 +384,7 @@ impl<'a> Block<'a> {
             flags,
             args,
             args_count: 0,
+            locals,
             ag: &compiler.ag,
             tg: &compiler.tg,
             compiled_exprs: &compiler.compiled_exprs,
@@ -433,6 +515,13 @@ mod tests {
     #[test]
     fn compilation_test_06() {
         // lets test a def!
+        compile("\\ 3 | = 3").unwrap();
         compile("\\ 3 | > 2").unwrap();
+    }
+
+    #[test]
+    fn compilation_test_07() {
+        // initial variable testing
+        compile("let $x | \\ $x").unwrap();
     }
 }

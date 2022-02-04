@@ -136,7 +136,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
     }
 
     fn map_astnode_into_hold(blk: &Block, node: ArgNode) -> Result<Hold> {
-        use graphs::astgraph::AstNode::*;
+        use astgraph::AstNode::*;
 
         match &blk.ag[node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
@@ -149,13 +149,47 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Pound { ch: 't', tag: _ } => Ok(Hold::Lit(true.into())),
             Pound { ch: 'f', tag: _ } => Ok(Hold::Lit(false.into())),
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
-            Var(tag) => todo!(),
+            Var(tag) => blk
+                .locals
+                .as_ref()
+                .ok_or_else(|| Error::locals_unavailable(tag))
+                .and_then(|locals| {
+                    locals
+                        .get(tag.str())
+                        .ok_or_else(|| Error::var_not_found(tag))
+                })
+                .map(|local| match local {
+                    Local::Var(var) => var.clone(),
+                    Local::Param(_, _) => todo!("need to handle params"),
+                })
+                .map(Hold::Var),
             Expr(tag) => blk
                 .compiled_exprs
                 .get(&node.index())
                 .cloned()
                 .map(Hold::Expr)
                 .ok_or_else(|| Error::incomplete_expr_compilation(tag)),
+        }
+    }
+
+    /// Assert this argument is a variable and construct a reference to it.
+    ///
+    /// If the block does not contain a reference to an up-to-date locals, and error is returned.
+    ///
+    /// # Type safety
+    /// The variable will be created expecting the type `ty`. `set_data` only validates types in
+    /// debug builds, be sure that testing occurs of code path to avoid UB in release.
+    pub fn create_var_ref(self, ty: Type) -> Result<Variable> {
+        match (self.blk.locals.as_mut(), &self.blk.ag[self.node.idx()]) {
+            (Some(locals), astgraph::AstNode::Var(var)) => {
+                Ok(locals.add_new_var(Str::new(var.str()), ty, var.clone()))
+            }
+            (None, astgraph::AstNode::Var(var)) => Err(Error::locals_unavailable(var)),
+            (_, x) => {
+                todo!("this should error with unexp arg variant, but the span_arg needs to change signature");
+                //                 let (x, y) = Error::span_arg(x.tag());
+                //                 Err(Error::unexp_arg_variant(x, y))
+            }
         }
     }
 }

@@ -59,6 +59,7 @@ pub struct Block<'a> {
     // This is done so that this block can be tested against differing input types for InferInput
     /// The block's input type.
     pub in_ty: Type,
+
     /// The block's flags.
     ///
     /// Must be empty upon finalisation, unused flags return error.
@@ -75,6 +76,14 @@ pub struct Block<'a> {
     ///
     /// Only 255 arguments are supported.
     args_count: u8,
+
+    /// Mutable local variables.
+    ///
+    /// This is similar to tg_chgs, where it is stored as a mutable reference since block is passed
+    /// by value.
+    /// Any changees made to the locals are not actually stored unless compilation succeeds.
+    locals: Option<&'a mut Locals>,
+
     /// The compiler's ast graph.
     ag: &'a graphs::astgraph::AstGraph,
     /// The compiler's type graph.

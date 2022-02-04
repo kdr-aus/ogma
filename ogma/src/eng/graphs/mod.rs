@@ -9,7 +9,7 @@ pub mod tygraph;
 macro_rules! wrapr {
     ($( $name:ident )*) => {
         $(
-            #[derive(Copy, Clone)]
+            #[derive(Copy, Clone, PartialEq, Eq, Debug)]
             pub struct $name(pub petgraph::prelude::NodeIndex);
             impl $name {
                 pub fn idx(self) -> petgraph::prelude::NodeIndex {

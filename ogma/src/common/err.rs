@@ -338,17 +338,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn var_not_found(var: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("variable `{}` does not exist", var),
-            traces: trace(var, format!("`{}` not in scope", var)),
-            help_msg: Some(
-                "variables must be in scope and can be defined using the `let` command".into(),
-            ),
-        }
-    }
-
     pub(crate) fn unexp_entry_ty<C: fmt::Display>(
         exp: &Type,
         found: &Type,
@@ -468,6 +457,29 @@ impl Error {
             cat: Category::Semantics,
             desc: "expression is yet to be compiled".into(),
             traces: trace(expr, Some("this expression has not finished compiling".into())),
+            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+        }
+    }
+}
+
+/// Variable Errors
+impl Error {
+    pub(crate) fn var_not_found(var: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("variable `{}` does not exist", var),
+            traces: trace(var, format!("`{}` not in scope", var)),
+            help_msg: Some(
+                "variables must be in scope and can be defined using the `let` command".into(),
+            ),
+        }
+    }
+
+    pub(crate) fn locals_unavailable(var: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "locals map is unavailable".into(),
+            traces: trace(var, Some("this variable needs access to the locals".into())),
             help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
         }
     }

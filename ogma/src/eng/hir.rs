@@ -124,26 +124,6 @@ impl<'a> Block<'a> {
         }
     }
 
-    /// Create a variable reference using the next argument.
-    ///
-    /// Returns an error if:
-    /// 1. There is no next argument,
-    /// 2. The next argument is _not_ a variable,
-    ///
-    /// # Type safety
-    /// The variable will be created expecting the type `ty`. `set_data` only validates types in
-    /// debug builds, be sure that testing occurs of code path to avoid UB in release.
-    pub fn create_var_ref(&mut self, ty: Type) -> Result<Variable> {
-        todo!()
-        //         match self.next_arg_raw()? {
-        //             ast::Argument::Var(var) => Ok(self.vars.add_new_var(Str::new(var.str()), ty, var)),
-        //             x => {
-        //                 let (x, y) = Error::span_arg(&x);
-        //                 Err(Error::unexp_arg_variant(x, y))
-        //             }
-        //         }
-    }
-
     /// Create a variable reference not off a specific argument, but by manually specifying the
     /// variable name.
     ///

@@ -87,8 +87,7 @@ impl Locals {
         }
     }
 
-    /// Get the deepest local matching the name and optional depth. If no depth is specified, will
-    /// get the deepest.
+    /// Get a local by name.
     pub fn get(&self, name: &str) -> Option<&Local> {
         self.vars.get(name)
     }
