@@ -186,7 +186,7 @@ impl<'d> Compiler<'d> {
                     // insert the returned, mutated, locals into the locals map (if it is some).
                     // need to insert it into the **next** op after this one.
                     if let Some(locals) = locals {
-                        if let Some(next) = self.ag.next_op(node) {
+                        if let Some(next) = node.next(&self.ag) {
                             self.insert_locals(locals, next);
                         }
                     }
@@ -231,7 +231,7 @@ impl<'d> Compiler<'d> {
             AstNode::Def(params) => {
                 // check if there exists an entry for the sub-expression,
                 // if so, wrap that in a Step and call it done!
-                let expr = self.ag.def_expr(DefNode(cmd_node.into()));
+                let expr = DefNode(cmd_node.idx()).expr(&self.ag);
                 match self.compiled_exprs.get(&expr.index()) {
                     Some(stack) => todo!("wrap in a step"),
                     None => {
@@ -330,7 +330,7 @@ impl<'d> Compiler<'d> {
             .filter(|(n, _)| self.tg[*n].output.is_unknown())
             // map in if has a Locals
             .filter_map(|(n, v)| {
-                let opnode = self.ag.arg_opnode(ArgNode(n));
+                let opnode = ArgNode(n).op(&self.ag);
                 self.locals.get(&opnode.index()).map(|l| (n, v, l))
             })
             .filter_map(|(n, v, l)| {
@@ -371,7 +371,7 @@ impl<'d> Compiler<'d> {
             .ag
             .neighbors(op.idx())
             .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
-            .map(|e| self.ag.first_op(e))
+            .map(|e| e.first_op(&self.ag))
             .collect::<Vec<_>>();
 
         for op in ops {
@@ -398,8 +398,8 @@ impl<'d> Compiler<'d> {
             // map to a D structure
             .map(|def| D {
                 def,
-                parent: self.ag.parent_opnode(def.into()),
-                first: self.ag.first_op(self.ag.def_expr(def)),
+                parent: def.parent(&self.ag),
+                first: def.expr(&self.ag).first_op(&self.ag),
                 in_ty: Type::Nil,
             })
             // check that the op does not already have a locals map
@@ -440,7 +440,7 @@ impl<'a> Block<'a> {
         locals: Option<&'a mut Locals>,
         chgs: &'a mut Vec<tygraph::Chg>,
     ) -> Self {
-        let opnode = compiler.ag.parent_opnode(node);
+        let opnode = node.parent(&compiler.ag);
         let mut flags = compiler.ag.get_flags(node);
         let mut args = compiler.ag.get_args(node);
         let defs = &compiler.defs;

@@ -381,97 +381,6 @@ impl AstGraph {
             Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
         }
     }
-
-    /// Fetch the parent OpNode from this command node.
-    ///
-    /// # Panics
-    /// Panics if the node is not a command node.
-    pub fn parent_opnode(&self, node: CmdNode) -> OpNode {
-        debug_assert!(self.is_cmd_node(node.idx()), "expecting a command node");
-
-        self.edges_directed(node.idx(), Incoming)
-            .find_map(|e| e.weight().is_key().then(|| e.source()))
-            .map(OpNode)
-            .expect("command nodes should have a parent op node")
-    }
-
-    /// Fetch the parent ExprNode from this op node.
-    ///
-    /// # Panics
-    /// Panics if the node is not an op node.
-    pub fn parent_expr(&self, node: OpNode) -> ExprNode {
-        debug_assert!(self[node.idx()].op().is_some(), "expecting an op node");
-
-        self.edges_directed(node.idx(), Incoming)
-            .filter(|e| e.weight().is_normal())
-            .find_map(|e| self[e.source()].expr().map(|_| ExprNode(e.source())))
-            .expect("op nodes should have a parent expr node")
-    }
-
-    /// Fetch the block's OpNode from this argument node.
-    ///
-    /// # Panics
-    /// Panics if the node is not an argument node.
-    pub fn arg_opnode(&self, node: ArgNode) -> OpNode {
-        debug_assert!(self.is_arg_node(node.idx()), "expecting an argument node");
-
-        self.edges_directed(node.idx(), Incoming)
-            .find_map(|e| e.weight().is_normal().then(|| e.source()))
-            .map(OpNode)
-            .expect("argument nodes should have a parent op node")
-    }
-
-    /// Fetch the def's expression from a definition node.
-    ///
-    /// # Panics
-    /// Panics if the node is not a def node.
-    pub fn def_expr(&self, node: DefNode) -> ExprNode {
-        debug_assert!(
-            matches!(self[node.idx()], AstNode::Def(_)),
-            "expecting a def node"
-        );
-
-        self.neighbors(node.idx())
-            .next()
-            .map(ExprNode)
-            .expect("definition node should have a sub expression")
-    }
-
-    pub fn first_op(&self, node: ExprNode) -> OpNode {
-        debug_assert!(
-            matches!(self[node.idx()], AstNode::Expr(_)),
-            "expecting an expression node"
-        );
-
-        self.neighbors(node.idx())
-            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
-            .last()
-            .expect("all expressions have at least one block op node")
-    }
-
-    /// Get the next op after `op` in the expression, if there is one.
-    pub fn next_op(&self, op: OpNode) -> Option<OpNode> {
-        // TODO -- test this..
-        debug_assert!(&self[op.idx()].op().is_some(), "expecting Op node");
-
-        let mut f = None;
-        let mut found = false;
-
-        // in reverse order, so break if found
-        for next in self
-            .neighbors(self.parent_expr(op).idx())
-            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
-        {
-            if next == op {
-                found = true;
-                break;
-            }
-
-            f = Some(next);
-        }
-
-        found.then(|| ()).and(f)
-    }
 }
 
 impl AstNode {
@@ -546,5 +455,121 @@ impl Relation {
             Relation::Term(x) => Some(*x),
             _ => None,
         }
+    }
+}
+
+impl OpNode {
+    fn debug_assert_is_op_node(self, g: &AstGraph) {
+        debug_assert!(g[self.idx()].op().is_some(), "expecting an op node");
+    }
+
+    /// Fetches the parent expression node which holds this block.
+    pub fn parent(self, g: &AstGraph) -> ExprNode {
+        self.debug_assert_is_op_node(g);
+
+        g.edges_directed(self.idx(), Incoming)
+            .filter(|e| e.weight().is_normal())
+            .find_map(|e| g[e.source()].expr().map(|_| ExprNode(e.source())))
+            .expect("op nodes should have a parent expr node")
+    }
+
+    /// Fetches the next block's opnode, if there is one.
+    pub fn next(self, g: &AstGraph) -> Option<OpNode> {
+        self.debug_assert_is_op_node(g);
+
+        // TODO -- test this..
+
+        let mut f = None;
+        let mut found = false;
+
+        // in reverse order, so break if found
+        for next in g
+            .neighbors(self.parent(g).idx())
+            .filter_map(|n| g[n].op().map(|_| OpNode(n)))
+        {
+            if next == self {
+                found = true;
+                break;
+            }
+
+            f = Some(next);
+        }
+
+        found.then(|| ()).and(f)
+    }
+}
+
+impl ArgNode {
+    /// Fetches the block's OpNode that this argument comprises.
+    pub fn op(self, g: &AstGraph) -> OpNode {
+        debug_assert!(g.is_arg_node(self.idx()), "expecting an argument node");
+
+        g.edges_directed(self.idx(), Incoming)
+            .find_map(|e| e.weight().is_normal().then(|| e.source()))
+            .map(OpNode)
+            .expect("argument nodes should have a parent op node")
+    }
+}
+
+impl CmdNode {
+    /// Fetch the parent OpNode from this command node.
+    pub fn parent(self, g: &AstGraph) -> OpNode {
+        debug_assert!(g.is_cmd_node(self.idx()), "expecting a command node");
+
+        g.edges_directed(self.idx(), Incoming)
+            .find_map(|e| e.weight().is_key().then(|| e.source()))
+            .map(OpNode)
+            .expect("command nodes should have a parent op node")
+    }
+}
+
+impl IntrinsicNode {
+    /// Fetch the parent OpNode from this intrinsic node.
+    pub fn parent(self, g: &AstGraph) -> OpNode {
+        debug_assert!(
+            matches!(g[self.idx()], AstNode::Intrinsic { .. }),
+            "expecting an intrinsic node"
+        );
+        CmdNode::from(self).parent(g)
+    }
+}
+
+impl DefNode {
+    fn debug_assert_is_def_node(self, g: &AstGraph) {
+        debug_assert!(
+            matches!(g[self.idx()], AstNode::Def(_)),
+            "expecting a def node"
+        );
+    }
+
+    /// Fetch the parent OpNode from this command node.
+    pub fn parent(self, g: &AstGraph) -> OpNode {
+        self.debug_assert_is_def_node(g);
+        CmdNode::from(self).parent(g)
+    }
+
+    /// Fetch the def's expression from a definition node.
+    pub fn expr(self, g: &AstGraph) -> ExprNode {
+        self.debug_assert_is_def_node(g);
+
+        g.neighbors(self.idx())
+            .next()
+            .map(ExprNode)
+            .expect("definition node should have a sub expression")
+    }
+}
+
+impl ExprNode {
+    /// Fetches the first block's op for this expression.
+    pub fn first_op(self, g: &AstGraph) -> OpNode {
+        debug_assert!(
+            matches!(g[self.idx()], AstNode::Expr(_)),
+            "expecting an expression node"
+        );
+
+        g.neighbors(self.idx())
+            .filter_map(|n| g[n].op().map(|_| OpNode(n)))
+            .last()
+            .expect("all expressions have at least one block op node")
     }
 }
