@@ -1,6 +1,5 @@
-use crate::prelude::*;
+use super::*;
 use ::libs::divvy::Str;
-use ast::Argument;
 use std::{cell::*, rc::Rc, sync::Arc};
 
 // ###### VARIABLE #############################################################
@@ -13,7 +12,7 @@ pub struct Variable {
 
 #[derive(Debug, Clone)]
 pub enum Local {
-    Param(Argument, Locals),
+    Param(Argument),
     Var(Variable),
 }
 
@@ -69,6 +68,16 @@ struct LocalEntry {
     _local: Local,
 }
 
+/// A map of available variables based on an string name.
+///
+/// Locals is easily shareable and Cow for the variables maps. It also stores a **shared** counter
+/// which increments _everytime_ an entry is made into the variable map.
+/// This counter, along with the variable storing an index into the environment, makes this system
+/// fairly robust.
+///
+/// Scoping is done by _not_ passing along an altered map. For instance, a block will pass on its
+/// locals to the next block, so any changes to the map are available. For an expression, the map
+/// is not passed along, instead the changes are local to the expression.
 #[derive(Debug, Default)]
 pub struct Locals {
     vars: Rc<HashMap<Str, Local>>,
@@ -98,12 +107,10 @@ impl Locals {
         vars.insert(name, Local::Var(var));
     }
 
-    /// Add a parameter with the given name in the local environment.
-    /// Capture a locals environment that is associated with this parameter, usually the caller's
-    /// environment.
-    pub fn add_param(&mut self, name: Str, arg: Argument, locals: Locals) {
+    /// Add a parameter mapped to this name.
+    pub fn add_param(&mut self, name: Str, arg: Argument) {
         let vars = Rc::make_mut(&mut self.vars);
-        vars.insert(name, Local::Param(arg, locals));
+        vars.insert(name, Local::Param(arg));
     }
 
     /// Add a **new** variable (a new memory location) into the environment.

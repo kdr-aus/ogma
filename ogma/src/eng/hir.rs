@@ -42,25 +42,26 @@ impl<'a> Block<'a> {
             //             ),
             A::Pound(ch, tag) => return Err(Error::unknown_spec_literal(ch, &tag)),
             A::Var(var) => {
-                match locals
-                    .get(var.str())
-                    .ok_or_else(|| Error::var_not_found(&var))?
-                {
-                    Local::Param(arg, locals) => {
-                        // update result with the outside var (similar to Local::Var)
-                        return self
-                            .arg_recursive(arg.clone(), in_ty, locals)
-                            .map_err(|e| e.add_trace(&var))
-                            .map(|mut x| (x.tag = var, x).1);
-                    }
-                    Local::Var(v) => {
-                        let mut v = v.clone();
-                        // update the location of this var to give correct error reporting
-                        v.tag = var.clone();
-                        let ty = v.ty().clone();
-                        (Hold::Var(v), var, ty)
-                    }
-                }
+                todo!()
+                //                 match locals
+                //                     .get(var.str())
+                //                     .ok_or_else(|| Error::var_not_found(&var))?
+                //                 {
+                //                     Local::Param(arg, locals) => {
+                //                         // update result with the outside var (similar to Local::Var)
+                //                         return self
+                //                             .arg_recursive(arg.clone(), in_ty, locals)
+                //                             .map_err(|e| e.add_trace(&var))
+                //                             .map(|mut x| (x.tag = var, x).1);
+                //                     }
+                //                     Local::Var(v) => {
+                //                         let mut v = v.clone();
+                //                         // update the location of this var to give correct error reporting
+                //                         v.tag = var.clone();
+                //                         let ty = v.ty().clone();
+                //                         (Hold::Var(v), var, ty)
+                //                     }
+                //                 }
             }
             A::Expr(expr) => {
                 let tag = expr.tag.clone();

@@ -160,7 +160,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
                 })
                 .map(|local| match local {
                     Local::Var(var) => var.clone(),
-                    Local::Param(_, _) => todo!("need to handle params"),
+                    Local::Param(_) => todo!("need to handle params"),
                 })
                 .map(Hold::Var),
             Expr(tag) => blk

@@ -50,6 +50,9 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
             continue;
         }
 
+        eprintln!("Inserting available def locals");
+        compiler.insert_available_def_locals();
+
         eprintln!("Compiling blocks");
         match compiler.compile_blocks() {
             Ok(()) => {
@@ -184,12 +187,7 @@ impl<'d> Compiler<'d> {
                     // need to insert it into the **next** op after this one.
                     if let Some(locals) = locals {
                         if let Some(next) = self.ag.next_op(node) {
-                            dbg!(node, next, &self.ag[next.idx()]);
-                            let _is_empty = self.locals.insert(next.index(), locals).is_none();
-                            debug_assert!(
-                        _is_empty,
-                        "just replaced an already populated locals, which should not happen"
-                    );
+                            self.insert_locals(locals, next);
                         }
                     }
 
@@ -223,13 +221,7 @@ impl<'d> Compiler<'d> {
             AstNode::Intrinsic { op } => {
                 let mut locals = self.locals.get(&opnode.index()).cloned();
 
-                let block = Block::construct(
-                    self,
-                    IntrinsicNode(cmd_node.into()),
-                    in_ty,
-                    locals.as_mut(),
-                    chgs,
-                );
+                let block = Block::construct(self, cmd_node, in_ty, locals.as_mut(), chgs);
 
                 dbg!(block.op_tag());
 
@@ -360,17 +352,95 @@ impl<'d> Compiler<'d> {
         chgs.map(|c| self.tg.apply_chg(c))
             .fold(false, std::ops::BitOr::bitor)
     }
+
+    /// Inserts a locals _input_ entry into the locals map.
+    /// This function is recursive, it walks through child expression arguments and also inserts
+    /// the locals entry into the _first_ op node.
+    fn insert_locals(&mut self, locals: Locals, op: OpNode) {
+        dbg!(op, &self.ag[op.idx()]);
+
+        let _is_empty = self.locals.insert(op.index(), locals.clone()).is_none();
+
+        debug_assert!(
+            _is_empty,
+            "just replaced an already populated locals, which should not happen"
+        );
+
+        // repeat this process for each expr argument
+        let ops = self
+            .ag
+            .neighbors(op.idx())
+            .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
+            .map(|e| self.ag.first_op(e))
+            .collect::<Vec<_>>();
+
+        for op in ops {
+            self.insert_locals(locals.clone(), op);
+        }
+    }
+
+    /// Looks at the `Def` command nodes and builds a `Locals` for the first op if:
+    /// 1. The parent op has an available locals to scaffold off, and
+    /// 2. _All_ parameters have a known type.
+    fn insert_available_def_locals(&mut self) {
+        struct D {
+            def: DefNode,
+            parent: OpNode,
+            first: OpNode,
+            in_ty: Type,
+        }
+
+        let defs = self
+            .ag
+            .node_indices()
+            // filter to just Def nodes
+            .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
+            // map to a D structure
+            .map(|def| D {
+                def,
+                parent: self.ag.parent_opnode(def.into()),
+                first: self.ag.first_op(self.ag.def_expr(def)),
+                in_ty: Type::Nil,
+            })
+            // check that the op does not already have a locals map
+            .filter(|d| !self.locals.contains_key(&d.first.index()))
+            // get the input type of parent block
+            .filter_map(|d| {
+                self.tg[d.parent.idx()].input.ty().map(|ty| D {
+                    in_ty: ty.clone(),
+                    ..d
+                })
+            })
+            // get the Locals of the parent Op node
+            .filter_map(|d| self.locals.get(&d.parent.index()).map(|l| (d, l.clone())))
+            .collect::<Vec<_>>();
+
+        for (d, mut locals) in defs {
+            let D {
+                def,
+                parent,
+                first,
+                in_ty,
+            } = d;
+
+            let params = self.ag[def.idx()].def().expect("filtered to def node");
+
+            if let Ok(locals) = locals.inject_params(self, params, def, in_ty) {
+                self.insert_locals(locals, first);
+            }
+        }
+    }
 }
 
 impl<'a> Block<'a> {
     fn construct(
         compiler: &'a Compiler,
-        node: IntrinsicNode,
+        node: CmdNode,
         in_ty: Type,
         locals: Option<&'a mut Locals>,
         chgs: &'a mut Vec<tygraph::Chg>,
     ) -> Self {
-        let opnode = compiler.ag.parent_opnode(node.into());
+        let opnode = compiler.ag.parent_opnode(node);
         let mut flags = compiler.ag.get_flags(node);
         let mut args = compiler.ag.get_args(node);
         let defs = &compiler.defs;
@@ -447,6 +517,47 @@ impl eval::Stack {
             .ty()
             .expect("expressions output type should be known at this point")
             .clone();
+    }
+}
+
+impl Locals {
+    pub fn inject_params(
+        mut self,
+        compiler: &Compiler,
+        params: &[astgraph::Parameter],
+        defnode: DefNode,
+        blk_in_ty: Type,
+    ) -> Result<Self> {
+        let _sink = &mut Vec::new();
+
+        let mut blk = Block::construct(
+            compiler,
+            // TODO this is wrong! maybe Block doesn't require intrinsic node? Just Op node??
+            defnode.into(),
+            blk_in_ty,
+            Some(&mut self),
+            _sink,
+        );
+
+        let mut args = Vec::with_capacity(params.len());
+
+        for astgraph::Parameter { name, ty } in params {
+            let arg = blk.next_arg()?.supplied(None)?;
+
+            let arg = match ty {
+                Some(ty) => arg.returns(ty.clone())?,
+                None => arg,
+            }
+            .concrete()?;
+
+            args.push((Str::new(name.str()), arg));
+        }
+
+        for (name, arg) in args {
+            self.add_param(name, arg);
+        }
+
+        Ok(self)
     }
 }
 

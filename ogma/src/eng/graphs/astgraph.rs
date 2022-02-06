@@ -21,7 +21,7 @@ impl Deref for AstGraph {
 pub enum AstNode {
     Op { op: Tag, blk: Tag },
     Intrinsic { op: Tag },
-    Def(Vec<ast::Parameter>),
+    Def(Vec<Parameter>),
     Flag(Tag),
     Ident(Tag),
     Num { val: Number, tag: Tag },
@@ -46,6 +46,27 @@ pub enum Relation {
     Term(u8),
 }
 
+/// Engine equivalent of [`ast::Parameter`].
+#[derive(Debug)]
+pub struct Parameter {
+    pub name: Tag,
+    pub ty: Option<Type>,
+}
+
+impl Parameter {
+    fn from_ast(param: &ast::Parameter, tys: &types::Types) -> Result<Self> {
+        let ast::Parameter { ident, ty } = param;
+
+        let name = ident.clone();
+        let ty = ty
+            .as_ref()
+            .map(|t| tys.get_using_tag(t).map(Clone::clone))
+            .transpose()?;
+
+        Ok(Self { name, ty })
+    }
+}
+
 /// Initialises the syntax graph decomposing the expression.
 ///
 /// This:
@@ -56,7 +77,7 @@ pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<AstGraph> {
     let mut graph = AstGraph(Default::default());
 
     graph.flatten_expr(expr);
-    while graph.expand_defs(defs.impls())? {}
+    while graph.expand_defs(defs)? {}
 
     Ok(graph)
 }
@@ -118,7 +139,7 @@ impl AstGraph {
     }
 
     /// Returns `true` if definitions were found and expanded.
-    fn expand_defs(&mut self, impls: &Implementations) -> Result<bool> {
+    fn expand_defs(&mut self, defs: &Definitions) -> Result<bool> {
         // it should be fastest just to filter the nodes and test edges rather than going through
         // .sinks
 
@@ -138,13 +159,13 @@ impl AstGraph {
 
         for op in ops {
             expanded = true;
-            self.expand_def(op, impls)?;
+            self.expand_def(op, defs)?;
         }
 
         Ok(expanded)
     }
 
-    fn expand_def(&mut self, opnode: OpNode, impls: &Implementations) -> Result<()> {
+    fn expand_def(&mut self, opnode: OpNode, defs: &Definitions) -> Result<()> {
         let opnode = NodeIndex::from(opnode);
 
         let op = self[opnode]
@@ -152,6 +173,8 @@ impl AstGraph {
             .expect("opnode must be an Op variant")
             .0
             .clone();
+
+        let impls = defs.impls();
 
         if !impls.contains_op(op.str()) {
             return Err(Error::op_not_found(&op));
@@ -168,7 +191,14 @@ impl AstGraph {
                     self.0.add_node(AstNode::Intrinsic { op: op.clone() })
                 }
                 Implementation::Definition(def) => {
-                    let cmd = self.0.add_node(AstNode::Def(def.params.clone()));
+                    let tys = defs.types();
+                    let params = def
+                        .params
+                        .iter()
+                        .map(|p| Parameter::from_ast(p, tys))
+                        .collect::<Result<Vec<Parameter>>>()?;
+
+                    let cmd = self.0.add_node(AstNode::Def(params));
                     let expr = self.flatten_expr(def.expr.clone());
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
@@ -407,6 +437,18 @@ impl AstGraph {
             .expect("definition node should have a sub expression")
     }
 
+    pub fn first_op(&self, node: ExprNode) -> OpNode {
+        debug_assert!(
+            matches!(self[node.idx()], AstNode::Expr(_)),
+            "expecting an expression node"
+        );
+
+        self.neighbors(node.idx())
+            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
+            .last()
+            .expect("all expressions have at least one block op node")
+    }
+
     /// Get the next op after `op` in the expression, if there is one.
     pub fn next_op(&self, op: OpNode) -> Option<OpNode> {
         // TODO -- test this..
@@ -437,6 +479,14 @@ impl AstNode {
     pub fn op(&self) -> Option<(&Tag, &Tag)> {
         match self {
             AstNode::Op { op, blk } => Some((op, blk)),
+            _ => None,
+        }
+    }
+
+    /// If this is a def node, returns the params as `Some`.
+    pub fn def(&self) -> Option<&[Parameter]> {
+        match self {
+            AstNode::Def(x) => Some(x.as_slice()),
             _ => None,
         }
     }

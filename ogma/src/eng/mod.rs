@@ -27,6 +27,7 @@ pub(crate) use self::{
 ///
 /// TODO: reduce the size of this, possibly by boxing the Hold??
 /// TODO: Move into `arg` module.
+#[derive(Debug, Clone)]
 pub struct Argument {
     /// The argument tag.
     pub tag: Tag,
@@ -36,6 +37,7 @@ pub struct Argument {
 }
 
 // TODO move this into `arg` module??
+#[derive(Debug, Clone)]
 enum Hold {
     Lit(Value),
     // TODO -- this needs some thought,

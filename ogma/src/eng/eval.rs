@@ -2,7 +2,7 @@
 
 use super::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Stack {
     #[cfg(debug_assertions)]
     pub in_ty: Type,
