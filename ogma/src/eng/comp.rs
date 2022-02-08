@@ -47,11 +47,15 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
 
         eprintln!("Assigning variable types");
         if compiler.assign_variable_types() {
+            eprintln!("✅ SUCCESS");
             continue;
         }
 
         eprintln!("Inserting available def locals");
-        compiler.insert_available_def_locals();
+        if compiler.insert_available_def_locals() {
+            eprintln!("✅ SUCCESS");
+            continue;
+        }
 
         eprintln!("Compiling blocks");
         match compiler.compile_blocks() {
@@ -63,9 +67,13 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         }
 
         eprintln!("Inferring inputs");
-        if compiler.infer_inputs() {
-            eprintln!("✅ SUCCESS");
-            continue;
+        match compiler.infer_inputs() {
+            Ok(true) => {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
+            Err(e) => err = Some(e),
+            _ => (),
         }
 
         eprintln!("Inferring outputs");
@@ -75,6 +83,9 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         }
 
         // if we get here we should error, could not progress on any steps
+        // output the state of the compiler...
+        compiler.write_debug_report("debug-compiler.md");
+
         return Err(err.unwrap_or_else(||
                 Error {
                     cat: err::Category::Semantics,
@@ -107,6 +118,10 @@ pub struct Compiler<'d> {
 }
 
 impl<'d> Compiler<'d> {
+    pub fn ag(&self) -> &AstGraph {
+        &self.ag
+    }
+
     fn init_tg(&mut self, root_ty: Type) {
         // apply ast known types and link edges
         self.tg.apply_ast_types(&self.ag);
@@ -223,8 +238,6 @@ impl<'d> Compiler<'d> {
 
                 let block = Block::construct(self, cmd_node, in_ty, locals.as_mut(), chgs);
 
-                dbg!(block.op_tag());
-
                 // TODO -- rather store the func in Intrinsic,
                 Step::compile(self.defs.impls(), block).map(|step| (step, locals))
             }
@@ -233,7 +246,11 @@ impl<'d> Compiler<'d> {
                 // if so, wrap that in a Step and call it done!
                 let expr = DefNode(cmd_node.idx()).expr(&self.ag);
                 match self.compiled_exprs.get(&expr.index()) {
-                    Some(stack) => todo!("wrap in a step"),
+                    Some(stack) => {
+                        let step = Step::from(stack.clone());
+                        let locals = self.locals.get(&opnode.index()).cloned();
+                        Ok((step, locals))
+                    }
                     None => {
                         // there is not, but we can add to the TG that this sub-expression will
                         // have input of `in_ty`.
@@ -252,7 +269,7 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    fn infer_inputs(&mut self) -> bool {
+    fn infer_inputs(&mut self) -> Result<bool> {
         // we get _lowest_ nodes that are:
         // 1. Op variants,
         // 2. are not compiled,
@@ -267,14 +284,25 @@ impl<'d> Compiler<'d> {
             && self.tg[n].input.is_unknown()
         });
 
-        let mut chgs = infer_nodes
+        let x = infer_nodes
             .into_iter()
-            .map(OpNode) // we filter to just Ops
-            .filter_map(|n| ty::infer::input(n, self).map(|t| (n, t)))
-            .map(|(node, ty)| tygraph::Chg::InferInput(node.idx(), ty))
-            .collect::<Vec<_>>();
+            .map(OpNode) // we've filtered to just Ops
+            .fold((Vec::new(), None), |(mut chgs, mut err), op| {
+                match ty::infer::input(op, self) {
+                    Ok(ty) => chgs.push(tygraph::Chg::InferInput(op.idx(), ty)),
+                    Err(e) if chgs.is_empty() => {
+                        err = Some(e.crate_err(self.ag[op.idx()].op().unwrap().1))
+                    }
+                    _ => (),
+                }
 
-        self.apply_tg_chgs(chgs.into_iter())
+                (chgs, err)
+            });
+
+        match x {
+            (chgs, Some(err)) if chgs.is_empty() => Err(err),
+            (chgs, _) => Ok(self.apply_tg_chgs(chgs.into_iter())),
+        }
     }
 
     fn infer_outputs(&mut self) -> bool {
@@ -315,11 +343,10 @@ impl<'d> Compiler<'d> {
 
     /// Assign types to variables by looking in the block's `Locals`.
     ///
-    /// Assigns types to variables by seeing there is an input `Locals` for the block's Op, and
+    /// Assigns types to variables by seeing if there is an input `Locals` for the block's Op, and
     /// checking for the variable in that locals.
     ///
-    /// Errors if a variable wasn't found.
-    /// If the TG is altered, returns `Ok(true)`.
+    /// If the TG is altered, returns `true`.
     fn assign_variable_types(&mut self) -> bool {
         let chgs = self
             .ag
@@ -336,7 +363,7 @@ impl<'d> Compiler<'d> {
             .filter_map(|(n, v, l)| {
                 l.get(v.str()).map(|v| match v {
                     Local::Var(v) => tygraph::Chg::KnownOutput(n, v.ty().clone()),
-                    _ => todo!("haven't handled params yet!"),
+                    Local::Param(x) => tygraph::Chg::KnownOutput(n, x.out_ty().clone()),
                 })
             })
             .collect::<Vec<tygraph::Chg>>();
@@ -357,8 +384,6 @@ impl<'d> Compiler<'d> {
     /// This function is recursive, it walks through child expression arguments and also inserts
     /// the locals entry into the _first_ op node.
     fn insert_locals(&mut self, locals: Locals, op: OpNode) {
-        dbg!(op, &self.ag[op.idx()]);
-
         let _is_empty = self.locals.insert(op.index(), locals.clone()).is_none();
 
         debug_assert!(
@@ -382,7 +407,7 @@ impl<'d> Compiler<'d> {
     /// Looks at the `Def` command nodes and builds a `Locals` for the first op if:
     /// 1. The parent op has an available locals to scaffold off, and
     /// 2. _All_ parameters have a known type.
-    fn insert_available_def_locals(&mut self) {
+    fn insert_available_def_locals(&mut self) -> bool {
         struct D {
             def: DefNode,
             parent: OpNode,
@@ -390,45 +415,116 @@ impl<'d> Compiler<'d> {
             in_ty: Type,
         }
 
-        let defs = self
-            .ag
-            .node_indices()
-            // filter to just Def nodes
-            .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
-            // map to a D structure
-            .map(|def| D {
-                def,
-                parent: def.parent(&self.ag),
-                first: def.expr(&self.ag).first_op(&self.ag),
-                in_ty: Type::Nil,
-            })
-            // check that the op does not already have a locals map
-            .filter(|d| !self.locals.contains_key(&d.first.index()))
-            // get the input type of parent block
-            .filter_map(|d| {
-                self.tg[d.parent.idx()].input.ty().map(|ty| D {
-                    in_ty: ty.clone(),
-                    ..d
+        // repeat the process since a Def might have sub-Defs which would get processed by this.
+        let mut defs = Vec::new();
+        let mut skip = HashSet::default();
+
+        let mut chgd = false;
+        let tg_chgs = &mut Vec::new();
+
+        loop {
+            let getdefs = self
+                .ag
+                .node_indices()
+                // filter to just Def nodes
+                .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
+                // skip any defs previously processed
+                .filter(|def| !skip.contains(def))
+                // map to a D structure
+                .map(|def| D {
+                    def,
+                    parent: def.parent(&self.ag),
+                    first: def.expr(&self.ag).first_op(&self.ag),
+                    in_ty: Type::Nil,
                 })
-            })
-            // get the Locals of the parent Op node
-            .filter_map(|d| self.locals.get(&d.parent.index()).map(|l| (d, l.clone())))
-            .collect::<Vec<_>>();
+                // check that the op does not already have a locals map
+                .filter(|d| !self.locals.contains_key(&d.first.index()))
+                // get the input type of parent block
+                .filter_map(|d| {
+                    self.tg[d.parent.idx()].input.ty().map(|ty| D {
+                        in_ty: ty.clone(),
+                        ..d
+                    })
+                })
+                // get the Locals of the parent Op node
+                .filter_map(|d| self.locals.get(&d.parent.index()).map(|l| (d, l.clone())));
 
-        for (d, mut locals) in defs {
-            let D {
-                def,
-                parent,
-                first,
-                in_ty,
-            } = d;
+            defs.clear();
+            defs.extend(getdefs);
 
-            let params = self.ag[def.idx()].def().expect("filtered to def node");
+            if defs.is_empty() {
+                break; // finish the loop, no more to do
+            }
 
-            if let Ok(locals) = locals.inject_params(self, params, def, in_ty) {
-                self.insert_locals(locals, first);
+            for (d, locals) in defs.drain(..) {
+                let D {
+                    def,
+                    parent: _,
+                    first,
+                    in_ty,
+                } = d;
+
+                skip.insert(def);
+
+                let params = self.ag[def.idx()].def().expect("filtered to def node");
+
+                if let Ok(locals) = locals.inject_params(self, params, def, in_ty, tg_chgs) {
+                    chgd = true;
+                    self.insert_locals(locals, first);
+                }
             }
         }
+
+        let tg_chgd = self.apply_tg_chgs(tg_chgs.drain(..));
+
+        chgd || tg_chgd
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<'a> Compiler<'a> {
+    pub fn write_debug_report<F: AsRef<std::path::Path>>(&self, file: F) {
+        use std::fmt::Write;
+        let mut report = String::new();
+
+        writeln!(&mut report, "# Compiler Debug Report").unwrap();
+
+        writeln!(&mut report, "## AST Graph Nodes").unwrap();
+        writeln!(&mut report, "---").unwrap();
+        self.ag.debug_write_table_of_nodes(&mut report);
+
+        writeln!(&mut report, "## AST Graph Chart").unwrap();
+        writeln!(&mut report, "---").unwrap();
+        self.ag.debug_write_flowchart(&self.tg, &mut report);
+
+        writeln!(&mut report, "## Type Graph Chart").unwrap();
+        writeln!(&mut report, "---").unwrap();
+        self.tg.debug_write_flowchart(&self.ag, &mut report);
+
+        writeln!(&mut report, "## Current Locals").unwrap();
+        writeln!(&mut report, "---").unwrap();
+        self.debug_locals_map(&mut report).unwrap();
+
+        let path = file.as_ref();
+
+        std::fs::write(path, report).unwrap();
+    }
+
+    fn debug_locals_map(&self, buf: &mut String) -> std::fmt::Result {
+        use std::fmt::Write;
+
+        writeln!(buf, "```")?;
+        for (n, _locals) in self.locals.iter() {
+            writeln!(
+                buf,
+                "{} :: {}",
+                n,
+                self.ag[petgraph::prelude::NodeIndex::from(*n as u32)]
+            )?;
+        }
+        writeln!(buf, "```")?;
+
+        Ok(())
     }
 }
 
@@ -527,21 +623,24 @@ impl Locals {
         params: &[astgraph::Parameter],
         defnode: DefNode,
         blk_in_ty: Type,
+        tygraph_chgs: &mut Vec<tygraph::Chg>,
     ) -> Result<Self> {
-        let _sink = &mut Vec::new();
-
         let mut blk = Block::construct(
             compiler,
-            // TODO this is wrong! maybe Block doesn't require intrinsic node? Just Op node??
             defnode.into(),
             blk_in_ty,
             Some(&mut self),
-            _sink,
+            tygraph_chgs,
         );
+
+        dbg!(blk.op_tag());
+        dbg!(blk.blk_tag());
+        dbg!(blk.in_ty());
 
         let mut args = Vec::with_capacity(params.len());
 
         for astgraph::Parameter { name, ty } in params {
+            dbg!(name, ty);
             let arg = blk.next_arg()?.supplied(None)?;
 
             let arg = match ty {
@@ -626,7 +725,10 @@ mod tests {
     #[test]
     fn compilation_test_06() {
         // lets test a def!
+        eprintln!("TEST #1 ------- \\ 3 | = 3");
         compile("\\ 3 | = 3").unwrap();
+
+        eprintln!("TEST #1 ------- \\ 3 | > 2");
         compile("\\ 3 | > 2").unwrap();
     }
 

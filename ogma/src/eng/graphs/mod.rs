@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt;
 
 pub mod astgraph;
 pub mod tygraph;
@@ -9,7 +10,7 @@ pub mod tygraph;
 macro_rules! wrapr {
     ($( $name:ident )*) => {
         $(
-            #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+            #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
             pub struct $name(pub petgraph::prelude::NodeIndex);
             impl $name {
                 pub fn idx(self) -> petgraph::prelude::NodeIndex {
@@ -40,6 +41,43 @@ impl From<DefNode> for CmdNode {
     fn from(x: DefNode) -> Self {
         CmdNode(x.0)
     }
+}
+
+#[cfg(debug_assertions)]
+fn debug_write_flowchart<N, E, W, F1, F2>(
+    g: &petgraph::stable_graph::StableGraph<N, E>,
+    buf: &mut W,
+    mut node_disp: F1,
+    mut edge_disp: F2,
+) -> fmt::Result
+where
+    W: fmt::Write,
+    F1: FnMut(petgraph::graph::NodeIndex, &N, &mut W) -> fmt::Result,
+    F2: FnMut(&E, &mut W) -> fmt::Result,
+{
+    writeln!(buf, "```mermaid")?;
+    writeln!(buf, "flowchart TD")?;
+
+    // nodes
+    for (idx, node) in g.node_indices().map(|i| (i, &g[i])) {
+        write!(buf, "i{}[\"", idx.index())?;
+        node_disp(idx, node, buf)?;
+        writeln!(buf, "\"]")?;
+    }
+
+    writeln!(buf)?;
+
+    // edges
+    for (edge, (src, dst)) in g
+        .edge_indices()
+        .map(|e| (&g[e], g.edge_endpoints(e).unwrap()))
+    {
+        write!(buf, "i{} -- \"", src.index())?;
+        edge_disp(edge, buf)?;
+        writeln!(buf, "\" --> i{}", dst.index())?;
+    }
+
+    writeln!(buf, "```")
 }
 
 #[cfg(test)]
@@ -361,7 +399,7 @@ mod tests {
             output: Knowledge::Unknown,
         };
 
-        assert_eq!(tg.edge_count(), 4);
+        assert_eq!(tg.edge_count(), 8);
 
         assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
         assert_eq!(tg.node_weight(1.into()), Some(&def())); // =
@@ -385,5 +423,10 @@ mod tests {
 
         assert_eq!(getedge(4, 5), &Flow::II); // eq $rhs -> eq: II
         assert_eq!(getedge(5, 4), &Flow::OO); // eq -> eq $rhs: OO
+
+        assert_eq!(getedge(1, 3), &Flow::II); // = -> Def: II
+        assert_eq!(getedge(3, 4), &Flow::II); // Def -> eq $rhs: II
+        assert_eq!(getedge(4, 3), &Flow::OO); // eq $rhs -> Def: OO
+        assert_eq!(getedge(3, 1), &Flow::OO); // Def -> =: OO
     }
 }

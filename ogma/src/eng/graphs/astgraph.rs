@@ -350,7 +350,6 @@ impl AstGraph {
             .filter_map(|e| e.weight().term().map(|i| (i, e.source())));
 
         for (i, node) in terms {
-            dbg!(i, node);
             let i = i as usize;
             if i >= v.len() {
                 v.resize(i + 1, None);
@@ -380,6 +379,47 @@ impl AstGraph {
             }
             Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
         }
+    }
+}
+
+#[cfg(debug_assertions)]
+impl AstGraph {
+    pub fn debug_write_table_of_nodes(&self, buf: &mut String) {
+        use std::fmt::Write;
+
+        writeln!(buf, "```kserd").unwrap();
+        writeln!(buf, r#"header = ["Index","AST Node"]"#).unwrap();
+        writeln!(buf, "data = [").unwrap();
+
+        for (idx, node) in self.node_indices().map(|i| (i, &self[i])) {
+            writeln!(buf, "    [{},\"{}\"]", idx.index(), node).unwrap();
+        }
+
+        writeln!(buf, "]").unwrap();
+        writeln!(buf, "rowslim = 200").unwrap();
+        writeln!(buf, "```").unwrap();
+    }
+
+    pub fn debug_write_flowchart(&self, tg: &super::tygraph::TypeGraph, buf: &mut String) {
+        use fmt::Write;
+
+        super::debug_write_flowchart(
+            self,
+            buf,
+            |idx, node, buf| {
+                let tynode = &tg[idx];
+                write!(
+                    buf,
+                    "{idx} :: {ast} <br> {input} & {output}",
+                    idx = idx.index(),
+                    ast = node,
+                    input = tynode.input,
+                    output = tynode.output,
+                )
+            },
+            |edge, buf| write!(buf, "{:?}", edge),
+        )
+        .unwrap()
     }
 }
 
@@ -441,6 +481,24 @@ impl AstNode {
     }
 }
 
+impl fmt::Display for AstNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use AstNode::*;
+
+        match self {
+            Op { op, blk } => write!(f, "Op({})", op.str()),
+            Intrinsic { op } => write!(f, "Intrinsic"),
+            Def(_) => write!(f, "Def"),
+            Flag(t) => write!(f, "Flag(--{})", t.str()),
+            Ident(x) => write!(f, "Ident({})", x.str()),
+            Num { val, tag } => write!(f, "Num({})", val),
+            Pound { ch, tag } => write!(f, "Pound(#{})", ch),
+            Var(t) => write!(f, "Var(${})", t.str()),
+            Expr(t) => write!(f, "Expr({})", t.str()),
+        }
+    }
+}
+
 impl Relation {
     pub fn is_normal(&self) -> bool {
         matches!(self, Relation::Normal)
@@ -448,6 +506,11 @@ impl Relation {
 
     pub fn is_key(&self) -> bool {
         matches!(self, Relation::Keyed(_))
+    }
+
+    /// Returns if this relation is keyed, but **not** on a type.
+    pub fn keyed_none(&self) -> bool {
+        matches!(self, Relation::Keyed(None))
     }
 
     pub fn term(&self) -> Option<u8> {

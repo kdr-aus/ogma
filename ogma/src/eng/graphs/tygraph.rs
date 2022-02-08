@@ -1,6 +1,6 @@
 use super::*;
-use ::petgraph::prelude::*;
 use astgraph::*;
+use petgraph::prelude::*;
 use std::ops::Deref;
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
@@ -131,8 +131,6 @@ impl TypeGraph {
         // Be careful here since the expression may be an argument and link to an command node
         let op_neighbors = |expr| ag.neighbors(expr).filter(|&n| ag[n].op().is_some());
 
-        dbg!(self.edge_count());
-
         // The input of an expression goes to the input of the first op
         for &expr in &exprs {
             if let Some(op) = op_neighbors(expr).last() {
@@ -141,8 +139,6 @@ impl TypeGraph {
             }
         }
 
-        dbg!(self.edge_count());
-
         // the output of the last op in an expression to the output of the expression
         for &expr in &exprs {
             if let Some(op) = op_neighbors(expr).next() {
@@ -150,8 +146,6 @@ impl TypeGraph {
                 self.0.add_edge(op, expr, Flow::OO); // output -> output
             }
         }
-
-        dbg!(self.edge_count());
 
         // the output of a block into the input of the next block
         for &expr in &exprs {
@@ -163,9 +157,30 @@ impl TypeGraph {
             }
         }
 
-        dbg!(self.edge_count());
-
         // TODO: handle defs
+        // Do I have to? I am not so sure anymore if the type flow is set like this??
+        // So far yes, since it helps the TG
+        for def in ag
+            .node_indices()
+            .filter_map(|n| ag[n].def().map(|_| DefNode(n)))
+            .filter(|def| {
+                ag.edges_directed(def.idx(), Incoming)
+                    .any(|e| e.weight().keyed_none())
+            })
+        {
+            let op = def.parent(ag).idx();
+            let expr = def.expr(ag).idx();
+            let def = def.idx();
+
+            // flow the input of the op into the input of this Def
+            self.0.add_edge(op, def, Flow::II);
+            // flow the input of the Def into the expression
+            self.0.add_edge(def, expr, Flow::II);
+            // flow the output of the expression into the Def
+            self.0.add_edge(expr, def, Flow::OO);
+            // flow the output of the Def into the Op
+            self.0.add_edge(def, op, Flow::OO);
+        }
     }
 
     pub fn set_root_input_ty(&mut self, ty: Type) {
@@ -294,6 +309,31 @@ impl TypeGraph {
     }
 }
 
+#[cfg(debug_assertions)]
+impl TypeGraph {
+    pub fn debug_write_flowchart(&self, ag: &AstGraph, buf: &mut String) {
+        use fmt::Write;
+
+        super::debug_write_flowchart(
+            self,
+            buf,
+            |idx, node, buf| {
+                let ast_node = &ag[idx];
+                write!(
+                    buf,
+                    "{idx} :: {ast} <br> {input} & {output}",
+                    idx = idx.index(),
+                    input = node.input,
+                    output = node.output,
+                    ast = ast_node
+                )
+            },
+            |edge, buf| write!(buf, "{:?}", edge),
+        )
+        .unwrap()
+    }
+}
+
 impl Node {
     /// Returns true if both the input and output both have types available to them.
     /// That is, either one will return `Some` when a `.ty()` call is made.
@@ -360,6 +400,20 @@ impl Knowledge {
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
 
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
+        }
+    }
+}
+
+impl fmt::Display for Knowledge {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Knowledge::*;
+
+        match self {
+            Known(t) => write!(f, "Known({})", t),
+            Obliged(t) => write!(f, "Obliged({})", t),
+            Inferred(t) => write!(f, "Inferred({})", t),
+            Any => write!(f, "Any"),
+            Unknown => write!(f, "Unknown"),
         }
     }
 }

@@ -122,7 +122,8 @@ pub fn help_as_error(msg: &HelpMessage) -> Error {
 }
 
 // ###### ERROR ################################################################
-fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
+/// Create a single trace item using the tag.
+pub fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
     vec![Trace::from_tag(tag, desc)]
 }
 

@@ -25,6 +25,50 @@ impl Stack {
             out_ty: Type::Nil,
         }
     }
+
+    pub fn eval(&self, value: Value, cx: Context) -> Result<(Value, Environment)> {
+        debug_assert_eq!(
+            value.ty(),
+            self.in_ty,
+            "expecting input value into Stack to match Stack's input type"
+        );
+
+        let Context { mut env, root, wd } = cx;
+
+        let mut input = value;
+        for step in &self.steps {
+            let cx = Context { env, root, wd };
+            let (output, new_env) = step.invoke(input, cx)?;
+            input = output;
+            env = new_env;
+        }
+
+        debug_assert_eq!(
+            input.ty(),
+            self.out_ty,
+            "expecting the output value once evaluated to match Stack's output type"
+        );
+
+        Ok((input, env))
+    }
+}
+
+impl From<Stack> for Step {
+    fn from(stack: Stack) -> Step {
+        let out_ty = stack
+            .steps
+            .last()
+            .expect("at least one step")
+            .out_ty
+            .clone();
+        let f = Arc::new(move |value: Value, cx: Context| stack.eval(value, cx));
+
+        Step {
+            out_ty,
+            f,
+            type_annotation: String::new(),
+        }
+    }
 }
 
 /// Evaluator of an expression.

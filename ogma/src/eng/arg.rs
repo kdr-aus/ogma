@@ -113,17 +113,11 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             out_ty,
         } = self;
 
-        dbg!("here");
-
         match (in_ty, out_ty) {
             (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
             (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
-                dbg!(&in_ty, &out_ty);
-
                 let hold = Self::map_astnode_into_hold(blk, node)?;
-
-                dbg!("hold should not fail");
 
                 Ok(Argument {
                     tag,
@@ -159,16 +153,28 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
                         .ok_or_else(|| Error::var_not_found(tag))
                 })
                 .map(|local| match local {
-                    Local::Var(var) => var.clone(),
-                    Local::Param(_) => todo!("need to handle params"),
-                })
-                .map(Hold::Var),
-            Expr(tag) => blk
-                .compiled_exprs
-                .get(&node.index())
-                .cloned()
-                .map(Hold::Expr)
-                .ok_or_else(|| Error::incomplete_expr_compilation(tag)),
+                    Local::Var(var) => Hold::Var(var.clone()),
+                    Local::Param(arg) => {
+                        dbg!(&arg);
+                        // debug checking about types here
+                        #[cfg(debug_assertions)]
+                        {
+                            let tys = &blk.tg[node.idx()];
+                            assert_eq!(tys.output.ty(), Some(arg.out_ty()));
+                            assert_eq!(tys.input.ty(), Some(arg.in_ty()));
+                        }
+
+                        arg.hold.clone()
+                    }
+                }),
+            Expr(tag) => {
+                dbg!(&tag);
+                blk.compiled_exprs
+                    .get(&node.index())
+                    .cloned()
+                    .map(Hold::Expr)
+                    .ok_or_else(|| Error::incomplete_expr_compilation(tag))
+            }
         }
     }
 
@@ -215,7 +221,6 @@ impl<'a> Block<'a> {
         let node = self.pop_index()?;
         // see if the input and/or output types are known
         let tys = &self.tg[node.idx()]; // node should exist
-        dbg!(tys);
         let in_ty = Kn::from(&tys.input);
         let out_ty = Kn::from(&tys.output);
 
