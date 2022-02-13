@@ -67,7 +67,10 @@ pub fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, C
 
         // set the OUTPUT of the block to 'ty'
         let mut compiler = compiler.clone();
-        let chgd = compiler.apply_tg_chgs(std::iter::once(tygraph::Chg::InferOutput(op.idx(), ty.clone())));
+        let chgd = compiler.apply_tg_chgs(std::iter::once(tygraph::Chg::InferOutput(
+            op.idx(),
+            ty.clone(),
+        )));
 
         if !chgd {
             continue; // no point in trying to compile if nothing changed
@@ -76,11 +79,11 @@ pub fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, C
         // recurse into compile call -- breaking when the parent expr gets compiled
         match compiler.compile(parent) {
             Ok(compiler) => {
-            eprintln!("🏁 Able to be compiled with output type: {}", _name);
+                eprintln!("🏁 Able to be compiled with output type: {}", _name);
 
-        // break early, output inferring is greedy
-        return Ok(compiler);
-            },
+                // break early, output inferring is greedy
+                return Ok(compiler);
+            }
             Err(_) => (), // continue
         }
     }
