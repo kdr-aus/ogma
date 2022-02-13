@@ -20,6 +20,7 @@ lazy_static = "1"
 nom = "7"
 notify = "4"
 paste = "1"
+petgraph = "0.6"
 serde = { version = "1", features = ["derive"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
 encoding = "0.2"

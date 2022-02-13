@@ -62,24 +62,39 @@ optionally specify a default value if the get type does not match"
 fn get_intrinsic(mut blk: Block) -> Result<Step> {
     match blk.in_ty().clone() {
         Ty::TabRow => {
-            let colarg = blk.next_arg(Type::Nil)?.returns(&Ty::Str)?;
-            let get_type = match blk
-                .next_arg(Type::Nil)
-                .ok()
-                .map(Box::new)
-                .map(TableGetType::Default)
-            {
-                Some(x) => x,
-                None => TableGetType::Flag(type_flag(&mut blk, Type::Num)?),
+            let colarg = blk
+                .next_arg()?
+                .supplied(Type::Nil)?
+                .returns(Ty::Str)?
+                .concrete()?;
+            // this is the default arg: 'get foo 0'
+            let get_type = match blk.args_len() {
+                1 => blk
+                    .next_arg()?
+                    .supplied(Type::Nil)?
+                    .concrete()
+                    .map(Box::new)
+                    .map(TableGetType::Default)?,
+                // use the type flag
+                _ => type_flag(&mut blk)
+                    .and_then(|ty| {
+                        // otherwise try to infer the output
+                        ty.map(Ok).unwrap_or_else(|| {
+                            blk.output_ty()
+                                .ok_or_else(|| Error::unknown_blk_output_type(blk.blk_tag()))
+                        })
+                    })
+                    .map(TableGetType::Flag)?,
             };
+
             blk.eval(get_type.ty().clone(), move |x, cx| {
                 let trow: TableRow = x.try_into()?;
                 table_row_get(&trow, &colarg, &get_type, cx)
             })
         }
         t => {
-            let field_arg = blk.next_arg(None)?;
-            let (facc, out_ty) = FieldAccessor::construct(&t, &field_arg, &blk.op_tag)?;
+            let field_arg = blk.next_arg()?.supplied(None)?.concrete()?;
+            let (facc, out_ty) = FieldAccessor::construct(&t, &field_arg, blk.op_tag())?;
             blk.eval(out_ty, move |input, cx| {
                 facc.get(input).and_then(|x| cx.done(x))
             })
@@ -137,7 +152,7 @@ impl FieldAccessor {
                 // TypeDefs can use `get` to access a field, so only works for product types.
                 // The field is checked, then the accessor index is passed through for the eval Step
                 if !matches!(tydef.structure(), types::TypeVariant::Product(_)) {
-                    let mut err = Error::wrong_input_type(ty, err_tag);
+                    let mut err = Error::wrong_op_input_type(ty, err_tag);
                     err.help_msg = Some("types with `sum` structure cannot be queried into".into());
                     return Err(err);
                 }
@@ -158,7 +173,7 @@ impl FieldAccessor {
                 let out_ty = field.ty().clone();
                 Ok((FieldAccessor(idx), out_ty))
             }
-            x => Err(Error::wrong_input_type(x, err_tag)),
+            x => Err(Error::wrong_op_input_type(x, err_tag)),
         }
     }
 
@@ -195,26 +210,28 @@ impl ast::DotOperatorBlock {
     /// Consists of 2 terms: `input.field`.
     /// For TableRow input we handle separately
     fn instrinsic(mut blk: Block) -> Result<Step> {
-        let input = blk.next_arg(None)?;
-        let field = blk.next_arg(Ty::Nil)?;
-        match input.out_ty() {
-            Ty::TabRow => {
-                let colarg = field.returns(&Ty::Str)?;
-                let ty = TableGetType::Flag(Type::Num); // '.' does not support flags
-                blk.eval(ty.ty().clone(), move |lhs_input, cx| {
-                    let trow: TableRow = input.resolve(|| lhs_input, &cx)?.try_into()?;
-                    table_row_get(&trow, &colarg, &ty, cx)
-                })
-            }
-            x => {
-                let (facc, out_ty) = FieldAccessor::construct(x, &field, &blk.op_tag)?;
+        todo!();
 
-                blk.eval(out_ty, move |lhs_input, cx| {
-                    let input = input.resolve(|| lhs_input, &cx)?;
-                    facc.get(input).and_then(|x| cx.done(x))
-                })
-            }
-        }
+        //         let input = blk.next_arg(None)?;
+        //         let field = blk.next_arg(Ty::Nil)?;
+        //         match input.out_ty() {
+        //             Ty::TabRow => {
+        //                 let colarg = field.returns(&Ty::Str)?;
+        //                 let ty = TableGetType::Flag(Type::Num); // '.' does not support flags
+        //                 blk.eval(ty.ty().clone(), move |lhs_input, cx| {
+        //                     let trow: TableRow = input.resolve(|| lhs_input, &cx)?.try_into()?;
+        //                     table_row_get(&trow, &colarg, &ty, cx)
+        //                 })
+        //             }
+        //             x => {
+        //                 let (facc, out_ty) = FieldAccessor::construct(x, &field, &blk.op_tag)?;
+        //
+        //                 blk.eval(out_ty, move |lhs_input, cx| {
+        //                     let input = input.resolve(|| lhs_input, &cx)?;
+        //                     facc.get(input).and_then(|x| cx.done(x))
+        //                 })
+        //             }
+        //         }
     }
 }
 
@@ -238,7 +255,7 @@ fn in_help() -> HelpMessage {
 }
 
 fn in_intrinsic(mut blk: Block) -> Result<Step> {
-    let arg = blk.next_arg(None)?;
+    let arg = blk.next_arg()?.supplied(None)?.concrete()?;
     blk.eval(arg.out_ty().clone(), move |val, cx| {
         arg.resolve(|| val, &cx).and_then(|x| cx.done(x))
     })
@@ -292,7 +309,7 @@ fn len_intrinsic(mut blk: Block) -> Result<Step> {
                     .and_then(|x| cx.done_o(x))
             })
         }
-        x => Err(Error::wrong_input_type(x, &blk.op_tag)),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
@@ -334,8 +351,8 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
     let mut bindings = Vec::with_capacity(blk.args_len() / 2);
 
     while blk.args_len() > 1 {
-        let e = blk.next_arg(None)?;
-        let v = blk.create_var_ref(e.out_ty().clone())?;
+        let e = blk.next_arg()?.supplied(None)?.concrete()?;
+        let v = blk.next_arg()?.create_var_ref(e.out_ty().clone())?;
         bindings.push((v, e));
     }
 
@@ -345,7 +362,7 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
     let ty = blk.in_ty().clone();
 
     let trailing_binding = if blk.args_len() > 0 {
-        let v = blk.create_var_ref(ty.clone())?;
+        let v = blk.next_arg()?.create_var_ref(ty.clone())?;
         Some(v)
     } else {
         None
@@ -398,54 +415,55 @@ Table: retrieves the nth row and applies the expression"
 }
 
 fn nth_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            let n = blk.next_arg(None)?.returns(&Ty::Num)?;
-            let expr = blk.next_arg(Ty::TabRow)?;
-            let oty = expr.out_ty().clone();
-            blk.eval(oty, move |table, cx| {
-                // nth is adj by one to account for header
-                let nth = n
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                let table = Table::try_from(table)?;
-                if nth + 1 >= table.rows_len() {
-                    return Err(Error::eval(
-                        &n.tag,
-                        "index is outside table bounds",
-                        format!("this resolves to `{}`", nth),
-                        None,
-                    ));
-                }
-
-                let trow = TableRow::new(table, Default::default(), nth + 1);
-                expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
-            })
-        }
-        Ty::Str => {
-            let n = blk.next_arg(None)?.returns(&Ty::Num)?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let nth = n
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                Str::try_from(string)
-                    .and_then(|s| {
-                        s.chars().nth(nth).ok_or_else(|| {
-                            Error::eval(
-                                &n.tag,
-                                "index is outside string bounds",
-                                format!("this resolves to `{}`", nth),
-                                None,
-                            )
-                        })
-                    })
-                    .map(String::from)
-                    .map(Str::from)
-                    .and_then(|x| cx.done_o(x))
-            })
-        }
-        x => Err(Error::wrong_input_type(x, &blk.op_tag)),
-    }
+    todo!()
+    //     match blk.in_ty() {
+    //         Ty::Tab => {
+    //             let n = blk.next_arg(None)?.returns(&Ty::Num)?;
+    //             let expr = blk.next_arg(Ty::TabRow)?;
+    //             let oty = expr.out_ty().clone();
+    //             blk.eval(oty, move |table, cx| {
+    //                 // nth is adj by one to account for header
+    //                 let nth = n
+    //                     .resolve(|| table.clone(), &cx)
+    //                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+    //                 let table = Table::try_from(table)?;
+    //                 if nth + 1 >= table.rows_len() {
+    //                     return Err(Error::eval(
+    //                         &n.tag,
+    //                         "index is outside table bounds",
+    //                         format!("this resolves to `{}`", nth),
+    //                         None,
+    //                     ));
+    //                 }
+    //
+    //                 let trow = TableRow::new(table, Default::default(), nth + 1);
+    //                 expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
+    //             })
+    //         }
+    //         Ty::Str => {
+    //             let n = blk.next_arg(None)?.returns(&Ty::Num)?;
+    //             blk.eval_o::<_, Str>(move |string, cx| {
+    //                 let nth = n
+    //                     .resolve(|| string.clone(), &cx)
+    //                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+    //                 Str::try_from(string)
+    //                     .and_then(|s| {
+    //                         s.chars().nth(nth).ok_or_else(|| {
+    //                             Error::eval(
+    //                                 &n.tag,
+    //                                 "index is outside string bounds",
+    //                                 format!("this resolves to `{}`", nth),
+    //                                 None,
+    //                             )
+    //                         })
+    //                     })
+    //                     .map(String::from)
+    //                     .map(Str::from)
+    //                     .and_then(|x| cx.done_o(x))
+    //             })
+    //         }
+    //         x => Err(Error::wrong_input_type(x, &blk.op_tag)),
+    //     }
 }
 
 // ------ Rand -----------------------------------------------------------------
@@ -480,8 +498,10 @@ rand has four ways of calling:
 fn rand_intrinsic(mut blk: Block) -> Result<Step> {
     let args = blk.args_len();
     let mut next_num = || {
-        blk.next_arg(None)
-            .and_then(|x| x.returns(&Ty::Num))
+        blk.next_arg()
+            .and_then(|x| x.supplied(None))
+            .and_then(|x| x.returns(Ty::Num))
+            .and_then(|x| x.concrete())
             .map(Some)
     };
 
@@ -499,7 +519,7 @@ fn rand_intrinsic(mut blk: Block) -> Result<Step> {
         }
     }
 
-    let tag = blk.op_tag.clone();
+    let tag = blk.op_tag().clone();
 
     if args == 3 {
         let len = len.unwrap();
@@ -571,11 +591,18 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
         Table::from(::table::Table::from(t))
     }
 
-    let from = blk.next_arg(None)?.returns(&Type::Num)?;
+    blk.assert_output(Type::Tab);
+
+    let from = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Type::Num)?
+        .concrete()?;
     let alen = blk.args_len();
+    dbg!(alen);
     match (alen, blk.in_ty()) {
         (0, Ty::Num) => {
-            let blktag = blk.blk_tag.clone();
+            let blktag = blk.blk_tag().clone();
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)
@@ -585,7 +612,13 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         _ => {
-            let to = blk.next_arg(None)?.returns(&Type::Num)?;
+            dbg!("here");
+            let to = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Type::Num)?
+                .concrete()?;
+            dbg!("got next arg");
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)
@@ -618,19 +651,21 @@ fn table_help() -> HelpMessage {
 }
 
 fn table_intrinsic(mut blk: Block) -> Result<Step> {
-    // table takes zero or more arguments that resolve to Str (header name)
-    let mut names = Vec::with_capacity(blk.args_len());
-    for _ in 0..blk.args_len() {
-        names.push(blk.next_arg(None)?.returns(&Ty::Str)?);
-    }
+    todo!()
 
-    blk.eval_o(move |i, cx| {
-        let mut t = table::Table::new();
-        for name in &names {
-            t.add_col(once(name.resolve(|| i.clone(), &cx)?));
-        }
-        cx.done_o(Table::from(t))
-    })
+    //     // table takes zero or more arguments that resolve to Str (header name)
+    //     let mut names = Vec::with_capacity(blk.args_len());
+    //     for _ in 0..blk.args_len() {
+    //         names.push(blk.next_arg(None)?.returns(&Ty::Str)?);
+    //     }
+
+    //     blk.eval_o(move |i, cx| {
+    //         let mut t = table::Table::new();
+    //         for name in &names {
+    //             t.add_col(once(name.resolve(|| i.clone(), &cx)?));
+    //         }
+    //         cx.done_o(Table::from(t))
+    //     })
 }
 
 // ------ To Str ---------------------------------------------------------------
@@ -680,22 +715,23 @@ access of the fields is using `get t#` with the field number",
 }
 
 fn tuple_intrinsic(mut blk: Block) -> Result<Step> {
-    let len = blk.args_len();
-    if len < 2 {
-        return Err(Error::insufficient_args(&blk.blk_tag, len));
-    }
-    let mut v = Vec::with_capacity(len);
-    for _ in 0..len {
-        v.push(blk.next_arg(None)?);
-    }
+    todo!()
+    //     let len = blk.args_len();
+    //     if len < 2 {
+    //         return Err(Error::insufficient_args(&blk.blk_tag, len));
+    //     }
+    //     let mut v = Vec::with_capacity(len);
+    //     for _ in 0..len {
+    //         v.push(blk.next_arg(None)?);
+    //     }
 
-    let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
-
-    blk.eval(Type::Def(ty.clone()), move |input, cx| {
-        let mut data = Vec::with_capacity(v.len());
-        for arg in &v {
-            data.push(arg.resolve(|| input.clone(), &cx)?);
-        }
-        cx.done(OgmaData::new(ty.clone(), None, data))
-    })
+    //     let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
+    //
+    //     blk.eval(Type::Def(ty.clone()), move |input, cx| {
+    //         let mut data = Vec::with_capacity(v.len());
+    //         for arg in &v {
+    //             data.push(arg.resolve(|| input.clone(), &cx)?);
+    //         }
+    //         cx.done(OgmaData::new(ty.clone(), None, data))
+    //     })
 }

@@ -3,12 +3,20 @@
 use crate::prelude::*;
 
 mod arg;
+mod blk;
+mod comp;
 mod eval;
+mod graphs;
 mod hir;
+mod step;
 mod ty;
 mod var;
 
+type IndexSet = crate::HashSet<usize>;
+type IndexMap<V> = crate::HashMap<usize, V>;
+
 pub(crate) use self::{
+    comp::compile,
     eval::{DefImplEvaluator, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals, Variable},
@@ -18,6 +26,8 @@ pub(crate) use self::{
 /// Compiled argument.
 ///
 /// TODO: reduce the size of this, possibly by boxing the Hold??
+/// TODO: Move into `arg` module.
+#[derive(Debug, Clone)]
 pub struct Argument {
     /// The argument tag.
     pub tag: Tag,
@@ -26,72 +36,118 @@ pub struct Argument {
     hold: Hold,
 }
 
+// TODO move this into `arg` module??
+#[derive(Debug, Clone)]
 enum Hold {
     Lit(Value),
+    // TODO -- this needs some thought,
     Var(Variable),
-    Expr(Evaluator),
+    // TODO -- this needs some thought,
+    Expr(eval::Stack),
 }
 
 // ###### BLOCK ################################################################
 /// A compilation unit for a single [`ast::Block`].
 ///
 /// The block is foundational to the compilation engine.
-pub struct Block<'d, 'v> {
-    in_ty: Type,
-    /// The entire block tag.
-    pub blk_tag: Tag,
-    /// The operation (command) tag.
-    pub op_tag: Tag,
-    /// Definitions,
-    pub defs: &'d Definitions,
-    /// Variables tracking.
-    vars: &'v mut Locals,
+/// It acts as the interface between the engine's internal mechanisms and the implementers,
+/// exposing an API which is ergonomic, while handling all the typing and checking behind the
+/// scenes.
+pub struct Block<'a> {
+    /// The OP node index from the compiler graphs.
+    node: graphs::OpNode,
+
+    // NOTE that the input type is not referenced via the TG.
+    // This is done so that this block can be tested against differing input types for InferInput
+    /// The block's input type.
+    pub in_ty: Type,
+
+    /// The block's flags.
+    ///
     /// Must be empty upon finalisation, unused flags return error.
     ///
     /// > Stored in reverse order as a stack.
     flags: Vec<Tag>,
-    /// Does not include flags.
+    /// The blocks arguments, stored as indices into the ast graph.
+    ///
     /// Must be empty upon finalisation, unused args return error.
     ///
     /// > Stored in reverse order as a stack.
-    args: Vec<ast::Argument>,
+    args: Vec<graphs::ArgNode>,
     /// Counter of the arguments used.
-    args_count: usize,
-
-    /// A tracked type annotation code representation.
     ///
-    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
-    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
-    /// moved into that system.
-    type_annotation: String,
+    /// Only 255 arguments are supported.
+    args_count: u8,
+
+    /// Mutable local variables.
+    ///
+    /// This is similar to tg_chgs, where it is stored as a mutable reference since block is passed
+    /// by value.
+    /// Any changees made to the locals are not actually stored unless compilation succeeds.
+    locals: Option<&'a mut Locals>,
+
+    /// The compiler's ast graph.
+    ag: &'a graphs::astgraph::AstGraph,
+    /// The compiler's type graph.
+    tg: &'a graphs::tygraph::TypeGraph, // notice the immutability!
+    /// The compiler's compiled expressions.
+    compiled_exprs: &'a IndexMap<eval::Stack>,
+
+    /// A list of changes to be made to the type graph.
+    ///
+    /// This is stored as a mutable reference since the block is usually passed by value to
+    /// implementors.
+    /// Any items here are actioned by the compiler to update the type graph, providing more
+    /// information to conduct the type inferencing.
+    /// This allows for block compilation to fail but the updates still be applied.
+    tg_chgs: &'a mut Vec<graphs::tygraph::Chg>,
+
+    /// Flag that this block's output should be inferred if getting to output inferencing phase.
+    infer_output: &'a mut bool,
+
+    // TODO is this removable??
+    /// The definitions carried through.
+    pub defs: &'a Definitions,
+
+    /// Carry information about an asserted output type.
+    /// Check this against upon finalisation to ensure it matches.
+    /// Only available and checked in debug builds.
+    #[cfg(debug_assertions)]
+    output_ty: Option<Type>,
 }
 
-impl<'d, 'v> Block<'d, 'v> {
-    fn next_arg_raw(&mut self) -> Result<ast::Argument> {
-        let arg = self
-            .args
-            .pop()
-            .ok_or_else(|| Error::insufficient_args(&self.blk_tag, self.args_count))?;
-        self.args_count += 1;
-        Ok(arg)
-    }
-
-    fn finalise(&self) -> Result<()> {
+impl<'a> Block<'a> {
+    /// Carry out checks of the block's state.
+    fn finalise(&self, _out_ty: &Type) -> Result<()> {
         if let Some(flag) = self.flags.last() {
             Err(Error::unused_flag(flag))
         } else if let Some(arg) = self.args.get(0) {
-            Err(Error::unused_arg(arg))
+            todo!()
+        //             Err(Error::unused_arg(arg))
         } else {
+            #[cfg(debug_assertions)]
+            match &self.output_ty {
+                Some(t) => debug_assert_eq!(
+                    t, _out_ty,
+                    "asserted output type should match finalisation type"
+                ),
+                None => (), // no assertion, no failure
+            };
+
             Ok(())
         }
     }
 }
 
 // ###### STEP #################################################################
+
+pub trait Func<O>: Fn(Value, Context) -> O + Send + Sync + 'static {}
+impl<T, O> Func<O> for T where T: Fn(Value, Context) -> O + Send + Sync + 'static {}
+
 /// A compiled block, ready for evaluation.
 pub struct Step {
     out_ty: Type,
-    f: Box<dyn Fn(Value, Context) -> StepR + Sync>,
+    f: Arc<dyn Func<StepR>>,
 
     /// A tracked type annotation code representation.
     /// This comes directly off the block when transforming into a `Step`.

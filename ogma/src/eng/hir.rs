@@ -23,7 +23,7 @@ impl<'a> Context<'a> {
 }
 
 // ###### BLOCK ################################################################
-impl<'d, 'v> Block<'d, 'v> {
+impl<'a> Block<'a> {
     fn arg_recursive(&self, arg: ast::Argument, in_ty: Type, locals: &Locals) -> Result<Argument> {
         use ast::Argument as A;
         use eval::make_input_pound_expr;
@@ -34,39 +34,42 @@ impl<'d, 'v> Block<'d, 'v> {
             A::Pound('t', tag) => (Hold::Lit(true.into()), tag, Type::Bool),
             A::Pound('f', tag) => (Hold::Lit(false.into()), tag, Type::Bool),
             A::Pound('n', tag) => (Hold::Lit(Value::Nil), tag, Type::Nil),
-            A::Pound('i', tag) => (
-                Hold::Expr(make_input_pound_expr(in_ty.clone(), tag.clone())),
-                tag,
-                in_ty.clone(),
-            ),
+            A::Pound('i', tag) => todo!(),
+            //                 (
+            //                 Hold::Expr(make_input_pound_expr(in_ty.clone(), tag.clone())),
+            //                 tag,
+            //                 in_ty.clone(),
+            //             ),
             A::Pound(ch, tag) => return Err(Error::unknown_spec_literal(ch, &tag)),
             A::Var(var) => {
-                match locals
-                    .get(var.str())
-                    .ok_or_else(|| Error::var_not_found(&var))?
-                {
-                    Local::Param(arg, locals) => {
-                        // update result with the outside var (similar to Local::Var)
-                        return self
-                            .arg_recursive(arg.clone(), in_ty, locals)
-                            .map_err(|e| e.add_trace(&var))
-                            .map(|mut x| (x.tag = var, x).1);
-                    }
-                    Local::Var(v) => {
-                        let mut v = v.clone();
-                        // update the location of this var to give correct error reporting
-                        v.tag = var.clone();
-                        let ty = v.ty().clone();
-                        (Hold::Var(v), var, ty)
-                    }
-                }
+                todo!()
+                //                 match locals
+                //                     .get(var.str())
+                //                     .ok_or_else(|| Error::var_not_found(&var))?
+                //                 {
+                //                     Local::Param(arg, locals) => {
+                //                         // update result with the outside var (similar to Local::Var)
+                //                         return self
+                //                             .arg_recursive(arg.clone(), in_ty, locals)
+                //                             .map_err(|e| e.add_trace(&var))
+                //                             .map(|mut x| (x.tag = var, x).1);
+                //                     }
+                //                     Local::Var(v) => {
+                //                         let mut v = v.clone();
+                //                         // update the location of this var to give correct error reporting
+                //                         v.tag = var.clone();
+                //                         let ty = v.ty().clone();
+                //                         (Hold::Var(v), var, ty)
+                //                     }
+                //                 }
             }
             A::Expr(expr) => {
                 let tag = expr.tag.clone();
                 let eval = Evaluator::construct(in_ty.clone(), expr, self.defs, locals.clone())
-                    .map_err(|e| e.add_trace(&self.blk_tag))?;
+                    .map_err(|e| e.add_trace(self.blk_tag()))?;
                 let out_ty = eval.ty().clone();
-                (Hold::Expr(eval), tag, out_ty)
+                todo!()
+                //                 (Hold::Expr(eval), tag, out_ty)
             }
         };
 
@@ -76,45 +79,6 @@ impl<'d, 'v> Block<'d, 'v> {
             out_ty,
             hold,
         })
-    }
-
-    /// Generate a new compilation block from the ast node.
-    pub fn new(
-        in_ty: Type,
-        defs: &'d Definitions,
-        vars: &'v mut Locals,
-        block: ast::Block,
-    ) -> Self {
-        let blk_tag = block.block_tag();
-        let (op_tag, terms) = block.parts();
-
-        let mut flags = Vec::new();
-        // most of the time it will just be args
-        let mut args = Vec::with_capacity(terms.len());
-
-        for t in terms {
-            match t {
-                Term::Flag(f) => flags.push(f),
-                Term::Arg(a) => args.push(a),
-            }
-        }
-
-        flags.reverse();
-        args.reverse();
-
-        let type_annotation = op_tag.to_string();
-
-        Self {
-            in_ty,
-            defs,
-            blk_tag,
-            op_tag,
-            flags,
-            args,
-            args_count: 0,
-            vars,
-            type_annotation,
-        }
     }
 
     /// The input [`Type`] of the block.
@@ -127,33 +91,6 @@ impl<'d, 'v> Block<'d, 'v> {
         self.args.len()
     }
 
-    /// Get the [`Block`]'s next argument.
-    ///
-    /// The argument is agnostic to the flavour of definition, if it is a literal or variable, the
-    /// output type is set to what it is. If the argument is an expression, an evaluator is
-    /// constructed given the input type. This drives the output type.
-    ///
-    /// ## Input type
-    /// If no input type is specified (`None`), then the _blocks_ input type is used to feed into
-    /// the expression. **It must be ensured that the correct [`Value`] type is supplied to the
-    /// expression.**
-    ///
-    /// > For **input agnostic functions**, the `input_type` should be set to [`Type::Nil`] and the
-    /// > input value passed through is [`Value::Nil`].
-    pub fn next_arg<I: Into<Option<Type>>>(&mut self, input_type: I) -> Result<Argument> {
-        let arg = self.next_arg_raw()?;
-        let arg = self.arg_recursive(
-            arg,
-            input_type.into().unwrap_or_else(|| self.in_ty().clone()),
-            self.vars,
-        )?;
-
-        self.type_annotation.push(' ');
-        self.type_annotation += &*arg.type_annotation();
-
-        Ok(arg)
-    }
-
     /// Works in the same fashion as [`Block::next_arg`], but **does not remove the argument from
     /// the argument stack**. This should not be used except in edge cases where the argument is
     /// required more than once.
@@ -161,14 +98,15 @@ impl<'d, 'v> Block<'d, 'v> {
         &mut self,
         input_type: I,
     ) -> Result<Argument> {
-        let arg = self.next_arg_raw()?;
-        self.args.push(arg.clone());
-        self.args_count = self.args_count.saturating_sub(1);
-        self.arg_recursive(
-            arg,
-            input_type.into().unwrap_or_else(|| self.in_ty().clone()),
-            self.vars,
-        )
+        todo!()
+        //         let arg = self.next_arg_raw()?;
+        //         self.args.push(arg.clone());
+        //         self.args_count = self.args_count.saturating_sub(1);
+        //         self.arg_recursive(
+        //             arg,
+        //             input_type.into().unwrap_or_else(|| self.in_ty().clone()),
+        //             self.vars,
+        //         )
     }
 
     /// Gets the flag that matches a given name.
@@ -176,7 +114,7 @@ impl<'d, 'v> Block<'d, 'v> {
     /// If no name is given with `None`, _the first flag first is returned, if there is one._
     ///
     /// > The flag is **removed** from the flag stack.
-    pub fn get_flag<'a, N: Into<Option<&'a str>>>(&mut self, flag: N) -> Option<Tag> {
+    pub fn get_flag<'b, N: Into<Option<&'b str>>>(&mut self, flag: N) -> Option<Tag> {
         match flag.into() {
             Some(name) => self
                 .flags
@@ -184,25 +122,6 @@ impl<'d, 'v> Block<'d, 'v> {
                 .position(|x| x.str() == name)
                 .map(|i| self.flags.remove(i)),
             None => self.flags.pop(),
-        }
-    }
-
-    /// Create a variable reference using the next argument.
-    ///
-    /// Returns an error if:
-    /// 1. There is no next argument,
-    /// 2. The next argument is _not_ a variable,
-    ///
-    /// # Type safety
-    /// The variable will be created expecting the type `ty`. `set_data` only validates types in
-    /// debug builds, be sure that testing occurs of code path to avoid UB in release.
-    pub fn create_var_ref(&mut self, ty: Type) -> Result<Variable> {
-        match self.next_arg_raw()? {
-            ast::Argument::Var(var) => Ok(self.vars.add_new_var(Str::new(var.str()), ty, var)),
-            x => {
-                let (x, y) = Error::span_arg(&x);
-                Err(Error::unexp_arg_variant(x, y))
-            }
         }
     }
 
@@ -214,7 +133,8 @@ impl<'d, 'v> Block<'d, 'v> {
     ///
     /// The tag is usually `blk.op_tag`.
     pub fn create_var_manually<N: Into<Str>>(&mut self, name: N, ty: Type, tag: Tag) -> Variable {
-        self.vars.add_new_var(name.into(), ty, tag)
+        todo!()
+        //         self.vars.add_new_var(name.into(), ty, tag)
     }
 
     /// Most flexible evaluation option, but also most brittle.
@@ -231,14 +151,14 @@ impl<'d, 'v> Block<'d, 'v> {
     /// be built with `Type::Nil` and `Value::Nil` can be passed on through!
     pub fn eval<F>(self, out_ty: Type, f: F) -> Result<Step>
     where
-        F: Fn(Value, Context) -> StepR + Sync + 'static,
+        F: Fn(Value, Context) -> StepR,
+        F: Func<StepR>,
     {
-        self.finalise()?;
-        let type_annotation = self.type_annotation;
+        self.finalise(&out_ty)?;
         Ok(Step {
             out_ty,
-            f: Box::new(f),
-            type_annotation,
+            f: Arc::new(f),
+            type_annotation: String::new(),
         })
     }
 
@@ -247,7 +167,8 @@ impl<'d, 'v> Block<'d, 'v> {
     /// This supplies the [`Value`] input but uses type inference on `O` to get the output type.
     pub fn eval_o<F, O>(self, f: F) -> Result<Step>
     where
-        F: Fn(Value, Context) -> Result<(O, Environment)> + Sync + 'static,
+        F: Fn(Value, Context) -> Result<(O, Environment)>,
+        F: Func<Result<(O, Environment)>>,
         O: AsType + Into<Value>,
     {
         self.eval(O::as_type(), move |v, c| {

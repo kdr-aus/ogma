@@ -259,7 +259,12 @@ fn typedef_init(
 ) -> Result<Step> {
     let mut value_places = Vec::with_capacity(fields.len());
     for field in fields {
-        value_places.push(blk.next_arg(None)?.returns(field.ty())?);
+        let arg = blk
+            .next_arg()?
+            .supplied(None)?
+            .returns(field.ty().clone())?
+            .concrete()?;
+        value_places.push(arg);
     }
 
     blk.eval(Type::Def(tydef.clone()), move |input, cx| {

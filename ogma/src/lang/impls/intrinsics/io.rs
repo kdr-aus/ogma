@@ -59,7 +59,7 @@ input is Table; outputs the headers as a table"
 }
 
 fn ls_intrinsic(mut blk: Block) -> Result<Step> {
-    let blk_tag = blk.blk_tag.clone();
+    let blk_tag = blk.blk_tag().clone();
     match blk.in_ty() {
         Ty::Tab => blk.eval_o(move |input, cx| {
             Table::try_from(input)
@@ -75,7 +75,12 @@ fn ls_intrinsic(mut blk: Block) -> Result<Step> {
         }),
         _ => {
             let path = if blk.args_len() > 0 {
-                Some(blk.next_arg(Type::Nil)?.returns(&Type::Str)?)
+                Some(
+                    blk.next_arg()?
+                        .supplied(Type::Nil)?
+                        .returns(Type::Str)?
+                        .concrete()?,
+                )
             } else {
                 None
             };
@@ -185,9 +190,15 @@ String: reads file as string"
 }
 
 fn open_intrinsic(mut blk: Block) -> Result<Step> {
-    let blktag = blk.blk_tag.clone();
-    let arg = blk.next_arg(None)?.returns(&Ty::Str)?;
-    let as_ty = type_flag(&mut blk, Ty::Tab)?;
+    let blktag = blk.blk_tag().clone();
+    let arg = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Str)?
+        .concrete()?;
+    // TODO make this output inferred / default to Table?
+    // AND make this to guessing of types based on file extension
+    let as_ty = type_flag(&mut blk)?.unwrap_or_else(|| Ty::Tab);
 
     match as_ty {
         Ty::Tab => blk.eval_o(move |val, cx| {
@@ -229,7 +240,7 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
         }),
         x => Err(Error {
             help_msg: None,
-            ..Error::wrong_input_type(&x, &blk.op_tag)
+            ..Error::wrong_op_input_type(&x, blk.op_tag())
         }),
     }
 }
@@ -267,11 +278,15 @@ table input is saved as comma separated values"
 fn save_intrinsic(mut blk: Block) -> Result<Step> {
     let ty = blk.in_ty().clone();
     if ty == Ty::TabRow {
-        return Err(Error::wrong_input_type(&ty, &blk.op_tag));
+        return Err(Error::wrong_op_input_type(&ty, blk.op_tag()));
     }
 
-    let filepath = blk.next_arg(None)?.returns(&Ty::Str)?;
-    let blktag = blk.blk_tag.clone();
+    let filepath = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Str)?
+        .concrete()?;
+    let blktag = blk.blk_tag().clone();
     blk.eval(ty, move |val, cx| {
         let p: Str = filepath.resolve(|| val.clone(), &cx)?.try_into()?;
         let p = cx.root.join(cx.wd).join(p.as_str());
