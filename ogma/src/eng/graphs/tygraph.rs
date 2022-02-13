@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Node {
     pub input: Knowledge,
     pub output: Knowledge,
@@ -20,7 +20,7 @@ pub enum Knowledge {
     Inferred(Type),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Flow {
     /// Output knowledge flows into the input.
     OI,
@@ -39,6 +39,7 @@ pub enum Chg {
     InferInput(NodeIndex, Type),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
+    InferOutput(NodeIndex, Type),
 }
 
 pub enum Conflict {
@@ -52,7 +53,7 @@ pub struct ResolutionError {
     pub conflict: Conflict,
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct TypeGraph(TypeGraphInner);
 
 // Note that we do not expose a mutable deref, keep mutation contained in this module.
@@ -292,7 +293,6 @@ impl TypeGraph {
         }
 
         match chg {
-            // set the input to `Known`.
             Chg::KnownInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Known(ty)))
             }
@@ -304,6 +304,9 @@ impl TypeGraph {
             }
             Chg::ObligeOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
+            }
+            Chg::InferOutput(node, ty) => {
+                apply(self, node, |n| set(&mut n.output, Knowledge::Inferred(ty)))
             }
         }
     }

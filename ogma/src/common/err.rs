@@ -179,57 +179,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn type_not_found(ty: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("type `{}` not defined", ty),
-            traces: trace(ty, format!("`{}` not defined", ty)),
-            help_msg: Some("view a list of types using `def-ty --list`".into()),
-        }
-    }
-
-    pub(crate) fn unknown_input_type(op: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("unable to infer input type for op `{}`", op),
-            traces: trace(op, None),
-            help_msg: Some(format!(
-                "use `{0} --help` to view requirements. consider implementing `def {0}`",
-                op
-            )),
-        }
-    }
-
-    pub(crate) fn wrong_input_type(ty: &Type, op: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("`{}` does not support `{}` input data", op, ty),
-            traces: trace(op, None),
-            help_msg: Some(format!(
-                "use `{0} --help` to view requirements. consider implementing `def {0}`",
-                op
-            )),
-        }
-    }
-
-    pub(crate) fn unknown_arg_input_type(arg: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: "unable to infer argument's input type".into(),
-            traces: trace(arg, None),
-            help_msg: None,
-        }
-    }
-
-    pub(crate) fn unknown_arg_output_type(arg: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: "unable to infer argument's output type".into(),
-            traces: trace(arg, None),
-            help_msg: None,
-        }
-    }
-
     pub(crate) fn unexp_arg_input_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
         Error {
             cat: Category::Semantics,
@@ -452,6 +401,66 @@ expected `{}`, found `{}`",
 
 /// Type Errors
 impl Error {
+    pub(crate) fn type_not_found(ty: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("type `{}` not defined", ty),
+            traces: trace(ty, format!("`{}` not defined", ty)),
+            help_msg: Some("view a list of types using `def-ty --list`".into()),
+        }
+    }
+
+    pub(crate) fn unknown_blk_input_type(op: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("unable to infer input type for op `{}`", op),
+            traces: trace(op, None),
+            help_msg: Some(format!(
+                "use `{0} --help` to view requirements. consider implementing `def {0}`",
+                op
+            )),
+        }
+    }
+
+    pub(crate) fn unknown_blk_output_type(blk: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer block's output type".into(),
+            traces: trace(blk, None),
+            help_msg: None,
+        }
+    }
+
+    pub(crate) fn wrong_op_input_type(ty: &Type, op: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("`{}` does not support `{}` input data", op, ty),
+            traces: trace(op, None),
+            help_msg: Some(format!(
+                "use `{0} --help` to view requirements. consider implementing `def {0}`",
+                op
+            )),
+        }
+    }
+
+    pub(crate) fn unknown_arg_input_type(arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer argument's input type".into(),
+            traces: trace(arg, None),
+            help_msg: None,
+        }
+    }
+
+    pub(crate) fn unknown_arg_output_type(arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer argument's output type".into(),
+            traces: trace(arg, None),
+            help_msg: None,
+        }
+    }
+
     pub(crate) fn incomplete_expr_compilation(expr: &Tag) -> Self {
         Error {
             // TODO - change to Type???

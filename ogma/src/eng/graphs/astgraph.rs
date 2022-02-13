@@ -6,7 +6,7 @@ use std::ops::Deref;
 
 type Inner = StableGraph<AstNode, Relation, Directed, u32>;
 
-#[derive(Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct AstGraph(Inner);
 
 // Note that we do not expose a mutable deref, keep mutation contained in this module.
@@ -17,7 +17,7 @@ impl Deref for AstGraph {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstNode {
     Op { op: Tag, blk: Tag },
     Intrinsic { op: Tag },
@@ -47,7 +47,7 @@ pub enum Relation {
 }
 
 /// Engine equivalent of [`ast::Parameter`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: Tag,
     pub ty: Option<Type>,

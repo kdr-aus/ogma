@@ -289,7 +289,7 @@ filtering columns is achievable with the --cols flag"
 
 fn filter_intrinsic(mut blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_input_type(blk.in_ty(), blk.op_tag()));
+        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
 
     blk.assert_output(Type::Tab); // filtering Table -> Table

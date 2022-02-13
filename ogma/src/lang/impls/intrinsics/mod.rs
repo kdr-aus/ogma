@@ -142,11 +142,8 @@ fn n<N: Into<Number>>(n: N) -> Entry<Value> {
     Entry::Num(n.into())
 }
 
-/// Used to get a type flag such as `--Str` or `--Num`. `default` is used if no flag existing.
-fn type_flag(blk: &mut Block, default: Type) -> Result<Type> {
-    // TODO: should this be removed in favour of defining types using a ':' syntax?
-    // For now it shall remain and it can be phased out once the new syntax lands
-
+/// Used to get a type flag such as `--Str` or `--Num`.
+fn type_flag(blk: &mut Block) -> Result<Option<Type>> {
     blk.get_flag(None)
         .map(|ty| {
             let x = if ty.str().starts_with("U_") {
@@ -159,7 +156,7 @@ fn type_flag(blk: &mut Block, default: Type) -> Result<Type> {
                 None => blk.defs.types().get_using_tag(&ty).map(|x| x.clone()),
             }
         })
-        .unwrap_or(Ok(default))
+        .transpose()
 }
 
 /// Iterator over buf in a parallel fashion, invoking the callback `f` on each item of `buf`.

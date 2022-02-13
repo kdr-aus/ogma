@@ -17,6 +17,7 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         compiled_ops: Default::default(),
         compiled_exprs: Default::default(),
         locals: Default::default(),
+        output_infer_opnode: None,
     };
 
     compiler.init_tg(input_ty); // initialise TG
@@ -33,68 +34,7 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
         Locals::default(),
     );
 
-    let mut err = None;
-
-    while !compiler.finished() {
-        eprintln!("Resolving TG");
-        compiler.resolve_tg()?;
-
-        eprintln!("Populating compiled expressions");
-        if compiler.populate_compiled_expressions() {
-            eprintln!("✅ SUCCESS");
-            continue;
-        }
-
-        eprintln!("Assigning variable types");
-        if compiler.assign_variable_types() {
-            eprintln!("✅ SUCCESS");
-            continue;
-        }
-
-        eprintln!("Inserting available def locals");
-        if compiler.insert_available_def_locals() {
-            eprintln!("✅ SUCCESS");
-            continue;
-        }
-
-        eprintln!("Compiling blocks");
-        match compiler.compile_blocks() {
-            Ok(()) => {
-                eprintln!("✅ SUCCESS");
-                continue;
-            }
-            Err(e) => err = Some(e),
-        }
-
-        eprintln!("Inferring inputs");
-        match compiler.infer_inputs() {
-            Ok(true) => {
-                eprintln!("✅ SUCCESS");
-                continue;
-            }
-            Err(e) => err = Some(e),
-            _ => (),
-        }
-
-        eprintln!("Inferring outputs");
-        if compiler.infer_outputs() {
-            eprintln!("✅ SUCCESS");
-            continue;
-        }
-
-        // if we get here we should error, could not progress on any steps
-        // output the state of the compiler...
-        compiler.write_debug_report("debug-compiler.md");
-
-        return Err(err.unwrap_or_else(||
-                Error {
-                    cat: err::Category::Semantics,
-                    desc: "compilation failed with no other errors".into(),
-                    traces: vec![],
-                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
-        }
-        ));
-    }
+    let compiler = compiler.compile(ExprNode(0.into()))?;
 
     // TODO better output
     // - the ordered root steps
@@ -103,6 +43,8 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
     Ok(())
 }
 
+// TODO: check sizing, maybe box this??
+#[derive(Clone)]
 pub struct Compiler<'d> {
     pub defs: &'d Definitions,
     ag: AstGraph,
@@ -115,6 +57,8 @@ pub struct Compiler<'d> {
     compiled_exprs: IndexMap<eval::Stack>,
     /// A map of **Op** nodes which have a _known **input** `Locals`_.
     locals: IndexMap<Locals>,
+    /// A op node which has been flag for output inferrence.
+    output_infer_opnode: Option<OpNode>,
 }
 
 impl<'d> Compiler<'d> {
@@ -130,9 +74,72 @@ impl<'d> Compiler<'d> {
         self.tg.set_root_input_ty(root_ty); // set the root input
     }
 
-    /// We can determine if compilation is finished by seeing if there is a root evaluation stack.
-    fn finished(&self) -> bool {
-        self.compiled_exprs.contains_key(&0)
+    pub fn compile(mut self, break_on: ExprNode) -> Result<Self> {
+        let mut err = None;
+
+        let brk_key = &break_on.index();
+        while !self.compiled_exprs.contains_key(brk_key) {
+            eprintln!("Resolving TG");
+            self.resolve_tg()?;
+
+            eprintln!("Populating compiled expressions");
+            if self.populate_compiled_expressions() {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
+
+            eprintln!("Assigning variable types");
+            if self.assign_variable_types() {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
+
+            eprintln!("Inserting available def locals");
+            if self.insert_available_def_locals() {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
+
+            eprintln!("Compiling blocks");
+            match self.compile_blocks() {
+                Ok(()) => {
+                    eprintln!("✅ SUCCESS");
+                    continue;
+                }
+                Err(e) => err = Some(e),
+            }
+
+            eprintln!("Inferring inputs");
+            match self.infer_inputs() {
+                Ok(true) => {
+                    eprintln!("✅ SUCCESS");
+                    continue;
+                }
+                Err(e) => err = Some(e),
+                _ => (),
+            }
+
+            eprintln!("Inferring outputs");
+            if self.infer_outputs() {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
+
+            // if we get here we should error, could not progress on any steps
+            // output the state of the compiler...
+            self.write_debug_report("debug-compiler.md");
+
+            return Err(err.unwrap_or_else(||
+                Error {
+                    cat: err::Category::Semantics,
+                    desc: "compilation failed with no other errors".into(),
+                    traces: vec![],
+                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+        }
+        ));
+        }
+
+        Ok(self)
     }
 
     fn resolve_tg(&mut self) -> Result<()> {
@@ -186,7 +193,9 @@ impl<'d> Compiler<'d> {
                 .cloned()
                 .expect("known input at this point");
 
-            match self.compile_block(node, in_ty, &mut chgs) {
+            let mut infer_output = false;
+
+            match self.compile_block(node, in_ty, &mut chgs, &mut infer_output) {
                 Ok((step, locals)) => {
                     goto_resolve = true;
                     let out_ty = step.out_ty.clone();
@@ -210,7 +219,13 @@ impl<'d> Compiler<'d> {
                     // the TG is updated with this information
                     chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty));
                 }
-                Err(e) => err = Some(e),
+                Err(e) => {
+                    if infer_output {
+                        self.output_infer_opnode = Some(node);
+                    }
+
+                    err = Some(e);
+                }
             }
         }
 
@@ -226,6 +241,7 @@ impl<'d> Compiler<'d> {
         opnode: OpNode,
         in_ty: Type,
         chgs: &mut Vec<tygraph::Chg>,
+        infer_output: &mut bool,
     ) -> Result<(Step, Option<Locals>)> {
         let cmd_node = self
             .ag
@@ -236,7 +252,8 @@ impl<'d> Compiler<'d> {
             AstNode::Intrinsic { op } => {
                 let mut locals = self.locals.get(&opnode.index()).cloned();
 
-                let block = Block::construct(self, cmd_node, in_ty, locals.as_mut(), chgs);
+                let block =
+                    Block::construct(self, cmd_node, in_ty, locals.as_mut(), chgs, infer_output);
 
                 // TODO -- rather store the func in Intrinsic,
                 Step::compile(self.defs.impls(), block).map(|step| (step, locals))
@@ -306,8 +323,33 @@ impl<'d> Compiler<'d> {
     }
 
     fn infer_outputs(&mut self) -> bool {
-        // TODO wire in properly
-        false
+        if let Some(opnode) = self.output_infer_opnode.take() {
+            let defs = self.defs;
+            // replace a dummy compiler value
+            let this = std::mem::replace(
+                self,
+                Compiler {
+                    ag: Default::default(),
+                    tg: Default::default(),
+                    compiled_ops: Default::default(),
+                    compiled_exprs: Default::default(),
+                    output_infer_opnode: Default::default(),
+                    flowed_edges: Default::default(),
+                    locals: Default::default(),
+                    defs,
+                },
+            );
+            // infer output
+            let x = ty::infer::output(opnode, this);
+            // store if we were successful
+            let success = x.is_ok();
+            // bring back the compiler to self, throw out the dummy
+            *self = x.unwrap_or_else(|c| c);
+            // return the inferring result
+            success
+        } else {
+            false
+        }
     }
 
     /// Populate the compiled expression map.
@@ -372,7 +414,7 @@ impl<'d> Compiler<'d> {
     }
 
     /// Returns if the TG was altered when applying the changes.
-    fn apply_tg_chgs<C>(&mut self, chgs: C) -> bool
+    pub fn apply_tg_chgs<C>(&mut self, chgs: C) -> bool
     where
         C: Iterator<Item = tygraph::Chg>,
     {
@@ -535,6 +577,7 @@ impl<'a> Block<'a> {
         in_ty: Type,
         locals: Option<&'a mut Locals>,
         chgs: &'a mut Vec<tygraph::Chg>,
+        output_infer: &'a mut bool,
     ) -> Self {
         let opnode = node.parent(&compiler.ag);
         let mut flags = compiler.ag.get_flags(node);
@@ -555,6 +598,7 @@ impl<'a> Block<'a> {
             tg: &compiler.tg,
             compiled_exprs: &compiler.compiled_exprs,
             tg_chgs: chgs,
+            infer_output: output_infer,
             defs,
             #[cfg(debug_assertions)]
             output_ty: None,
@@ -625,12 +669,15 @@ impl Locals {
         blk_in_ty: Type,
         tygraph_chgs: &mut Vec<tygraph::Chg>,
     ) -> Result<Self> {
+        let _sink = &mut false;
+
         let mut blk = Block::construct(
             compiler,
             defnode.into(),
             blk_in_ty,
             Some(&mut self),
             tygraph_chgs,
+            _sink,
         );
 
         dbg!(blk.op_tag());
@@ -728,7 +775,7 @@ mod tests {
         eprintln!("TEST #1 ------- \\ 3 | = 3");
         compile("\\ 3 | = 3").unwrap();
 
-        eprintln!("TEST #1 ------- \\ 3 | > 2");
+        eprintln!("TEST #2 ------- \\ 3 | > 2");
         compile("\\ 3 | > 2").unwrap();
     }
 
@@ -736,5 +783,24 @@ mod tests {
     fn compilation_test_07() {
         // initial variable testing
         compile("let $x | \\ $x").unwrap();
+    }
+
+    #[test]
+    fn compilation_test_08() {
+        // output inferring
+        // no defs
+        eprintln!("TEST #1 ------- ls | filter {{ get 'foo' | eq 3 }}");
+        compile("ls | filter { get 'foo' | eq 3 }").unwrap();
+        // with def
+        eprintln!("TEST #2 ------- ls | filter {{ get 'foo' | > 3 }}");
+        compile("ls | filter { get 'foo' | > 3 }").unwrap();
+
+        // with Str
+        // no defs
+        eprintln!("TEST #1 ------- ls | filter {{ get 'foo' | eq 'bar' }}");
+        compile("ls | filter { get 'foo' | eq 'bar' }").unwrap();
+        // with def
+        eprintln!("TEST #2 ------- ls | filter {{ get 'foo' | > 'bar' }}");
+        compile("ls | filter { get 'foo' | > 'bar' }").unwrap();
     }
 }

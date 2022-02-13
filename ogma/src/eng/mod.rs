@@ -102,6 +102,9 @@ pub struct Block<'a> {
     /// This allows for block compilation to fail but the updates still be applied.
     tg_chgs: &'a mut Vec<graphs::tygraph::Chg>,
 
+    /// Flag that this block's output should be inferred if getting to output inferencing phase.
+    infer_output: &'a mut bool,
+
     // TODO is this removable??
     /// The definitions carried through.
     pub defs: &'a Definitions,

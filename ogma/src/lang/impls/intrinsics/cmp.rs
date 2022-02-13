@@ -97,7 +97,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             //                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
             //             })
         }
-        x => Err(Error::wrong_input_type(x, blk.op_tag())),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
@@ -213,7 +213,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             //                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
             //             })
         }
-        x => Err(Error::wrong_input_type(x, blk.op_tag())),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 

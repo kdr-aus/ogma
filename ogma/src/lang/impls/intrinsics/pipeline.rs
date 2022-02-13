@@ -60,32 +60,46 @@ optionally specify a default value if the get type does not match"
 }
 
 fn get_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!();
-    //     match blk.in_ty().clone() {
-    //         Ty::TabRow => {
-    //             let colarg = blk.next_arg(Type::Nil)?.returns(&Ty::Str)?;
-    //             let get_type = match blk
-    //                 .next_arg(Type::Nil)
-    //                 .ok()
-    //                 .map(Box::new)
-    //                 .map(TableGetType::Default)
-    //             {
-    //                 Some(x) => x,
-    //                 None => TableGetType::Flag(type_flag(&mut blk, Type::Num)?),
-    //             };
-    //             blk.eval(get_type.ty().clone(), move |x, cx| {
-    //                 let trow: TableRow = x.try_into()?;
-    //                 table_row_get(&trow, &colarg, &get_type, cx)
-    //             })
-    //         }
-    //         t => {
-    //             let field_arg = blk.next_arg(None)?;
-    //             let (facc, out_ty) = FieldAccessor::construct(&t, &field_arg, &blk.op_tag)?;
-    //             blk.eval(out_ty, move |input, cx| {
-    //                 facc.get(input).and_then(|x| cx.done(x))
-    //             })
-    //         }
-    //     }
+    match blk.in_ty().clone() {
+        Ty::TabRow => {
+            let colarg = blk
+                .next_arg()?
+                .supplied(Type::Nil)?
+                .returns(Ty::Str)?
+                .concrete()?;
+            // this is the default arg: 'get foo 0'
+            let get_type = match blk.args_len() {
+                1 => blk
+                    .next_arg()?
+                    .supplied(Type::Nil)?
+                    .concrete()
+                    .map(Box::new)
+                    .map(TableGetType::Default)?,
+                // use the type flag
+                _ => type_flag(&mut blk)
+                    .and_then(|ty| {
+                        // otherwise try to infer the output
+                        ty.map(Ok).unwrap_or_else(|| {
+                            blk.output_ty()
+                                .ok_or_else(|| Error::unknown_blk_output_type(blk.blk_tag()))
+                        })
+                    })
+                    .map(TableGetType::Flag)?,
+            };
+
+            blk.eval(get_type.ty().clone(), move |x, cx| {
+                let trow: TableRow = x.try_into()?;
+                table_row_get(&trow, &colarg, &get_type, cx)
+            })
+        }
+        t => {
+            let field_arg = blk.next_arg()?.supplied(None)?.concrete()?;
+            let (facc, out_ty) = FieldAccessor::construct(&t, &field_arg, blk.op_tag())?;
+            blk.eval(out_ty, move |input, cx| {
+                facc.get(input).and_then(|x| cx.done(x))
+            })
+        }
+    }
 }
 
 enum TableGetType {
@@ -138,7 +152,7 @@ impl FieldAccessor {
                 // TypeDefs can use `get` to access a field, so only works for product types.
                 // The field is checked, then the accessor index is passed through for the eval Step
                 if !matches!(tydef.structure(), types::TypeVariant::Product(_)) {
-                    let mut err = Error::wrong_input_type(ty, err_tag);
+                    let mut err = Error::wrong_op_input_type(ty, err_tag);
                     err.help_msg = Some("types with `sum` structure cannot be queried into".into());
                     return Err(err);
                 }
@@ -159,7 +173,7 @@ impl FieldAccessor {
                 let out_ty = field.ty().clone();
                 Ok((FieldAccessor(idx), out_ty))
             }
-            x => Err(Error::wrong_input_type(x, err_tag)),
+            x => Err(Error::wrong_op_input_type(x, err_tag)),
         }
     }
 
@@ -295,7 +309,7 @@ fn len_intrinsic(mut blk: Block) -> Result<Step> {
                     .and_then(|x| cx.done_o(x))
             })
         }
-        x => Err(Error::wrong_input_type(x, blk.op_tag())),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
