@@ -295,28 +295,27 @@ mod tests {
 
     #[test]
     fn build_tuple_cmp_test() {
-        todo!()
-        //         let f = build_tuple_cmp_def_str;
-        //         assert_eq!(
-        //             &f(1),
-        //             "def tuple-cmp (rhs) { \
-        // let {get t0 | cmp $rhs.t0} $c0 | if \
-        // $c0 }"
-        //         );
-        //         assert_eq!(
-        //             &f(2),
-        //             "def tuple-cmp (rhs) { \
-        // let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 | if \
-        // {\\ $c0 | != Ord::Eq} $c0 \
-        // $c1 }"
-        //         );
-        //         assert_eq!(
-        //             &f(3),
-        //             "def tuple-cmp (rhs) { \
-        // let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 {get t2 | cmp $rhs.t2} $c2 | if \
-        // {\\ $c0 | != Ord::Eq} $c0 \
-        // {\\ $c1 | != Ord::Eq} $c1 \
-        // $c2 }"
-        //         );
+        let f = build_tuple_cmp_def_str;
+        assert_eq!(
+            &f(1),
+            "def tuple-cmp (rhs) { \
+         let {get t0 | cmp $rhs.t0} $c0 | if \
+         $c0 }"
+        );
+        assert_eq!(
+            &f(2),
+            "def tuple-cmp (rhs) { \
+         let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 | if \
+         {\\ $c0 | != Ord::Eq} $c0 \
+         $c1 }"
+        );
+        assert_eq!(
+            &f(3),
+            "def tuple-cmp (rhs) { \
+         let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 {get t2 | cmp $rhs.t2} $c2 | if \
+         {\\ $c0 | != Ord::Eq} $c0 \
+         {\\ $c1 | != Ord::Eq} $c1 \
+         $c2 }"
+        );
     }
 }

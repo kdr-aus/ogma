@@ -5,7 +5,11 @@ use astgraph::{AstGraph, AstNode};
 use graphs::*;
 use tygraph::TypeGraph;
 
-pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Result<()> {
+pub fn compile(
+    expr: ast::Expression,
+    defs: &Definitions,
+    input_ty: Type,
+) -> Result<FullCompilation> {
     let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
 
@@ -23,6 +27,8 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
     compiler.init_tg(input_ty); // initialise TG
 
     // initialise an empty Locals into the first op node
+    // THIS IS THE RETURN LOCALS AS WELL!
+    let vars = Locals::default();
     compiler.locals.insert(
         compiler
             .ag
@@ -31,16 +37,22 @@ pub fn compile(expr: ast::Expression, defs: &Definitions, input_ty: Type) -> Res
             .last()
             .expect("there should be a root Op node")
             .index(),
-        Locals::default(),
+            vars.clone()
     );
 
-    let compiler = compiler.compile(ExprNode(0.into()))?;
+    let mut compiler = compiler.compile(ExprNode(0.into()))?;
 
-    // TODO better output
-    // - the ordered root steps
-    // - the completed type graph
-    // - ???
-    Ok(())
+    let err = "should exist on successful compilation";
+
+    Ok(FullCompilation {
+        eval_stack: compiler.compiled_exprs.remove(&0).expect(err), // root expr stack
+        vars,
+    })
+}
+
+pub struct FullCompilation {
+    pub eval_stack: eval::Stack,
+    pub vars: Locals,
 }
 
 // TODO: check sizing, maybe box this??
@@ -719,7 +731,7 @@ mod tests {
         super::compile(expr, defs, Type::Nil).map_err(|e| {
             eprintln!("{}", e);
             e
-        })
+        }).map(|_| ())
     }
 
     #[test]
