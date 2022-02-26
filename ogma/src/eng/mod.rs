@@ -21,9 +21,7 @@ pub(crate) use self::{
     var::{Environment, Local, Locals, Variable},
 };
 
-pub use self::{
-    comp::{compile, FullCompilation}
-};
+pub use self::comp::{compile, FullCompilation};
 
 // ###### ARGUMENT #############################################################
 /// Compiled argument.

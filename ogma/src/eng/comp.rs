@@ -37,7 +37,7 @@ pub fn compile(
             .last()
             .expect("there should be a root Op node")
             .index(),
-            vars.clone()
+        vars.clone(),
     );
 
     let mut compiler = compiler.compile(ExprNode(0.into()))?;
@@ -107,7 +107,7 @@ impl<'d> Compiler<'d> {
             }
 
             eprintln!("Inserting available def locals");
-            if self.insert_available_def_locals() {
+            if self.insert_available_def_locals()? {
                 eprintln!("✅ SUCCESS");
                 continue;
             }
@@ -402,25 +402,38 @@ impl<'d> Compiler<'d> {
     ///
     /// If the TG is altered, returns `true`.
     fn assign_variable_types(&mut self) -> bool {
-        let chgs = self
-            .ag
-            .node_indices()
+        let mut chgs = Vec::new();
+
+        for node in self.ag.node_indices() {
             // just get the variables
-            .filter_map(|n| self.ag[n].var().map(|v| (n, v)))
+            let var_tag = match self.ag[node].var() {
+                Some(t) => t,
+                None => continue,
+            };
+
             // output type is unknown
-            .filter(|(n, _)| self.tg[*n].output.is_unknown())
+            if !self.tg[node].output.is_unknown() {
+                continue;
+            }
+
             // map in if has a Locals
-            .filter_map(|(n, v)| {
-                let opnode = ArgNode(n).op(&self.ag);
-                self.locals.get(&opnode.index()).map(|l| (n, v, l))
-            })
-            .filter_map(|(n, v, l)| {
-                l.get(v.str()).map(|v| match v {
-                    Local::Var(v) => tygraph::Chg::KnownOutput(n, v.ty().clone()),
-                    Local::Param(x) => tygraph::Chg::KnownOutput(n, x.out_ty().clone()),
-                })
-            })
-            .collect::<Vec<tygraph::Chg>>();
+            let local = match self
+                .locals
+                .get(&ArgNode(node).op(&self.ag).index())
+                .and_then(|locals| locals.get(var_tag.str()))
+            {
+                Some(l) => l,
+                None => continue,
+            };
+
+            let chg = match local {
+                Local::Var(v) => tygraph::Chg::KnownOutput(node, v.ty().clone()),
+                Local::Param(x) => tygraph::Chg::KnownOutput(node, x.out_ty().clone()),
+            };
+
+            chgs.push(chg);
+            chgs.push(tygraph::Chg::AnyInput(node));
+        }
 
         self.apply_tg_chgs(chgs.into_iter())
     }
@@ -461,12 +474,11 @@ impl<'d> Compiler<'d> {
     /// Looks at the `Def` command nodes and builds a `Locals` for the first op if:
     /// 1. The parent op has an available locals to scaffold off, and
     /// 2. _All_ parameters have a known type.
-    fn insert_available_def_locals(&mut self) -> bool {
+    fn insert_available_def_locals(&mut self) -> Result<bool> {
         struct D {
             def: DefNode,
             parent: OpNode,
             first: OpNode,
-            in_ty: Type,
         }
 
         // repeat the process since a Def might have sub-Defs which would get processed by this.
@@ -489,17 +501,9 @@ impl<'d> Compiler<'d> {
                     def,
                     parent: def.parent(&self.ag),
                     first: def.expr(&self.ag).first_op(&self.ag),
-                    in_ty: Type::Nil,
                 })
                 // check that the op does not already have a locals map
                 .filter(|d| !self.locals.contains_key(&d.first.index()))
-                // get the input type of parent block
-                .filter_map(|d| {
-                    self.tg[d.parent.idx()].input.ty().map(|ty| D {
-                        in_ty: ty.clone(),
-                        ..d
-                    })
-                })
                 // get the Locals of the parent Op node
                 .filter_map(|d| self.locals.get(&d.parent.index()).map(|l| (d, l.clone())));
 
@@ -515,23 +519,29 @@ impl<'d> Compiler<'d> {
                     def,
                     parent: _,
                     first,
-                    in_ty,
                 } = d;
 
                 skip.insert(def);
 
                 let params = self.ag[def.idx()].def().expect("filtered to def node");
 
-                if let Ok(locals) = locals.inject_params(self, params, def, in_ty, tg_chgs) {
-                    chgd = true;
-                    self.insert_locals(locals, first);
+                // TODO should this be an error pathway?
+                // since the error pathway is not having enough params (or too many??)
+                match locals.inject_params(self, params, def, tg_chgs)? {
+                    LocalInjection::Success(locals) => {
+                        chgd = true;
+                        self.insert_locals(locals, first);
+                    }
+                    LocalInjection::UnknownReturnTy(argnode) => {
+                        // TODO what to do about unknown return arguments!?
+                    }
                 }
             }
         }
 
         let tg_chgd = self.apply_tg_chgs(tg_chgs.drain(..));
 
-        chgd || tg_chgd
+        Ok(chgd || tg_chgd)
     }
 }
 
@@ -672,50 +682,72 @@ impl eval::Stack {
     }
 }
 
+enum LocalInjection {
+    Success(Locals),
+    UnknownReturnTy(ArgNode),
+}
+
 impl Locals {
-    pub fn inject_params(
+    fn inject_params(
         mut self,
         compiler: &Compiler,
         params: &[astgraph::Parameter],
         defnode: DefNode,
-        blk_in_ty: Type,
         tygraph_chgs: &mut Vec<tygraph::Chg>,
-    ) -> Result<Self> {
+    ) -> Result<LocalInjection> {
         let _sink = &mut false;
 
-        let mut blk = Block::construct(
-            compiler,
-            defnode.into(),
-            blk_in_ty,
-            Some(&mut self),
-            tygraph_chgs,
-            _sink,
-        );
+        let mut args = compiler.ag().get_args(defnode);
+        args.reverse();
 
-        dbg!(blk.op_tag());
-        dbg!(blk.blk_tag());
-        dbg!(blk.in_ty());
+        let mut callsite_vars = Vec::with_capacity(params.len());
+        //         let mut expr_vars = Vec::with_capacity(params.len());
 
-        let mut args = Vec::with_capacity(params.len());
+        let mut arg_count = 0;
+        let blk_tag = compiler.ag()[defnode.parent(compiler.ag()).idx()].tag();
+        let locals = &mut Some(&mut self);
 
-        for astgraph::Parameter { name, ty } in params {
-            dbg!(name, ty);
-            let arg = blk.next_arg()?.supplied(None)?;
+        let Compiler {
+            ag,
+            tg,
+            compiled_exprs,
+            ..
+        } = compiler;
 
-            let arg = match ty {
+        for param in params {
+            // only point of failure
+            let argnode = arg::pop(&mut args, arg_count, blk_tag)?;
+            arg_count += 1;
+
+            // TODO need to handle Expr parameter types, will need to alter the structure of
+            // astgraph::Parameter
+
+            // the parameter is to be resolved at the call site
+            let arg =
+                arg::ArgBuilder::new(argnode, ag, tg, tygraph_chgs, None, locals, compiled_exprs);
+
+            let arg = match param.ty() {
                 Some(ty) => arg.returns(ty.clone())?,
                 None => arg,
+            };
+
+            // we do not need to .concrete the arg, since we don't really want to get the Argument
+            // that it returns. Instead, all we really want to know about this argument is it's
+            // output type.
+            match arg.return_ty() {
+                Some(ty) => {
+                    callsite_vars.push((param.name.clone(), ty.clone()));
+                }
+                None => return Ok(LocalInjection::UnknownReturnTy(argnode)),
             }
-            .concrete()?;
-
-            args.push((Str::new(name.str()), arg));
         }
 
-        for (name, arg) in args {
-            self.add_param(name, arg);
+        for (tag, ty) in callsite_vars {
+            let name = Str::new(tag.str());
+            self.add_new_var(name, ty, tag); // TODO validate that this is the tag that should be sent through
         }
 
-        Ok(self)
+        Ok(LocalInjection::Success(self))
     }
 }
 
@@ -728,10 +760,12 @@ mod tests {
         let defs = &Definitions::default();
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
-        super::compile(expr, defs, Type::Nil).map_err(|e| {
-            eprintln!("{}", e);
-            e
-        }).map(|_| ())
+        super::compile(expr, defs, Type::Nil)
+            .map_err(|e| {
+                eprintln!("{}", e);
+                e
+            })
+            .map(|_| ())
     }
 
     #[test]
@@ -814,5 +848,10 @@ mod tests {
         // with def
         eprintln!("TEST #2 ------- ls | filter {{ get 'foo' | > 'bar' }}");
         compile("ls | filter { get 'foo' | > 'bar' }").unwrap();
+    }
+
+    #[test]
+    fn compilation_test_09() {
+        compile("ls | filter name != 'foo'").unwrap();
     }
 }

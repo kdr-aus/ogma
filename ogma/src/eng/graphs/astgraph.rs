@@ -50,21 +50,14 @@ pub enum Relation {
 #[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: Tag,
-    pub ty: Option<Type>,
+    pub ty: ParameterTy,
 }
 
-impl Parameter {
-    fn from_ast(param: &ast::Parameter, tys: &types::Types) -> Result<Self> {
-        let ast::Parameter { ident, ty } = param;
-
-        let name = ident.clone();
-        let ty = ty
-            .as_ref()
-            .map(|t| tys.get_using_tag(t).map(Clone::clone))
-            .transpose()?;
-
-        Ok(Self { name, ty })
-    }
+#[derive(Debug, Clone)]
+pub enum ParameterTy {
+    Unspecified,
+    Specified(Type),
+    Expr,
 }
 
 /// Initialises the syntax graph decomposing the expression.
@@ -513,10 +506,59 @@ impl Relation {
         matches!(self, Relation::Keyed(None))
     }
 
+    pub fn keyed(&self) -> Option<&Type> {
+        match self {
+            Relation::Keyed(x) => x.as_ref(),
+            Relation::Normal => None,
+            Relation::Term(_) => None,
+        }
+    }
+
     pub fn term(&self) -> Option<u8> {
         match self {
             Relation::Term(x) => Some(*x),
             _ => None,
+        }
+    }
+}
+
+impl Parameter {
+    fn from_ast(param: &ast::Parameter, tys: &types::Types) -> Result<Self> {
+        let ast::Parameter { ident, ty } = param;
+
+        let name = ident.clone();
+        let ty = ty.as_ref();
+        let ty = if ty.map(|t| t.str() == "Expr").unwrap_or(false) {
+            ParameterTy::Expr
+        } else {
+            ty.map(|t| tys.get_using_tag(t))
+                .transpose()?
+                .map(Clone::clone)
+                .map(ParameterTy::Specified)
+                .unwrap_or(ParameterTy::Unspecified)
+        };
+
+        Ok(Self { name, ty })
+    }
+
+    /// This parameter should be evaluated at the call site.
+    pub fn is_callsite_eval(&self) -> bool {
+        match self.ty {
+            ParameterTy::Unspecified | ParameterTy::Specified(_) => true,
+            ParameterTy::Expr => false,
+        }
+    }
+
+    /// This parameter is marked with `Expr` and should be passed through to be evaluated at the
+    /// consuming execution block.
+    pub fn is_exesite_eval(&self) -> bool {
+        !self.is_callsite_eval()
+    }
+
+    pub fn ty(&self) -> Option<&Type> {
+        match &self.ty {
+            ParameterTy::Specified(ty) => Some(ty),
+            ParameterTy::Unspecified | ParameterTy::Expr => None,
         }
     }
 }

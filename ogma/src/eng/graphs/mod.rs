@@ -87,7 +87,10 @@ mod tests {
     use tygraph::*;
 
     fn init_graphs(expr: &str) -> (AstGraph, TypeGraph) {
-        let defs = &Definitions::default();
+        init_graphs_w_defs(expr, &Definitions::default())
+    }
+
+    fn init_graphs_w_defs(expr: &str, defs: &Definitions) -> (AstGraph, TypeGraph) {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
         let ag = astgraph::init(expr, defs).unwrap();
@@ -399,7 +402,7 @@ mod tests {
             output: Knowledge::Unknown,
         };
 
-        assert_eq!(tg.edge_count(), 8);
+        assert_eq!(tg.edge_count(), 9);
 
         assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
         assert_eq!(tg.node_weight(1.into()), Some(&def())); // =
@@ -428,5 +431,180 @@ mod tests {
         assert_eq!(getedge(3, 4), &Flow::II); // Def -> eq $rhs: II
         assert_eq!(getedge(4, 3), &Flow::OO); // eq $rhs -> Def: OO
         assert_eq!(getedge(3, 1), &Flow::OO); // Def -> =: OO
+
+        assert_eq!(getedge(1, 2), &Flow::II); // = -> 3: II ; the input into a Def op flows through to each argument
+    }
+
+    #[test]
+    fn def_tg_linking_def_and_intrinsic() {
+        let defs = &mut Definitions::default();
+        lang::process_definition(
+            "def cmp Nil (a b) { \\ #t }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+
+        let (ag, mut tg) = init_graphs_w_defs("cmp 'one' 'two'", defs);
+
+        tg.apply_ast_types(&ag);
+        tg.apply_ast_edges(&ag);
+
+        dbg!(&ag);
+        dbg!(&tg);
+
+        // Assert some info about the AST nodes
+        assert_eq!(ag.node_count(), 10);
+        assert_eq!(ag.edge_count(), 14);
+        // 0: cmp 'one' 'two'
+        // 1: cmp
+        // 2: one
+        // 3: two
+        // 4: Def([a b])
+        // 5: \ #t
+        // 6: \
+        // 7: #t
+        // 8: cmp Intrinsic
+        // 9: \ Intrinsic
+
+        // Type graph nodes
+        use tygraph::Flow;
+
+        assert_eq!(tg.edge_count(), 7);
+
+        // Type graph edges
+        let getedge = |a: u32, b: u32| &tg[tg.find_edge(a.into(), b.into()).unwrap()];
+        assert_eq!(getedge(0, 1), &Flow::II); // root -> cmp: II
+        assert_eq!(getedge(1, 0), &Flow::OO); // cmp -> root: OO
+
+        assert_eq!(getedge(5, 6), &Flow::II); // \ #t -> \: II
+        assert_eq!(getedge(6, 5), &Flow::OO); // \ -> \ #t: OO
+
+        assert_eq!(getedge(4, 5), &Flow::II); // Def -> Expr: II
+        assert_eq!(getedge(5, 4), &Flow::OO); // Expr -> Def: OO
+        assert_eq!(getedge(4, 1), &Flow::OO); // Def -> cmp: OO
+                                              // NOTE: there is NO 1 -> 4 (cmp -> Def) since this is not a keyed type
+    }
+
+    #[test]
+    fn def_tg_linking_multiple_defs_params() {
+        let defs = &mut Definitions::default();
+        lang::process_definition(
+            "def foo Nil (a b c) { \\ #t }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+        lang::process_definition(
+            "def foo Num (a b c:Expr) { \\ #t }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+        lang::process_definition(
+            "def foo Str (a:Expr b c d) { \\ #t }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+
+        let (ag, mut tg) = init_graphs_w_defs("foo 1 2 3", defs);
+
+        tg.apply_ast_types(&ag);
+        tg.apply_ast_edges(&ag);
+
+        dbg!(&ag);
+        dbg!(&tg);
+
+        // Assert some info about the AST nodes
+        assert_eq!(ag.node_count(), 20);
+        assert_eq!(ag.edge_count(), 31);
+        // 0: foo 1 2 3
+        // 1: foo
+        // 2: 1
+        // 3: 2
+        // 4: 3
+        // 5: Def([a b c])
+        // 6: \ #t
+        // 7: \
+        // 8: #t
+        // 9: Def([a b c:Expr])
+        // 10: \ #t
+        // 11: \
+        // 12: #t
+        // 13: Def([a:Expr b c d])
+        // 14: \ #t
+        // 15: \
+        // 16: #t
+        // 17: \ Intrinsic
+        // 18: \ Intrinsic
+        // 19: \ Intrinsic
+
+        // Type graph nodes
+        use tygraph::Flow;
+
+        assert_eq!(tg.edge_count(), 18);
+
+        // Type graph edges
+        let getedge = |a: u32, b: u32| &tg[tg.find_edge(a.into(), b.into()).unwrap()];
+        assert_eq!(getedge(0, 1), &Flow::II); // root -> foo: II
+        assert_eq!(getedge(1, 0), &Flow::OO); // foo -> root: OO
+
+        assert_eq!(getedge(6, 7), &Flow::II); // \ #t -> \: II
+        assert_eq!(getedge(7, 6), &Flow::OO); // \ -> \ #t: OO
+        assert_eq!(getedge(10, 11), &Flow::II); // \ #t -> \: II
+        assert_eq!(getedge(11, 10), &Flow::OO); // \ -> \ #t: OO
+        assert_eq!(getedge(14, 15), &Flow::II); // \ #t -> \: II
+        assert_eq!(getedge(15, 14), &Flow::OO); // \ -> \ #t: OO
+
+        assert_eq!(getedge(5, 6), &Flow::II); // Def -> Expr: II
+        assert_eq!(getedge(6, 5), &Flow::OO); // Expr -> Def: OO
+        assert_eq!(getedge(5, 1), &Flow::OO); // Def -> foo: OO
+
+        assert_eq!(getedge(9, 10), &Flow::II); // Def -> Expr: II
+        assert_eq!(getedge(10, 9), &Flow::OO); // Expr -> Def: OO
+        assert_eq!(getedge(9, 1), &Flow::OO); // Def -> foo: OO
+
+        assert_eq!(getedge(13, 14), &Flow::II); // Def -> Expr: II
+        assert_eq!(getedge(14, 13), &Flow::OO); // Expr -> Def: OO
+        assert_eq!(getedge(13, 1), &Flow::OO); // Def -> foo: OO
+
+        // Argument linking!
+        assert_eq!(getedge(1, 3), &Flow::II); // foo -> 2 (2nd arg)
+    }
+
+    #[test]
+    fn tg_types_with_keyed_some() {
+        let defs = &mut Definitions::default();
+        lang::process_definition(
+            "def foo Nil (a b) { \\ #t }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+
+        let (ag, mut tg) = init_graphs_w_defs("foo 2", defs);
+
+        tg.apply_ast_types(&ag);
+        tg.apply_ast_edges(&ag);
+
+        dbg!(&ag);
+        dbg!(&tg);
+
+        let idx = 3.into();
+
+        assert!(ag.node_weight(idx).unwrap().def().is_some());
+        assert_eq!(
+            tg.node_weight(idx),
+            Some(&Node {
+                input: Knowledge::Known(Type::Nil),
+                output: Knowledge::Unknown
+            })
+        ); // 3
     }
 }

@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T, ogma::Error>;
 // mod cmp;
 // mod definitions;
 // mod diagnostics;
-// mod io;
+mod io;
 // mod logic;
 // mod morphism;
 // mod pipeline;

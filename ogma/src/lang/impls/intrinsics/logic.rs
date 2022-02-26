@@ -61,7 +61,7 @@ input is carried through to each of the expressions
 fn if_intrinsic(mut blk: Block) -> Result<Step> {
     let args = blk.args_len();
     if args % 2 == 0 {
-        let mut e = Error::insufficient_args(&blk.blk_tag, args);
+        let mut e = Error::insufficient_args(blk.blk_tag(), args as u8);
         e.help_msg =
             Some("`if` requires odd number of arguments to match true/false expressions".into());
         return Err(e);
@@ -75,11 +75,15 @@ fn if_intrinsic(mut blk: Block) -> Result<Step> {
     let mut args = Vec::with_capacity(args / 2);
     while blk.args_len() > 1 {
         args.push(Cond {
-            pred: blk.next_arg(None)?.returns(&Ty::Bool)?,
-            expr: blk.next_arg(None)?,
+            pred: blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Ty::Bool)?
+                .concrete()?,
+            expr: blk.next_arg()?.supplied(None)?.concrete()?,
         });
     }
-    let else_ = blk.next_arg(None)?;
+    let else_ = blk.next_arg()?.supplied(None)?.concrete()?;
 
     let out_ty = else_.out_ty().clone();
 
@@ -118,10 +122,12 @@ fn not_help() -> HelpMessage {
     }
 }
 
-fn not_intrinsic(blk: Block) -> Result<Step> {
+fn not_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Bool); // takes a bool, returns a bool
+
     match blk.in_ty() {
         Ty::Bool => blk.eval_o(|val, cx| bool::try_from(val).and_then(|x| cx.done_o(!x))),
-        x => Err(Error::wrong_input_type(x, &blk.op_tag)),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
