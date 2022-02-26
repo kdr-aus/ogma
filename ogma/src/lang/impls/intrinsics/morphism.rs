@@ -332,7 +332,15 @@ impl FilterTable {
                 .supplied(Ty::Nil)?
                 .returns(Ty::Str)?
                 .concrete()?;
-            let expr_predicate = blk.next_arg()?.returns(Ty::Bool)?.concrete()?;
+
+            let ty_flag = type_flag(&mut blk)?;
+
+            let expr_predicate = blk.next_arg()?;
+            let expr_predicate = match ty_flag {
+                Some(ty) => expr_predicate.supplied(ty)?,
+                None => expr_predicate,
+            } .returns(Ty::Bool)?.concrete()?;
+
             let exp_ty = expr_predicate.in_ty().clone();
 
             let ft = Box::new(Self {

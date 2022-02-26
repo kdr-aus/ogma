@@ -225,11 +225,13 @@ impl TypeGraph {
 
     /// Add edges between a block's op (input) to _each_ arg (input).
     /// Only adds an edge if the positional argument is a **callsite** parameter.
-    pub fn link_def_arg_terms_with_ii(&mut self, ag: &AstGraph, def: DefNode) {
-        self.link_def_arg_terms_with_ii_inner(ag, &[def.idx()]);
+    ///
+    /// Returns if the type graph was altered.
+    pub fn link_def_arg_terms_with_ii(&mut self, ag: &AstGraph, def: DefNode) -> bool {
+        self.link_def_arg_terms_with_ii_inner(ag, &[def.idx()])
     }
 
-    fn link_def_arg_terms_with_ii_inner(&mut self, ag: &AstGraph, defs: &[NodeIndex]) {
+    fn link_def_arg_terms_with_ii_inner(&mut self, ag: &AstGraph, defs: &[NodeIndex]) -> bool {
         let op = DefNode(defs[0]).parent(ag);
         let args = ag.get_args(DefNode(defs[0]));
 
@@ -244,6 +246,8 @@ impl TypeGraph {
             .unwrap_or(0)
             .min(args.len());
 
+        let mut chgd = false;
+
         for i in 0..min {
             let all_callsite = params.iter().all(|p| p[i].is_callsite_eval());
             if !all_callsite {
@@ -251,8 +255,14 @@ impl TypeGraph {
             }
 
             let arg = args[i];
-            self.0.update_edge(op.idx(), arg.idx(), Flow::II);
+
+            if !self.contains_edge(op.idx(), arg.idx()) {
+                chgd = true;
+                self.0.add_edge(op.idx(), arg.idx(), Flow::II);
+            }
         }
+
+        chgd
     }
 
     pub fn set_root_input_ty(&mut self, ty: Type) {

@@ -112,6 +112,12 @@ impl<'d> Compiler<'d> {
                 continue;
             }
 
+            eprintln!("Linking def's args for known paths");
+            if self.link_known_def_path_args() {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
+
             eprintln!("Compiling blocks");
             match self.compile_blocks() {
                 Ok(()) => {
@@ -542,6 +548,34 @@ impl<'d> Compiler<'d> {
         let tg_chgd = self.apply_tg_chgs(tg_chgs.drain(..));
 
         Ok(chgd || tg_chgd)
+    }
+
+    fn link_known_def_path_args(&mut self) -> bool {
+        // filter ops which are not compiled
+        // filter to ops where the input type is known
+        // get the cmd node, if a def, then this is known as the path to take
+        
+        let defnodes = self.ag.node_indices()
+            // just OpNodes
+            .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
+            // without compiled steps
+            .filter(|n| !self.compiled_ops.contains_key(&n.index()))
+            // where input type is known
+            .filter_map(|n| self.tg[n.idx()].input.ty().map(|t| (n, t)))
+            // map to the def node path
+            .filter_map(|(n, ty)| self.ag.get_impl(n, ty))
+            // only if a Def
+            .filter_map(|n| self.ag[n.idx()].def().map(|_| DefNode(n.idx())))
+            .collect::<Vec<_>>();
+
+        let mut chgd = false;
+
+        for defnode in defnodes {
+            let x = self.tg.link_def_arg_terms_with_ii(&self.ag, defnode);
+            chgd |= x;
+        }
+
+        chgd
     }
 }
 
