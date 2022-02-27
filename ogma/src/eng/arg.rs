@@ -354,17 +354,16 @@ impl Argument {
         &'a self,
         cx: &'a Context<'a>,
     ) -> impl Fn(Value) -> Result<Value> + Sync + 'a {
-        todo!();
-
         use std::borrow::Cow;
         enum R<'r> {
             V(Cow<'r, Value>),
-            E(&'r Evaluator),
+            E(&'r eval::Stack)
+//             E(&'r Evaluator),
         }
         let r = match &self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
             Hold::Var(x) => R::V(Cow::Owned(x.fetch(&cx.env).clone())),
-            Hold::Expr(e) => todo!(), //R::E(e),
+            Hold::Expr(e) => R::E(e),
         };
 
         let inty = self.in_ty.clone();
@@ -372,7 +371,7 @@ impl Argument {
         move |input| {
             let r = match &r {
             R::V(v) => Ok(v.as_ref().clone()),
-            R::E(e) => resolve_expr(e, &inty, input, cx.clone()).map(|x| x.0),
+            R::E(e) => e.eval(input, cx.clone()).map(|x| x.0),
         };
 
             if let Ok(v) = &r {
