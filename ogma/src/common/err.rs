@@ -340,6 +340,7 @@ expected `{}`, found `{}`",
         )
     }
 
+    /// This is an internal error!
     pub(crate) fn conversion_failed(exp: &Type, found: &Type) -> Self {
         Error {
             cat: Category::Evaluation,
@@ -348,7 +349,7 @@ expected `{}`, found `{}`",
                 exp, found
             ),
             traces: Vec::new(),
-            help_msg: None,
+            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
         }
     }
 

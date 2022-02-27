@@ -1,14 +1,23 @@
 use super::*;
 use graphs::{
-    tygraph::{Chg, Knowledge},
+    astgraph::AstGraph,
+    tygraph::{Chg, Knowledge, TypeGraph},
     *,
 };
 use std::convert::TryInto;
 
+#[derive(Debug)]
 enum Kn {
     Unknown,
     Any,
     Ty(Type),
+}
+
+impl Kn {
+    /// Replace this Kn with `Unknown` and return what was there.
+    fn take(&mut self) -> Self {
+        std::mem::replace(self, Kn::Unknown)
+    }
 }
 
 impl From<&Knowledge> for Kn {
@@ -24,16 +33,51 @@ impl From<&Knowledge> for Kn {
 }
 
 pub struct ArgBuilder<'a, 'b> {
-    blk: &'a mut Block<'b>,
+    // blk: &'a mut Block<'b>,
     node: ArgNode,
     in_ty: Kn,
     out_ty: Kn,
+    // compiler references
+    ag: &'a AstGraph,
+    blk_in_ty: Option<Type>,
+    tg_chgs: &'a mut Vec<Chg>,
+    locals: &'a mut Option<&'b mut Locals>,
+    compiled_exprs: &'a IndexMap<eval::Stack>,
+    #[cfg(debug_assertions)]
+    tg: &'a TypeGraph,
 }
 
 impl<'a, 'b> ArgBuilder<'a, 'b> {
+    pub fn new(
+        node: ArgNode,
+        ag: &'a AstGraph,
+        tg: &'a TypeGraph,
+        tg_chgs: &'a mut Vec<Chg>,
+        blk_in_ty: Option<Type>,
+        locals: &'a mut Option<&'b mut Locals>,
+        compiled_exprs: &'a IndexMap<eval::Stack>,
+    ) -> Self {
+        // see if the input and/or output types are known
+        let tys = &tg[node.idx()]; // node should exist
+        let in_ty = Kn::from(&tys.input);
+        let out_ty = Kn::from(&tys.output);
+
+        ArgBuilder {
+            node,
+            in_ty,
+            out_ty,
+            ag,
+            tg_chgs,
+            blk_in_ty,
+            compiled_exprs,
+            locals,
+            tg,
+        }
+    }
+
     /// The arguments tag.
-    fn tag(&self) -> &Tag {
-        self.blk.ag[self.node.idx()].tag()
+    pub fn tag(&self) -> &Tag {
+        self.ag[self.node.idx()].tag()
     }
 
     /// Assert that this argument will be supplied an input of type `ty`.
@@ -42,7 +86,10 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
     /// > difficult with mutable aliasing, the type argument is an `Option`, where the `None`
     /// > variant represents _using the block's input type_.
     pub fn supplied<T: Into<Option<Type>>>(mut self, ty: T) -> Result<Self> {
-        let ty = ty.into().unwrap_or_else(|| self.blk.in_ty.clone());
+        let ty = match ty.into().or_else(|| self.blk_in_ty.clone()) {
+            Some(ty) => ty,
+            None => return Ok(self),
+        };
 
         if matches!(self.in_ty, Kn::Any) {
             self.in_ty = Kn::Ty(ty.clone());
@@ -62,7 +109,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Kn::Unknown => {
                 // There is currently no knowledge about the input type
                 // add to the TG that this node will be supplied a type `ty`
-                self.blk.tg_chgs.push(Chg::KnownInput(self.node.idx(), ty));
+                self.tg_chgs.push(Chg::KnownInput(self.node.idx(), ty));
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
             Kn::Any => unreachable!("any is reset to Kn::Ty"),
@@ -90,34 +137,35 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Kn::Unknown => {
                 // There is currently no knowledge about the output type
                 // add to the TG that this node is obliged to return the output type
-                self.blk
-                    .tg_chgs
-                    .push(Chg::ObligeOutput(self.node.idx(), ty));
+                self.tg_chgs.push(Chg::ObligeOutput(self.node.idx(), ty));
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
             Kn::Any => unreachable!("logic error if output is Any type"),
         }
     }
 
+    pub fn return_ty(&self) -> Option<&Type> {
+        match &self.out_ty {
+            Kn::Ty(t) => Some(t),
+            Kn::Any | Kn::Unknown => None,
+        }
+    }
+
     /// Asserts that the arguments input and output types are known, and if so, returns a concrete
     /// [`Argument`] with the ability to evaluate.
-    pub fn concrete(self) -> Result<Argument> {
+    pub fn concrete(mut self) -> Result<Argument> {
         use Kn::*;
 
         let tag = self.tag().clone();
 
-        let Self {
-            blk,
-            node,
-            in_ty,
-            out_ty,
-        } = self;
+        let in_ty = self.in_ty.take();
+        let out_ty = self.out_ty.take();
 
         match (in_ty, out_ty) {
             (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
             (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
-                let hold = Self::map_astnode_into_hold(blk, node)?;
+                let hold = self.map_astnode_into_hold()?;
 
                 Ok(Argument {
                     tag,
@@ -129,10 +177,10 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
         }
     }
 
-    fn map_astnode_into_hold(blk: &Block, node: ArgNode) -> Result<Hold> {
+    fn map_astnode_into_hold(self) -> Result<Hold> {
         use astgraph::AstNode::*;
 
-        match &blk.ag[node.idx()] {
+        match &self.ag[self.node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
@@ -143,7 +191,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Pound { ch: 't', tag: _ } => Ok(Hold::Lit(true.into())),
             Pound { ch: 'f', tag: _ } => Ok(Hold::Lit(false.into())),
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
-            Var(tag) => blk
+            Var(tag) => self
                 .locals
                 .as_ref()
                 .ok_or_else(|| Error::locals_unavailable(tag))
@@ -152,29 +200,26 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
                         .get(tag.str())
                         .ok_or_else(|| Error::var_not_found(tag))
                 })
-                .map(|local| match local {
-                    Local::Var(var) => Hold::Var(var.clone()),
+                .and_then(|local| match local {
+                    Local::Var(var) => Ok(Hold::Var(var.clone())),
                     Local::Param(arg) => {
-                        dbg!(&arg);
                         // debug checking about types here
                         #[cfg(debug_assertions)]
                         {
-                            let tys = &blk.tg[node.idx()];
+                            let tys = &self.tg[self.node.idx()];
                             assert_eq!(tys.output.ty(), Some(arg.out_ty()));
                             assert_eq!(tys.input.ty(), Some(arg.in_ty()));
                         }
 
-                        arg.hold.clone()
+                        Ok(arg.hold.clone())
                     }
                 }),
-            Expr(tag) => {
-                dbg!(&tag);
-                blk.compiled_exprs
-                    .get(&node.index())
-                    .cloned()
-                    .map(Hold::Expr)
-                    .ok_or_else(|| Error::incomplete_expr_compilation(tag))
-            }
+            Expr(tag) => self
+                .compiled_exprs
+                .get(&self.node.index())
+                .cloned()
+                .map(Hold::Expr)
+                .ok_or_else(|| Error::incomplete_expr_compilation(tag)),
         }
     }
 
@@ -185,8 +230,8 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
     /// # Type safety
     /// The variable will be created expecting the type `ty`. `set_data` only validates types in
     /// debug builds, be sure that testing occurs of code path to avoid UB in release.
-    pub fn create_var_ref(self, ty: Type) -> Result<Variable> {
-        match (self.blk.locals.as_mut(), &self.blk.ag[self.node.idx()]) {
+    pub fn create_var_ref(mut self, ty: Type) -> Result<Variable> {
+        match (self.locals.as_mut(), &self.ag[self.node.idx()]) {
             (Some(locals), astgraph::AstNode::Var(var)) => {
                 Ok(locals.add_new_var(Str::new(var.str()), ty, var.clone()))
             }
@@ -201,15 +246,6 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
 }
 
 impl<'a> Block<'a> {
-    fn pop_index(&mut self) -> Result<ArgNode> {
-        let arg = self
-            .args
-            .pop()
-            .ok_or_else(|| Error::insufficient_args(self.blk_tag(), self.args_count))?;
-        self.args_count += 1;
-        Ok(arg)
-    }
-
     /// Get the [`Block`]'s next argument.
     ///
     /// The argument is agnostic to whether it is a variable, literal, or expression.
@@ -218,18 +254,31 @@ impl<'a> Block<'a> {
     /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
     /// an [`Argument`] is produced.
     pub fn next_arg(&mut self) -> Result<ArgBuilder<'_, 'a>> {
-        let node = self.pop_index()?;
-        // see if the input and/or output types are known
-        let tys = &self.tg[node.idx()]; // node should exist
-        let in_ty = Kn::from(&tys.input);
-        let out_ty = Kn::from(&tys.output);
+        let btag = self.blk_tag().clone();
+        let node = pop(&mut self.args, self.args_count, &btag)?;
+        self.args_count += 1;
 
-        Ok(ArgBuilder {
-            blk: self,
+        let Block {
+            ag,
+            tg_chgs,
+            in_ty: blk_in_ty,
+            tg,
+            locals,
+            compiled_exprs,
+            ..
+        } = self;
+
+        let blk_in_ty = Some(blk_in_ty.clone());
+
+        Ok(ArgBuilder::new(
             node,
-            in_ty,
-            out_ty,
-        })
+            ag,
+            tg,
+            tg_chgs,
+            blk_in_ty,
+            locals,
+            compiled_exprs,
+        ))
     }
 }
 
@@ -280,12 +329,17 @@ impl Argument {
     where
         F: FnOnce() -> Value,
     {
-        todo!();
-        //         match &self.hold {
-        //             Hold::Lit(x) => Ok(x.clone()),
-        //             Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
-        //             Hold::Expr(e) => resolve_expr(e, &self.in_ty, input(), cx.clone()).map(|x| x.0),
-        //         }
+        let r = match &self.hold {
+            Hold::Lit(x) => Ok(x.clone()),
+            Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
+            Hold::Expr(stack) => stack.eval(input(), cx.clone()).map(|x| x.0),
+        };
+
+        if let Ok(v) = &r {
+            self.assert_resolved_type(v);
+        }
+
+        r
     }
 
     /// Transform this argument into a `resolve` function.
@@ -300,25 +354,42 @@ impl Argument {
         &'a self,
         cx: &'a Context<'a>,
     ) -> impl Fn(Value) -> Result<Value> + Sync + 'a {
-        todo!();
-
         use std::borrow::Cow;
         enum R<'r> {
             V(Cow<'r, Value>),
-            E(&'r Evaluator),
+            E(&'r eval::Stack), //             E(&'r Evaluator),
         }
         let r = match &self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
             Hold::Var(x) => R::V(Cow::Owned(x.fetch(&cx.env).clone())),
-            Hold::Expr(e) => todo!(), //R::E(e),
+            Hold::Expr(e) => R::E(e),
         };
 
         let inty = self.in_ty.clone();
 
-        move |input| match &r {
-            R::V(v) => Ok(v.as_ref().clone()),
-            R::E(e) => resolve_expr(e, &inty, input, cx.clone()).map(|x| x.0),
+        move |input| {
+            let r = match &r {
+                R::V(v) => Ok(v.as_ref().clone()),
+                R::E(e) => e.eval(input, cx.clone()).map(|x| x.0),
+            };
+
+            if let Ok(v) = &r {
+                self.assert_resolved_type(v);
+            }
+
+            r
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn assert_resolved_type(&self, value: &Value) {
+        let returned_ty = &value.ty();
+        let exp_ty = &self.out_ty;
+
+        assert_eq!(
+            returned_ty, exp_ty,
+            "the argument's output type does not match the expected type"
+        );
     }
 }
 
@@ -337,4 +408,9 @@ supplied input type: {}",
         );
     }
     expr.eval(input, cx)
+}
+
+pub fn pop(args: &mut Vec<ArgNode>, arg_count: u8, err_tag: &Tag) -> Result<ArgNode> {
+    args.pop()
+        .ok_or_else(|| Error::insufficient_args(err_tag, arg_count))
 }

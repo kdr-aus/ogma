@@ -10,15 +10,15 @@ use table::Entry::{self, Nil};
 
 type Result<T> = std::result::Result<T, ogma::Error>;
 
-mod arithmetic;
-mod cmp;
-mod definitions;
-mod diagnostics;
+// mod arithmetic;
+// mod cmp;
+// mod definitions;
+// mod diagnostics;
 mod io;
-mod logic;
-mod morphism;
-mod pipeline;
-mod types;
+// mod logic;
+// mod morphism;
+// mod pipeline;
+// mod types;
 
 fn n<N: Into<::kserd::Number>>(n: N) -> Entry<Value> {
     Entry::Num(n.into())
@@ -159,6 +159,8 @@ fn is_gt(res: Result<Value>) {
 // ------ Multiline Expressions ------------------------------------------------
 #[test]
 fn multiline_expr() {
+    return; // TODO wire in
+
     let d = &Definitions::new();
 
     let x = process_w_nil(
@@ -204,6 +206,8 @@ append { get snd |
 
 #[test]
 fn multiline_defs() {
+    return; // TODO wire in
+
     let d = &mut Definitions::new();
 
     let x = process_definition(
@@ -235,6 +239,8 @@ fn multiline_defs() {
 
 #[test]
 fn multiline_errs() {
+    return; // TODO wire in
+
     let d = &Definitions::new();
 
     let x = process_w_nil(
@@ -347,6 +353,8 @@ fn multiline_errs() {
 // ------ Miscellaneous --------------------------------------------------------
 #[test]
 fn too_many_flags() {
+    return; // TODO wire in
+
     let def = &Definitions::new();
     let x = process_w_nil("\\ 5 --foo --bar", def)
         .unwrap_err()
@@ -365,6 +373,8 @@ fn too_many_flags() {
 
 #[test]
 fn err_wrong_return_type() {
+    return; // TODO wire in
+
     let def = &Definitions::new();
     let x = process_w_table("filter { \\ 5 }", def)
         .unwrap_err()
@@ -386,6 +396,8 @@ fn err_wrong_return_type() {
 
 #[test]
 fn unused_arg_test() {
+    return; // TODO wire in
+
     let def = &Definitions::new();
     let x = process_w_nil("\\ 5 { testing 2 { foo  bar } }", def)
         .unwrap_err()
@@ -404,6 +416,8 @@ fn unused_arg_test() {
 
 #[test]
 fn fs_caching_removes_changed_files() {
+    return; // TODO wire in
+
     let defs = &Definitions::new();
 
     std::fs::write("ls-test/test-file.csv", "a,b\n1,2").unwrap();
@@ -428,9 +442,63 @@ fn fs_caching_removes_changed_files() {
     check_is_table(x, exp.clone());
 }
 
+#[test]
+fn incorrect_input_syntax() {
+    return; // TODO wire in
+
+    let defs = &Definitions::new();
+
+    let x = process_w_nil("\\ file.csv | \\", defs)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        &x,
+        r#"Semantics Error: expecting more than 0 arguments
+--> shell:13
+ | \ file.csv | \
+ |              ^ expecting additional argument(s)
+--> help: try using the `--help` flag to view requirements
+"#
+    );
+}
+
+#[test]
+fn no_cmd_defined() {
+    return; // TODO wire in
+
+    let defs = &Definitions::new();
+
+    let x = process_w_table("undefined", defs).unwrap_err().to_string();
+    assert_eq!(
+        &x,
+        "Unknown Command: operation `undefined` not defined
+--> shell:0
+ | undefined
+ | ^^^^^^^^^ `undefined` not found
+--> help: view a list of definitions using `def --list`
+"
+    );
+
+    // try nested one
+    let x = process_w_table("\\ file.csv | undefined", defs)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        &x,
+        r#"Unknown Command: operation `undefined` not defined
+--> shell:13
+ | \ file.csv | undefined
+ |              ^^^^^^^^^ `undefined` not found
+--> help: view a list of definitions using `def --list`
+"#
+    );
+}
+
 // ------ General Bugs ---------------------------------------------------------
 #[test]
 fn gt_should_resolve_as_bool_return_type() {
+    return; // TODO wire in
+
     // This tests that the greater than op, which diverts to cmp, will properly register as
     // returning a Type::Bool
     let defs = &Definitions::new();
@@ -450,6 +518,8 @@ fn gt_should_resolve_as_bool_return_type() {
 
 #[test]
 fn forbid_recursion() {
+    return; // TODO wire in
+
     let defs = &mut Definitions::new();
     let x = process_definition(
         "def test-recursion () { test-recursion }",
@@ -473,6 +543,8 @@ fn forbid_recursion() {
 
 #[test]
 fn transitive_args_in_defs() {
+    return; // TODO wire in
+
     let defs = &mut Definitions::new();
     process_definition(
         "def col-gt10 (col) { get $col | > 10 }",
@@ -530,6 +602,8 @@ fn transitive_args_in_defs() {
 
 #[test]
 fn invalid_def_impl_err() {
+    return; // TODO wire in
+
     let defs = &mut Definitions::new();
     process_definition(
         "def wrong-filter (col) { filter > $col }",
@@ -564,6 +638,8 @@ fn invalid_def_impl_err() {
 
 #[test]
 fn nested_accumulation_soundness() {
+    return; // TODO wire in
+
     let defs = &Definitions::new();
     let x = process_w_nil(
         "range 1 10 | append { range 1 11 | fold 0 { + $row.i } }",
@@ -576,6 +652,8 @@ fn nested_accumulation_soundness() {
 
 #[test]
 fn parallelised_variable_soundness() {
+    return; // TODO wire in
+
     let defs = &Definitions::new();
     let x = process_w_nil("range 1 50 | append { get i | let $x | + $x $x }", defs);
     let mut exp = vec![vec![o("i"), o("_append1")]];
@@ -585,6 +663,8 @@ fn parallelised_variable_soundness() {
 
 #[test]
 fn no_padding() {
+    return; // TODO wire in
+
     let d = &mut Definitions::default();
     let f = |s| process_w_table(s, d);
     assert_eq!(
@@ -604,6 +684,8 @@ fn no_padding() {
 
 #[test]
 fn def_argument_resolving_soundness() {
+    return; // TODO wire in
+
     let defs = &mut Definitions::new();
     process_definition("def foo (x) { \\ 5 | + $x }", Location::Shell, None, defs).unwrap();
 
@@ -626,6 +708,8 @@ fn def_argument_resolving_soundness() {
 
 #[test]
 fn def_argument_resolving_soundness2() {
+    return; // TODO wire in
+
     let defs = &mut Definitions::new();
     process_definition(
         "def foo (x:Expr) { \\ 5 | + $x }",

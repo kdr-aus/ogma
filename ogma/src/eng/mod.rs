@@ -16,11 +16,12 @@ type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
-    comp::compile,
     eval::{DefImplEvaluator, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals, Variable},
 };
+
+pub use self::comp::{compile, FullCompilation};
 
 // ###### ARGUMENT #############################################################
 /// Compiled argument.
@@ -172,8 +173,8 @@ mod tests {
         use std::mem::size_of;
 
         // TODO review this sizing, maybe it can be reduced by boxing
-        assert_eq!(size_of::<Argument>(), 232);
-        assert_eq!(size_of::<Hold>(), 136);
+        assert_eq!(size_of::<Argument>(), 192);
+        assert_eq!(size_of::<Hold>(), 96);
 
         // Evaluator is quite large
         assert_eq!(size_of::<Evaluator>(), 128);

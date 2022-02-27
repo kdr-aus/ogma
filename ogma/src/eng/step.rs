@@ -24,6 +24,25 @@ impl Step {
 
         Ok(step)
     }
+
+    pub fn def(params: Vec<(Variable, Argument)>, subexpr: eval::Stack, out_ty: Type) -> Self {
+        let f = Arc::new(move |input: Value, mut cx: Context| {
+            // resolve each callsite argument and set the variable
+            for (var, arg) in &params {
+                let v = arg.resolve(|| input.clone(), &cx)?;
+                var.set_data(&mut cx.env, v);
+            }
+
+            // evalulate the sub-expr
+            subexpr.eval(input, cx)
+        });
+
+        Self {
+            out_ty,
+            f,
+            type_annotation: String::new(),
+        }
+    }
 }
 
 impl Clone for Step {

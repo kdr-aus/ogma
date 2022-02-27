@@ -6,13 +6,13 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     //         (append, Morphism)
     //         ("append-row", append_row, Morphism)
     //         (dedup, Morphism)
-            (filter, Morphism)
+    (filter, Morphism)
     //         (fold, Morphism)
     //         ("fold-while", fold_while, Morphism)
     //         (grp, Morphism)
     //         ("grp-by", grpby, Morphism)
     //         (map, Morphism)
-    //         (pick, Morphism)
+    (pick, Morphism)
     //         (ren, Morphism)
     //         ("ren-with", ren_with, Morphism)
     //         (rev, Morphism)
@@ -20,7 +20,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     //         (sort, Morphism)
     //         ("sort-by", sortby, Morphism)
     //         (take, Morphism)
-        };
+    };
 }
 //
 // // ------ Append ---------------------------------------------------------------
@@ -332,7 +332,17 @@ impl FilterTable {
                 .supplied(Ty::Nil)?
                 .returns(Ty::Str)?
                 .concrete()?;
-            let expr_predicate = blk.next_arg()?.returns(Ty::Bool)?.concrete()?;
+
+            let ty_flag = type_flag(&mut blk)?;
+
+            let expr_predicate = blk.next_arg()?;
+            let expr_predicate = match ty_flag {
+                Some(ty) => expr_predicate.supplied(ty)?,
+                None => expr_predicate,
+            }
+            .returns(Ty::Bool)?
+            .concrete()?;
+
             let exp_ty = expr_predicate.in_ty().clone();
 
             let ft = Box::new(Self {
@@ -848,74 +858,77 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
 //     }
 // }
 //
-// // ------ Pick -----------------------------------------------------------------
-// fn pick_help() -> HelpMessage {
-//     HelpMessage {
-//         desc: "pick out columns to keep in a table, in order".into(),
-//         params: vec![HelpParameter::Required("col-name..".into())],
-//         flags: vec![
-//             (
-//                 "add",
-//                 "add a blank column if it does not exist in the table",
-//             ),
-//             ("trail", "append any remaining columns in order"),
-//         ],
-//         examples: vec![HelpExample {
-//             desc: "choose the size, name, and type columns",
-//             code: "ls | pick name size type",
-//         }],
-//         ..HelpMessage::new("pick")
-//     }
-// }
-//
-// fn pick_intrinsic(blk: Block) -> Result<Step> {
-//     match blk.in_ty() {
-//         Ty::Tab => pick_table_columns(blk),
-//         x => Err(Error::wrong_input_type(x, &blk.op_tag)),
-//     }
-// }
-//
-// fn pick_table_columns(mut blk: Block) -> Result<Step> {
-//     let addflag = blk.get_flag("add").is_some();
-//     let trailflag = blk.get_flag("trail").is_some();
-//
-//     let colnames = ColNameArgs::build(&mut blk)?;
-//     blk.eval_o::<_, Table>(move |input, cx| {
-//         let table = Table::try_from(input)?;
-//         let mut colidxs = if addflag {
-//             colnames.resolve_indices_forgiven(&table, &cx)?
-//         } else {
-//             colnames
-//                 .resolve_indices(&table, &cx)?
-//                 .into_iter()
-//                 .map(|(a, b)| (Some(a), b))
-//                 .collect()
-//         };
-//
-//         if trailflag {
-//             // add columns that weren't touched to end, in order.
-//             let indices: HashSet<_> = colidxs.iter().filter_map(|x| x.0).collect();
-//             let toadd = (0..table.cols_len()).filter(|i| !indices.contains(i));
-//             colidxs.extend(toadd.map(|i| (Some(i), "".into())));
-//         }
-//
-//         // rebuild table in parallel fashion
-//         let mut v = repeat_with(|| Vec::with_capacity(colidxs.len()))
-//             .take(table.rows_len())
-//             .collect::<Vec<_>>();
-//         v.par_iter_mut().enumerate().for_each(|(row, v)| {
-//             let row = colidxs.iter().map(|i| match i {
-//                 (Some(i), _) => table.row(row).and_then(|mut x| x.nth(*i)).unwrap().clone(),
-//                 (None, n) if row == 0 => Value::Str(n.clone()).into(), // header
-//                 (None, _) => Entry::Nil,
-//             });
-//             v.extend(row);
-//         });
-//
-//         cx.done_o(::table::Table::from(v).into())
-//     })
-// }
-//
+// ------ Pick -----------------------------------------------------------------
+fn pick_help() -> HelpMessage {
+    HelpMessage {
+        desc: "pick out columns to keep in a table, in order".into(),
+        params: vec![HelpParameter::Required("col-name..".into())],
+        flags: vec![
+            (
+                "add",
+                "add a blank column if it does not exist in the table",
+            ),
+            ("trail", "append any remaining columns in order"),
+        ],
+        examples: vec![HelpExample {
+            desc: "choose the size, name, and type columns",
+            code: "ls | pick name size type",
+        }],
+        ..HelpMessage::new("pick")
+    }
+}
+
+fn pick_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Type::Tab); // always return a table
+
+    match blk.in_ty() {
+        Ty::Tab => pick_table_columns(blk),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+    }
+}
+
+fn pick_table_columns(mut blk: Block) -> Result<Step> {
+    let addflag = blk.get_flag("add").is_some();
+    let trailflag = blk.get_flag("trail").is_some();
+    //
+    let colnames = ColNameArgs::build(&mut blk)?;
+    blk.eval_o::<_, Table>(move |input, cx| {
+        dbg!(input.ty());
+        let table = Table::try_from(input)?;
+        let mut colidxs = if addflag {
+            colnames.resolve_indices_forgiven(&table, &cx)?
+        } else {
+            colnames
+                .resolve_indices(&table, &cx)?
+                .into_iter()
+                .map(|(a, b)| (Some(a), b))
+                .collect()
+        };
+
+        if trailflag {
+            // add columns that weren't touched to end, in order.
+            let indices: HashSet<_> = colidxs.iter().filter_map(|x| x.0).collect();
+            let toadd = (0..table.cols_len()).filter(|i| !indices.contains(i));
+            colidxs.extend(toadd.map(|i| (Some(i), "".into())));
+        }
+
+        // rebuild table in parallel fashion
+        let mut v = repeat_with(|| Vec::with_capacity(colidxs.len()))
+            .take(table.rows_len())
+            .collect::<Vec<_>>();
+        v.par_iter_mut().enumerate().for_each(|(row, v)| {
+            let row = colidxs.iter().map(|i| match i {
+                (Some(i), _) => table.row(row).and_then(|mut x| x.nth(*i)).unwrap().clone(),
+                (None, n) if row == 0 => Value::Str(n.clone()).into(), // header
+                (None, _) => Entry::Nil,
+            });
+            v.extend(row);
+        });
+
+        cx.done_o(::table::Table::from(v).into())
+    })
+}
+
 // // ------ Ren ------------------------------------------------------------------
 // fn ren_help() -> HelpMessage {
 //     HelpMessage {

@@ -59,6 +59,7 @@ input is Table; outputs the headers as a table"
 }
 
 fn ls_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Type::Tab); // always outputs a table
     let blk_tag = blk.blk_tag().clone();
     match blk.in_ty() {
         Ty::Tab => blk.eval_o(move |input, cx| {
@@ -277,6 +278,7 @@ table input is saved as comma separated values"
 
 fn save_intrinsic(mut blk: Block) -> Result<Step> {
     let ty = blk.in_ty().clone();
+    blk.assert_output(ty.clone()); // output is the same as input
     if ty == Ty::TabRow {
         return Err(Error::wrong_op_input_type(&ty, blk.op_tag()));
     }

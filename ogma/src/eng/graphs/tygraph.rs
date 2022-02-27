@@ -37,9 +37,15 @@ pub enum Flow {
 pub enum Chg {
     KnownInput(NodeIndex, Type),
     InferInput(NodeIndex, Type),
+    AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
     InferOutput(NodeIndex, Type),
+    AddEdge {
+        src: NodeIndex,
+        dst: NodeIndex,
+        flow: Flow,
+    },
 }
 
 pub enum Conflict {
@@ -83,6 +89,7 @@ impl TypeGraph {
     ///
     /// For instance, a number variant node can be assigned the type number as an output.
     pub fn apply_ast_types(&mut self, ag: &AstGraph) {
+        // based on ast nodes
         for nidx in ag.node_indices() {
             let node = &ag[nidx];
 
@@ -111,6 +118,17 @@ impl TypeGraph {
                 current.output = ty;
             }
         }
+
+        // based on any Keyed(Some(type))
+        for (e, node) in ag
+            .edge_indices()
+            .filter(|&e| ag[e].is_key())
+            .map(|e| (e, ag.edge_endpoints(e).expect("should exist").1))
+        {
+            if let Some(ty) = ag[e].keyed().cloned() {
+                self.0[node].input = Knowledge::Known(ty);
+            }
+        }
     }
 
     /// Apply known edges for the flow of types from the ast graph:
@@ -118,8 +136,16 @@ impl TypeGraph {
     /// - The _input_ of an expression goes to the _input_ of the first op,
     /// - The _output_ of the last op in an expression to the _output_ of the expression,
     /// - The _output_ of a block into the _input_ of the next block,
-    /// - For _defs_, the _input_ flows down into the expression.
-    ///     - This is because defs will **always** use the input defined on the op.
+    ///
+    /// For `Def`s:
+    /// - `Def->Expr: II`
+    /// - `Expr->Def: OO`
+    /// - If keyed `None`:
+    ///   - `Op->Def: II`
+    ///   - `Def->Op: OO`
+    ///   - This is because defs will **always** use the input defined on the op.
+    /// - If **ALL** cmd nodes are `Def`s
+    ///   - `Op->Arg: II`: where `Arg` is a callsite param **for all params**.
     pub fn apply_ast_edges(&mut self, ag: &AstGraph) {
         // NOTE: The graph .neighbors call returns items in the _reverse_ order they were added.
         // It also does not support a .rev() call.
@@ -158,30 +184,85 @@ impl TypeGraph {
             }
         }
 
-        // TODO: handle defs
-        // Do I have to? I am not so sure anymore if the type flow is set like this??
-        // So far yes, since it helps the TG
-        for def in ag
+        // defs
+        for defnode in ag
             .node_indices()
             .filter_map(|n| ag[n].def().map(|_| DefNode(n)))
-            .filter(|def| {
-                ag.edges_directed(def.idx(), Incoming)
-                    .any(|e| e.weight().keyed_none())
-            })
         {
-            let op = def.parent(ag).idx();
-            let expr = def.expr(ag).idx();
-            let def = def.idx();
+            self.apply_ast_edges_defs(ag, defnode);
+        }
+    }
 
+    fn apply_ast_edges_defs(&mut self, ag: &AstGraph, defnode: DefNode) {
+        let def = defnode.idx();
+        let op = defnode.parent(ag).idx();
+        let expr = defnode.expr(ag).idx();
+
+        // flow the input of the Def into the expression
+        self.0.add_edge(def, expr, Flow::II);
+        // flow the output of the expression into the Def
+        self.0.add_edge(expr, def, Flow::OO);
+        // flow the output of the Def into the Op
+        self.0.add_edge(def, op, Flow::OO); // i believe this is okay with multiple OO?
+
+        let is_keyed_none = ag[ag.find_edge(op, def).expect("edge from op to def")].keyed_none();
+
+        // can only link op input to def input if there is no type key
+        if is_keyed_none {
             // flow the input of the op into the input of this Def
             self.0.add_edge(op, def, Flow::II);
-            // flow the input of the Def into the expression
-            self.0.add_edge(def, expr, Flow::II);
-            // flow the output of the expression into the Def
-            self.0.add_edge(expr, def, Flow::OO);
-            // flow the output of the Def into the Op
-            self.0.add_edge(def, op, Flow::OO);
         }
+
+        let all_defs = ag
+            .edges(op)
+            .filter(|e| e.weight().is_key())
+            .map(|e| e.target())
+            .collect::<Vec<_>>();
+        if all_defs.iter().all(|n| ag[*n].def().is_some()) {
+            self.link_def_arg_terms_with_ii_inner(ag, &all_defs);
+        }
+    }
+
+    /// Add edges between a block's op (input) to _each_ arg (input).
+    /// Only adds an edge if the positional argument is a **callsite** parameter.
+    ///
+    /// Returns if the type graph was altered.
+    pub fn link_def_arg_terms_with_ii(&mut self, ag: &AstGraph, def: DefNode) -> bool {
+        self.link_def_arg_terms_with_ii_inner(ag, &[def.idx()])
+    }
+
+    fn link_def_arg_terms_with_ii_inner(&mut self, ag: &AstGraph, defs: &[NodeIndex]) -> bool {
+        let op = DefNode(defs[0]).parent(ag);
+        let args = ag.get_args(DefNode(defs[0]));
+
+        let params = defs
+            .iter()
+            .map(|&n| ag[n].def().expect("all def nodes"))
+            .collect::<Vec<_>>();
+        let min = params
+            .iter()
+            .map(|v| v.len())
+            .min()
+            .unwrap_or(0)
+            .min(args.len());
+
+        let mut chgd = false;
+
+        for i in 0..min {
+            let all_callsite = params.iter().all(|p| p[i].is_callsite_eval());
+            if !all_callsite {
+                continue;
+            }
+
+            let arg = args[i];
+
+            if !self.contains_edge(op.idx(), arg.idx()) {
+                chgd = true;
+                self.0.add_edge(op.idx(), arg.idx(), Flow::II);
+            }
+        }
+
+        chgd
     }
 
     pub fn set_root_input_ty(&mut self, ty: Type) {
@@ -217,6 +298,7 @@ impl TypeGraph {
             let to = &self.0[to_idx];
             let known_out = from.output.known().is_some();
             let known_in = from.input.known().is_some();
+            let any_in = from.input.is_any();
 
             let reserr = |conflict| ResolutionError {
                 from: from_idx,
@@ -249,6 +331,12 @@ impl TypeGraph {
                 Flow::II if matches!(to.input, Knowledge::Inferred(_)) => {
                     to.input.can_flow(&from.input).map_err(reserr)?;
                     Some((Update::FromInput, to.input.clone()))
+                }
+                // Flow input -> input, allowing Any to flow through
+                // NOTE: Any should only be allowed on input types
+                Flow::II if any_in => {
+                    from.input.can_flow(&to.input).map_err(reserr)?;
+                    Some((Update::ToInput, from.input.clone()))
                 }
                 Flow::II | Flow::IO | Flow::OI | Flow::OO => None,
             };
@@ -299,6 +387,14 @@ impl TypeGraph {
             Chg::InferInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Inferred(ty)))
             }
+            Chg::AnyInput(node) => {
+                // Only set the input to be Any if the there is no knowledge about the type
+                if self[node].input.ty().is_none() {
+                    apply(self, node, |n| set(&mut n.input, Knowledge::Any))
+                } else {
+                    false
+                }
+            }
             Chg::KnownOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Known(ty)))
             }
@@ -307,6 +403,19 @@ impl TypeGraph {
             }
             Chg::InferOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Inferred(ty)))
+            }
+            Chg::AddEdge { src, dst, flow } => {
+                // TODO edges_connecting is not implemented yet for StableGraph
+                // can be replicated with a filter
+                let chgd = self
+                    .0
+                    .edges(src)
+                    .filter(|e| e.target() == dst)
+                    .all(|e| e.weight() != &flow);
+                if chgd {
+                    self.0.add_edge(src, dst, flow);
+                }
+                chgd
             }
         }
     }
@@ -401,6 +510,8 @@ impl Knowledge {
             (Inferred(_), Unknown | Any) => Ok(()),
             // An inferred source can flow into itself if the types match
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
+            // An any source can flow into an Any or Unknown dest
+            (Any, Any | Unknown) => Ok(()),
 
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }
