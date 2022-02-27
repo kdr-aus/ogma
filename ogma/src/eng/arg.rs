@@ -357,8 +357,7 @@ impl Argument {
         use std::borrow::Cow;
         enum R<'r> {
             V(Cow<'r, Value>),
-            E(&'r eval::Stack)
-//             E(&'r Evaluator),
+            E(&'r eval::Stack), //             E(&'r Evaluator),
         }
         let r = match &self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
@@ -370,9 +369,9 @@ impl Argument {
 
         move |input| {
             let r = match &r {
-            R::V(v) => Ok(v.as_ref().clone()),
-            R::E(e) => e.eval(input, cx.clone()).map(|x| x.0),
-        };
+                R::V(v) => Ok(v.as_ref().clone()),
+                R::E(e) => e.eval(input, cx.clone()).map(|x| x.0),
+            };
 
             if let Ok(v) = &r {
                 self.assert_resolved_type(v);
@@ -387,7 +386,10 @@ impl Argument {
         let returned_ty = &value.ty();
         let exp_ty = &self.out_ty;
 
-        assert_eq!(returned_ty, exp_ty, "the argument's output type does not match the expected type");
+        assert_eq!(
+            returned_ty, exp_ty,
+            "the argument's output type does not match the expected type"
+        );
     }
 }
 

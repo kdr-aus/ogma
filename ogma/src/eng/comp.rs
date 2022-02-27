@@ -291,8 +291,13 @@ impl<'d> Compiler<'d> {
                 match self.compiled_exprs.get(&expr.index()) {
                     Some(stack) => {
                         // map the callsite params into the **op** node's arguments (for eval)
-                        let params = self.map_callsite_params_for_def_step(defnode, &in_ty, chgs)?;
-                        let out_ty = self.tg[expr.idx()].output.ty().cloned().expect("shoud be known if a stack exists");
+                        let params =
+                            self.map_callsite_params_for_def_step(defnode, &in_ty, chgs)?;
+                        let out_ty = self.tg[expr.idx()]
+                            .output
+                            .ty()
+                            .cloned()
+                            .expect("shoud be known if a stack exists");
                         let step = Step::def(params, stack.clone(), out_ty);
                         let locals = self.locals.get(&opnode.index()).cloned();
                         Ok((step, locals))
@@ -331,24 +336,58 @@ impl<'d> Compiler<'d> {
     /// - `Compiler.callsite_params` expects to have an entry for the def
     /// - `CallsiteParam.arg_idx` should index into the def's argument list
     /// - the argument builder expects both input and output types of the argument to be known
-    fn map_callsite_params_for_def_step(&self, def: DefNode, in_ty: &Type, tg_chgs: &mut Vec<tygraph::Chg>) -> Result<Vec<(Variable, Argument)>> {
-        let Compiler { defs, ag, tg, flowed_edges, compiled_ops, compiled_exprs, locals, output_infer_opnode, callsite_params } = self;
+    fn map_callsite_params_for_def_step(
+        &self,
+        def: DefNode,
+        in_ty: &Type,
+        tg_chgs: &mut Vec<tygraph::Chg>,
+    ) -> Result<Vec<(Variable, Argument)>> {
+        let Compiler {
+            defs,
+            ag,
+            tg,
+            flowed_edges,
+            compiled_ops,
+            compiled_exprs,
+            locals,
+            output_infer_opnode,
+            callsite_params,
+        } = self;
 
         let args = ag.get_args(def);
-        let mut locals = locals.get(&def.parent(ag).index()).expect("input locals should exist").clone();
+        let mut locals = locals
+            .get(&def.parent(ag).index())
+            .expect("input locals should exist")
+            .clone();
         let locals = &mut Some(&mut locals);
 
-                        callsite_params.get(&def.index()).expect("if the sub-expression exists, there should be an associated callsite params").iter()
-                            .map(|CallsiteParam { param, var, arg_idx }| {
-                                let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
-                                arg::ArgBuilder::new(arg, ag, tg, tg_chgs, Some(in_ty.clone()), locals, compiled_exprs )
-                                    .supplied(in_ty.clone())
-                                    // do return????
-                                    .and_then(|a| 
-                                    a.concrete())
-                                    .map(|arg| 
-                                (var.clone(), arg))
-                            }).collect()
+        callsite_params
+            .get(&def.index())
+            .expect("if the sub-expression exists, there should be an associated callsite params")
+            .iter()
+            .map(
+                |CallsiteParam {
+                     param,
+                     var,
+                     arg_idx,
+                 }| {
+                    let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
+                    arg::ArgBuilder::new(
+                        arg,
+                        ag,
+                        tg,
+                        tg_chgs,
+                        Some(in_ty.clone()),
+                        locals,
+                        compiled_exprs,
+                    )
+                    .supplied(in_ty.clone())
+                    // do return????
+                    .and_then(|a| a.concrete())
+                    .map(|arg| (var.clone(), arg))
+                },
+            )
+            .collect()
     }
 
     fn infer_inputs(&mut self) -> Result<bool> {
