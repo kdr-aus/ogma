@@ -5,10 +5,10 @@ use super::*;
 #[derive(Debug, Clone)]
 pub struct Stack {
     #[cfg(debug_assertions)]
-    pub in_ty: Type,
+    in_ty: Type,
 
     #[cfg(debug_assertions)]
-    pub out_ty: Type,
+    out_ty: Type,
 
     /// Each block converted into a function.
     steps: Vec<Step>,
@@ -18,6 +18,7 @@ impl Stack {
     pub fn new(steps: Vec<Step>) -> Self {
         Self {
             steps,
+
             #[cfg(debug_assertions)]
             in_ty: Type::Nil,
 
@@ -33,15 +34,22 @@ impl Stack {
             "expecting input value into Stack to match Stack's input type"
         );
 
+        dbg!(self.steps.len());
+        dbg!(&self.in_ty);
+
         let Context { mut env, root, wd } = cx;
 
         let mut input = value;
         for step in &self.steps {
+            dbg!(input.ty());
             let cx = Context { env, root, wd };
             let (output, new_env) = step.invoke(input, cx)?;
             input = output;
             env = new_env;
         }
+
+        dbg!(input.ty());
+        dbg!(&self.out_ty);
 
         debug_assert_eq!(
             input.ty(),
@@ -50,6 +58,20 @@ impl Stack {
         );
 
         Ok((input, env))
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn add_types(&mut self, tynode: &graphs::tygraph::Node) {
+        self.in_ty = tynode
+            .input
+            .ty()
+            .expect("expressions input type should be known at this point")
+            .clone();
+        self.out_ty = tynode
+            .output
+            .ty()
+            .expect("expressions output type should be known at this point")
+            .clone();
     }
 }
 

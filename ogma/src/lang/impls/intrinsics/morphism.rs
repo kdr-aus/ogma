@@ -339,7 +339,9 @@ impl FilterTable {
             let expr_predicate = match ty_flag {
                 Some(ty) => expr_predicate.supplied(ty)?,
                 None => expr_predicate,
-            } .returns(Ty::Bool)?.concrete()?;
+            }
+            .returns(Ty::Bool)?
+            .concrete()?;
 
             let exp_ty = expr_predicate.in_ty().clone();
 
@@ -891,6 +893,7 @@ fn pick_table_columns(mut blk: Block) -> Result<Step> {
     //
     let colnames = ColNameArgs::build(&mut blk)?;
     blk.eval_o::<_, Table>(move |input, cx| {
+        dbg!(input.ty());
         let table = Table::try_from(input)?;
         let mut colidxs = if addflag {
             colnames.resolve_indices_forgiven(&table, &cx)?
@@ -901,14 +904,14 @@ fn pick_table_columns(mut blk: Block) -> Result<Step> {
                 .map(|(a, b)| (Some(a), b))
                 .collect()
         };
-        //
+
         if trailflag {
             // add columns that weren't touched to end, in order.
             let indices: HashSet<_> = colidxs.iter().filter_map(|x| x.0).collect();
             let toadd = (0..table.cols_len()).filter(|i| !indices.contains(i));
             colidxs.extend(toadd.map(|i| (Some(i), "".into())));
         }
-        //
+
         // rebuild table in parallel fashion
         let mut v = repeat_with(|| Vec::with_capacity(colidxs.len()))
             .take(table.rows_len())
@@ -921,7 +924,7 @@ fn pick_table_columns(mut blk: Block) -> Result<Step> {
             });
             v.extend(row);
         });
-        //
+
         cx.done_o(::table::Table::from(v).into())
     })
 }

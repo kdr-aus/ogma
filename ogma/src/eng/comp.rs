@@ -22,6 +22,7 @@ pub fn compile(
         compiled_exprs: Default::default(),
         locals: Default::default(),
         output_infer_opnode: None,
+        callsite_params: Default::default(),
     };
 
     compiler.init_tg(input_ty); // initialise TG
@@ -43,6 +44,10 @@ pub fn compile(
     let mut compiler = compiler.compile(ExprNode(0.into()))?;
 
     let err = "should exist on successful compilation";
+
+    // NOTE: this can be used to investigate compilation/evaluation issues by visualising the
+    // compiler state. gated by a compilation flag, it must be turned off for release modes
+    compiler.write_debug_report("debug-compiler.md");
 
     Ok(FullCompilation {
         eval_stack: compiler.compiled_exprs.remove(&0).expect(err), // root expr stack
@@ -71,6 +76,8 @@ pub struct Compiler<'d> {
     locals: IndexMap<Locals>,
     /// A op node which has been flag for output inferrence.
     output_infer_opnode: Option<OpNode>,
+    /// A map of **Def** nodes which have had their call site parameters prepared as variables.
+    callsite_params: IndexMap<Vec<CallsiteParam>>,
 }
 
 impl<'d> Compiler<'d> {
@@ -279,10 +286,14 @@ impl<'d> Compiler<'d> {
             AstNode::Def(params) => {
                 // check if there exists an entry for the sub-expression,
                 // if so, wrap that in a Step and call it done!
-                let expr = DefNode(cmd_node.idx()).expr(&self.ag);
+                let defnode = DefNode(cmd_node.idx());
+                let expr = defnode.expr(&self.ag);
                 match self.compiled_exprs.get(&expr.index()) {
                     Some(stack) => {
-                        let step = Step::from(stack.clone());
+                        // map the callsite params into the **op** node's arguments (for eval)
+                        let params = self.map_callsite_params_for_def_step(defnode, &in_ty, chgs)?;
+                        let out_ty = self.tg[expr.idx()].output.ty().cloned().expect("shoud be known if a stack exists");
+                        let step = Step::def(params, stack.clone(), out_ty);
                         let locals = self.locals.get(&opnode.index()).cloned();
                         Ok((step, locals))
                     }
@@ -302,6 +313,42 @@ impl<'d> Compiler<'d> {
                 x
             ),
         }
+    }
+
+    /// For a def step, a vector mapping callsite [`Argument`]s to [`Variable`]s is required.
+    /// The argument construction is held off until the block compilation occurs. This function
+    /// helps construct the arguments using a def's callsite_params entry.
+    ///
+    /// # Panics
+    /// This function is meant to be called once a def's sub-expression has been successfully
+    /// compiled. Assumptions are made that elements will exist. If they do not, this function will
+    /// panic, and is most likely the cause of a logic bug.
+    /// The exception are the argument's input and output types. These might still not be
+    /// completely up to date, so alterations will impact the tg_chgs and should be proagated
+    /// through.
+    ///
+    /// - `Compiler.locals` expects to have an entry for the def's parent op
+    /// - `Compiler.callsite_params` expects to have an entry for the def
+    /// - `CallsiteParam.arg_idx` should index into the def's argument list
+    /// - the argument builder expects both input and output types of the argument to be known
+    fn map_callsite_params_for_def_step(&self, def: DefNode, in_ty: &Type, tg_chgs: &mut Vec<tygraph::Chg>) -> Result<Vec<(Variable, Argument)>> {
+        let Compiler { defs, ag, tg, flowed_edges, compiled_ops, compiled_exprs, locals, output_infer_opnode, callsite_params } = self;
+
+        let args = ag.get_args(def);
+        let mut locals = locals.get(&def.parent(ag).index()).expect("input locals should exist").clone();
+        let locals = &mut Some(&mut locals);
+
+                        callsite_params.get(&def.index()).expect("if the sub-expression exists, there should be an associated callsite params").iter()
+                            .map(|CallsiteParam { param, var, arg_idx }| {
+                                let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
+                                arg::ArgBuilder::new(arg, ag, tg, tg_chgs, Some(in_ty.clone()), locals, compiled_exprs )
+                                    .supplied(in_ty.clone())
+                                    // do return????
+                                    .and_then(|a| 
+                                    a.concrete())
+                                    .map(|arg| 
+                                (var.clone(), arg))
+                            }).collect()
     }
 
     fn infer_inputs(&mut self) -> Result<bool> {
@@ -354,6 +401,7 @@ impl<'d> Compiler<'d> {
                     output_infer_opnode: Default::default(),
                     flowed_edges: Default::default(),
                     locals: Default::default(),
+                    callsite_params: Default::default(),
                     defs,
                 },
             );
@@ -534,9 +582,20 @@ impl<'d> Compiler<'d> {
                 // TODO should this be an error pathway?
                 // since the error pathway is not having enough params (or too many??)
                 match locals.inject_params(self, params, def, tg_chgs)? {
-                    LocalInjection::Success(locals) => {
+                    LocalInjection::Success {
+                        locals,
+                        callsite_params,
+                    } => {
                         chgd = true;
                         self.insert_locals(locals, first);
+                        let _is_empty = self
+                            .callsite_params
+                            .insert(def.index(), callsite_params)
+                            .is_none();
+                        debug_assert!(
+                            _is_empty,
+                            "just replaced a callsite_params entry which should not happen"
+                        );
                     }
                     LocalInjection::UnknownReturnTy(argnode) => {
                         // TODO what to do about unknown return arguments!?
@@ -554,8 +613,10 @@ impl<'d> Compiler<'d> {
         // filter ops which are not compiled
         // filter to ops where the input type is known
         // get the cmd node, if a def, then this is known as the path to take
-        
-        let defnodes = self.ag.node_indices()
+
+        let defnodes = self
+            .ag
+            .node_indices()
             // just OpNodes
             .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
             // without compiled steps
@@ -686,12 +747,16 @@ impl eval::Stack {
             ag.neighbors(expr_node)
                 .filter_map(just_op)
                 .map(|op| {
+                    dbg!(ag[op.idx()].tag());
                     compiled_ops
                         .get(&op.index())
                         .expect("just checked it exists")
                 })
                 .cloned(),
         );
+
+        // .neighbors() returns in reverse order added.
+        steps.reverse();
 
         let mut stack = Self::new(steps);
 
@@ -700,25 +765,21 @@ impl eval::Stack {
 
         Some(stack)
     }
-
-    #[cfg(debug_assertions)]
-    fn add_types(&mut self, tynode: &graphs::tygraph::Node) {
-        self.in_ty = tynode
-            .input
-            .ty()
-            .expect("expressions input type should be known at this point")
-            .clone();
-        self.out_ty = tynode
-            .output
-            .ty()
-            .expect("expressions output type should be known at this point")
-            .clone();
-    }
 }
 
 enum LocalInjection {
-    Success(Locals),
+    Success {
+        locals: Locals,
+        callsite_params: Vec<CallsiteParam>,
+    },
     UnknownReturnTy(ArgNode),
+}
+
+#[derive(Debug, Clone)]
+struct CallsiteParam {
+    param: astgraph::Parameter,
+    var: Variable,
+    arg_idx: u8,
 }
 
 impl Locals {
@@ -748,7 +809,7 @@ impl Locals {
             ..
         } = compiler;
 
-        for param in params {
+        for (idx, param) in params.into_iter().enumerate() {
             // only point of failure
             let argnode = arg::pop(&mut args, arg_count, blk_tag)?;
             arg_count += 1;
@@ -770,18 +831,30 @@ impl Locals {
             // output type.
             match arg.return_ty() {
                 Some(ty) => {
-                    callsite_vars.push((param.name.clone(), ty.clone()));
+                    callsite_vars.push((idx, param, ty.clone()));
                 }
                 None => return Ok(LocalInjection::UnknownReturnTy(argnode)),
             }
         }
 
-        for (tag, ty) in callsite_vars {
-            let name = Str::new(tag.str());
-            self.add_new_var(name, ty, tag); // TODO validate that this is the tag that should be sent through
-        }
+        let callsite_params = callsite_vars
+            .into_iter()
+            .map(|(arg_idx, param, ty)| {
+                let tag = param.name.clone();
+                let name = Str::new(tag.str());
+                CallsiteParam {
+                    param: param.clone(),
+                    // TODO validate that this is the tag that should be sent through
+                    var: self.add_new_var(name, ty, tag),
+                    arg_idx: arg_idx as u8,
+                }
+            })
+            .collect();
 
-        Ok(LocalInjection::Success(self))
+        Ok(LocalInjection::Success {
+            locals: self,
+            callsite_params,
+        })
     }
 }
 

@@ -329,11 +329,17 @@ impl Argument {
     where
         F: FnOnce() -> Value,
     {
-        match &self.hold {
+        let r = match &self.hold {
             Hold::Lit(x) => Ok(x.clone()),
             Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
             Hold::Expr(stack) => stack.eval(input(), cx.clone()).map(|x| x.0),
+        };
+
+        if let Ok(v) = &r {
+            self.assert_resolved_type(v);
         }
+
+        r
     }
 
     /// Transform this argument into a `resolve` function.
@@ -363,10 +369,26 @@ impl Argument {
 
         let inty = self.in_ty.clone();
 
-        move |input| match &r {
+        move |input| {
+            let r = match &r {
             R::V(v) => Ok(v.as_ref().clone()),
             R::E(e) => resolve_expr(e, &inty, input, cx.clone()).map(|x| x.0),
+        };
+
+            if let Ok(v) = &r {
+                self.assert_resolved_type(v);
+            }
+
+            r
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn assert_resolved_type(&self, value: &Value) {
+        let returned_ty = &value.ty();
+        let exp_ty = &self.out_ty;
+
+        assert_eq!(returned_ty, exp_ty, "the argument's output type does not match the expected type");
     }
 }
 
