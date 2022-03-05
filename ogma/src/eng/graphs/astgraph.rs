@@ -17,15 +17,27 @@ impl Deref for AstGraph {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum AstNode {
-    Op { op: Tag, blk: Tag },
-    Intrinsic { op: Tag },
+    Op {
+        op: Tag,
+        blk: Tag,
+    },
+    Intrinsic {
+        op: Tag,
+        intrinsic: lang::impls::IntrinsicFn,
+    },
     Def(Vec<Parameter>),
     Flag(Tag),
     Ident(Tag),
-    Num { val: Number, tag: Tag },
-    Pound { ch: char, tag: Tag },
+    Num {
+        val: Number,
+        tag: Tag,
+    },
+    Pound {
+        ch: char,
+        tag: Tag,
+    },
     Var(Tag),
     Expr(Tag),
 }
@@ -60,6 +72,8 @@ pub enum ParameterTy {
     Expr,
 }
 
+const LOOPLIM: u32 = 128;
+
 /// Initialises the syntax graph decomposing the expression.
 ///
 /// This:
@@ -69,15 +83,31 @@ pub enum ParameterTy {
 pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<AstGraph> {
     let mut graph = AstGraph(Default::default());
 
-    graph.flatten_expr(expr);
-    while graph.expand_defs(defs)? {}
+    let expr_tag = expr.tag.clone();
+
+    graph.flatten_expr(expr)?;
+
+    let recursion_detector = &mut RecursionDetection::default();
+
+    let mut count = 0;
+    dbg!(graph.node_count(), graph.edge_count());
+    while graph.expand_defs(defs, recursion_detector)? {
+        dbg!(graph.node_count(), graph.edge_count());
+        dbg!(&graph);
+
+        count += 1;
+        if count > LOOPLIM {
+            return Err(Error::ag_init_endless_loop(count, &expr_tag));
+        }
+    }
 
     Ok(graph)
 }
 
+/// Initialisation functions.
 impl AstGraph {
     /// Returns the NodeIndex that the `expr` becomes.
-    fn flatten_expr(&mut self, expr: ast::Expression) -> NodeIndex {
+    fn flatten_expr(&mut self, expr: ast::Expression) -> Result<NodeIndex> {
         use ast::*;
 
         let g = &mut self.0;
@@ -128,40 +158,45 @@ impl AstGraph {
             }
         }
 
-        root
+        Ok(root)
     }
 
     /// Returns `true` if definitions were found and expanded.
-    fn expand_defs(&mut self, defs: &Definitions) -> Result<bool> {
+    fn expand_defs(
+        &mut self,
+        defs: &Definitions,
+        recursion_detector: &mut RecursionDetection,
+    ) -> Result<bool> {
         // it should be fastest just to filter the nodes and test edges rather than going through
         // .sinks
 
         let ops = self
             .node_indices()
-            .filter_map(|n| {
-                // is an Op
-                self[n].op().is_some().then(|| n).map(OpNode)
-            })
-            .filter(|&n| {
-                // have not already expanded it
-                !self.op_expanded(n)
-            })
+            // is an Op
+            .filter_map(|n| self[n].op().is_some().then(|| n).map(OpNode))
+            // have not already expanded it
+            .filter(|&n| !self.op_expanded(n))
             .collect::<Vec<_>>();
 
         let mut expanded = false;
 
         for op in ops {
             expanded = true;
-            self.expand_def(op, defs)?;
+            self.expand_def(op, defs, recursion_detector)?;
         }
 
         Ok(expanded)
     }
 
-    fn expand_def(&mut self, opnode: OpNode, defs: &Definitions) -> Result<()> {
-        let opnode = NodeIndex::from(opnode);
+    fn expand_def(
+        &mut self,
+        opnode: OpNode,
+        defs: &Definitions,
+        recursion_detector: &mut RecursionDetection,
+    ) -> Result<()> {
+        let opnode_ = NodeIndex::from(opnode);
 
-        let op = self[opnode]
+        let op = self[opnode_]
             .op()
             .expect("opnode must be an Op variant")
             .0
@@ -177,13 +212,27 @@ impl AstGraph {
             .iter()
             .filter(|(name, _, _)| op.str() == name.as_str());
 
-        for (_, key, im) in op_impls {
+        recursion_detector.clear_cache();
+
+        for (name, key, im) in op_impls {
             // sub-root
             let cmd = match im {
-                Implementation::Intrinsic { loc, f } => {
-                    self.0.add_node(AstNode::Intrinsic { op: op.clone() })
-                }
+                // always include an intrinsic
+                Implementation::Intrinsic { loc, f } => self.0.add_node(AstNode::Intrinsic {
+                    op: op.clone(),
+                    intrinsic: f.clone(),
+                }),
                 Implementation::Definition(def) => {
+                    // first, test that this def is not already being used in the call chain,
+                    // detecting recursion.
+                    let id = format!("{}:{:?}", name, key);
+                    let recursion_detected = recursion_detector.detect(self, opnode, &id);
+
+                    if recursion_detected {
+                        continue;
+                    }
+
+                    // no recursion detected, this id will need to be added to the detector
                     let tys = defs.types();
                     let params = def
                         .params
@@ -192,9 +241,12 @@ impl AstGraph {
                         .collect::<Result<Vec<Parameter>>>()?;
 
                     let cmd = self.0.add_node(AstNode::Def(params));
-                    let expr = self.flatten_expr(def.expr.clone());
+                    let expr = self.flatten_expr(def.expr.clone())?;
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
+                    // add the id into the recursion detector
+                    recursion_detector.add_id(cmd, id);
+
                     cmd
                 }
             };
@@ -202,13 +254,13 @@ impl AstGraph {
             let g = &mut self.0;
 
             // link the op with this subroot, keyed by the key!
-            g.add_edge(opnode, cmd, Relation::Keyed(key.cloned()));
+            g.add_edge(opnode_, cmd, Relation::Keyed(key.cloned()));
 
             // link the op's terms to this subroot
             // REVERSED since the neighbors are returned in reverse add order
             // flags first
             for (i, flag) in g
-                .edges(opnode)
+                .edges(opnode_)
                 .filter(|e| e.weight().is_normal())
                 .filter(|e| g[e.target()].flag().is_some())
                 .map(|e| e.target())
@@ -221,7 +273,7 @@ impl AstGraph {
             }
             // now args, normal connections that aren't flags
             for (i, arg) in g
-                .edges(opnode)
+                .edges(opnode_)
                 .filter(|e| e.weight().is_normal())
                 .filter(|e| g[e.target()].flag().is_none())
                 .map(|e| e.target())
@@ -243,6 +295,68 @@ impl AstGraph {
             .any(|e| matches!(e.weight(), Relation::Keyed(_)))
     }
 
+    fn detect_recusion(defnode: DefNode) -> bool {
+        todo!()
+    }
+}
+
+#[derive(Default)]
+struct RecursionDetection {
+    def_ids: IndexMap<Str>,
+    parent_ids: Option<Vec<Str>>,
+}
+
+impl RecursionDetection {
+    pub fn clear_cache(&mut self) {
+        self.parent_ids = None;
+    }
+
+    pub fn add_id<I: Into<Str>>(&mut self, node: NodeIndex, id: I) {
+        self.def_ids.insert(node.index(), id.into());
+    }
+
+    /// Why is this mutable? The recursion detector utilises a lazily loaded path system to avoid
+    /// having to compute paths when not needed.
+    pub fn detect(&mut self, ag: &AstGraph, opnode: OpNode, id: &str) -> bool {
+        if self.parent_ids.is_none() {
+            let x = self.parent_ids(ag, opnode);
+            self.parent_ids = Some(x);
+        }
+
+        self.detect_inner(id)
+    }
+
+    fn detect_inner(&self, id: &str) -> bool {
+        // this should have Some, but can return false anyway
+        self.parent_ids
+            .as_ref()
+            .map(|paths| paths.iter().any(|i| i == id))
+            .expect("should have paths")
+    }
+
+    fn parent_ids(&self, ag: &AstGraph, opnode: OpNode) -> Vec<Str> {
+        let mut x = petgraph::algo::all_simple_paths(
+            &ag.0,
+            0.into(), // root node
+            opnode.idx(),
+            1,
+            None,
+        )
+        .flat_map(|path: Vec<_>| {
+            path.into_iter()
+                .filter_map(|n| self.def_ids.get(&n.index()))
+                .cloned()
+        })
+        .collect::<Vec<Str>>();
+
+        x.reverse(); // small optimisation since recursion is generally from closest point
+
+        x
+    }
+}
+
+/// API.
+impl AstGraph {
     /// Returns an iterator over the leaves of the graph.
     ///
     /// `filter` is used to specify a predicate for which nodes should be considered a 'sink'.
@@ -399,6 +513,7 @@ impl AstGraph {
         super::debug_write_flowchart(
             self,
             buf,
+            |_, _| true,
             |idx, node, buf| {
                 let tynode = &tg[idx];
                 write!(
@@ -410,7 +525,7 @@ impl AstGraph {
                     output = tynode.output,
                 )
             },
-            |edge, buf| write!(buf, "{:?}", edge),
+            |edge, buf| write!(buf, "{}", edge),
         )
         .unwrap()
     }
@@ -462,7 +577,7 @@ impl AstNode {
 
         match self {
             Op { op, blk: _ } => op,
-            Intrinsic { op } => op,
+            Intrinsic { op, intrinsic: _ } => op,
             Def(_) => panic!("should not call tag on a CmdNode"),
             Flag(f) => f,
             Ident(s) => s,
@@ -480,7 +595,7 @@ impl fmt::Display for AstNode {
 
         match self {
             Op { op, blk } => write!(f, "Op({})", op.str()),
-            Intrinsic { op } => write!(f, "Intrinsic"),
+            Intrinsic { op, intrinsic: _ } => write!(f, "Intrinsic"),
             Def(_) => write!(f, "Def"),
             Flag(t) => write!(f, "Flag(--{})", t.str()),
             Ident(x) => write!(f, "Ident({})", x.str()),
@@ -489,6 +604,12 @@ impl fmt::Display for AstNode {
             Var(t) => write!(f, "Var(${})", t.str()),
             Expr(t) => write!(f, "Expr({})", t.str()),
         }
+    }
+}
+
+impl fmt::Debug for AstNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -518,6 +639,19 @@ impl Relation {
         match self {
             Relation::Term(x) => Some(*x),
             _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Relation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Relation::*;
+
+        match self {
+            Normal => write!(f, "Normal"),
+            Keyed(Some(ty)) => write!(f, "Keyed({})", ty),
+            Keyed(None) => write!(f, "Keyed(None)"),
+            Term(x) => write!(f, "Term({})", x),
         }
     }
 }
@@ -582,25 +716,23 @@ impl OpNode {
     pub fn next(self, g: &AstGraph) -> Option<OpNode> {
         self.debug_assert_is_op_node(g);
 
-        // TODO -- test this..
-
-        let mut f = None;
-        let mut found = false;
-
-        // in reverse order, so break if found
-        for next in g
-            .neighbors(self.parent(g).idx())
+        // in reverse order, so it is one _before_ self
+        g.neighbors(self.parent(g).idx())
             .filter_map(|n| g[n].op().map(|_| OpNode(n)))
-        {
-            if next == self {
-                found = true;
-                break;
-            }
+            .take_while(|&n| n != self)
+            .last()
+    }
 
-            f = Some(next);
-        }
+    /// Fetches the previous block's opnode, if there is one.
+    pub fn prev(self, g: &AstGraph) -> Option<OpNode> {
+        self.debug_assert_is_op_node(g);
 
-        found.then(|| ()).and(f)
+        // in reverse order, so it is one _after_ self
+        g.neighbors(self.parent(g).idx())
+            .filter_map(|n| g[n].op().map(|_| OpNode(n)))
+            .skip_while(|&n| n != self)
+            .skip(1) // skip self
+            .next()
     }
 }
 

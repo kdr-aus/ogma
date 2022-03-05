@@ -136,6 +136,7 @@ impl TypeGraph {
     /// - The _input_ of an expression goes to the _input_ of the first op,
     /// - The _output_ of the last op in an expression to the _output_ of the expression,
     /// - The _output_ of a block into the _input_ of the next block,
+    /// - A `#i` arg will use it's op nodes _input_ as the _input_ **and** _output_.
     ///
     /// For `Def`s:
     /// - `Def->Expr: II`
@@ -182,6 +183,16 @@ impl TypeGraph {
             for (from, to) in froms.zip(tos) {
                 self.0.add_edge(from, to, Flow::OI); // output -> input
             }
+        }
+
+        // #i input/output is fed by it's op's input
+        for poundi in ag.node_indices().filter_map(|n| match &ag[n] {
+            AstNode::Pound { ch: 'i', tag: _ } => Some(ArgNode(n)),
+            _ => None,
+        }) {
+            let op = poundi.op(ag);
+            self.0.add_edge(op.idx(), poundi.idx(), Flow::II); // op -> arg: II
+            self.0.add_edge(op.idx(), poundi.idx(), Flow::IO); // op -> arg: IO
         }
 
         // defs
@@ -429,6 +440,7 @@ impl TypeGraph {
         super::debug_write_flowchart(
             self,
             buf,
+            |idx, _node| !matches!(&ag[idx], AstNode::Intrinsic { .. }),
             |idx, node, buf| {
                 let ast_node = &ag[idx];
                 write!(

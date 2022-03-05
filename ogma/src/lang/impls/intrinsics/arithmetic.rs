@@ -18,7 +18,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 
 fn variadic_intrinsic_num<F>(blk: Block, f: F) -> Result<Step>
 where
-    F: Fn(f64, f64) -> f64 + Sync + 'static,
+    F: Fn(f64, f64) -> f64 + Send + Sync + 'static,
 {
     variadic_intrinsic::<Number, _>(blk, move |prev, next| {
         let x = prev
@@ -69,6 +69,7 @@ if input is a Table, concat or join additional tables
 
 fn add_intrinsic(blk: Block) -> Result<Step> {
     match blk.in_ty() {
+        Ty::Num => variadic_intrinsic_num(blk, std::ops::Add::add),
         Ty::Str => variadic_intrinsic::<Str, _>(blk, |prev, next| {
             (
                 prev.map(|mut s| {
@@ -80,7 +81,7 @@ fn add_intrinsic(blk: Block) -> Result<Step> {
             )
         }),
         Ty::Tab => add_table(blk),
-        _ => variadic_intrinsic_num(blk, std::ops::Add::add),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
@@ -173,7 +174,7 @@ fn ceil_help() -> HelpMessage {
 
 fn ceil_intrinsic(blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
-        return Err(Error::wrong_input_type(blk.in_ty(), &blk.op_tag));
+        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
     blk.eval_o(move |n, cx| {
         Number::try_from(n)
@@ -220,7 +221,7 @@ fn floor_help() -> HelpMessage {
 
 fn floor_intrinsic(blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
-        return Err(Error::wrong_input_type(blk.in_ty(), &blk.op_tag));
+        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
     blk.eval_o(move |n, cx| {
         Number::try_from(n)
@@ -256,7 +257,7 @@ fn isfinite_intrinsic(blk: Block) -> Result<Step> {
                 .map(|n| n.as_f64().is_finite())
                 .and_then(|x| cx.done_o(x))
         }),
-        x => Err(Error::wrong_input_type(x, &blk.op_tag)),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
@@ -303,9 +304,13 @@ fn root_help() -> HelpMessage {
 
 fn root_intrinsic(mut blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
-        return Err(Error::wrong_input_type(blk.in_ty(), &blk.op_tag));
+        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
-    let index = blk.next_arg(None)?.returns(&Ty::Num)?;
+    let index = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
     blk.eval_o(move |radicand, cx| {
         let index = index
             .resolve(|| radicand.clone(), &cx)

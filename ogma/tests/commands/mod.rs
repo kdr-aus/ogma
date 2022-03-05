@@ -10,7 +10,7 @@ use table::Entry::{self, Nil};
 
 type Result<T> = std::result::Result<T, ogma::Error>;
 
-// mod arithmetic;
+mod arithmetic;
 // mod cmp;
 // mod definitions;
 // mod diagnostics;
@@ -536,7 +536,8 @@ fn forbid_recursion() {
 --> shell:24
  | def test-recursion () { test-recursion }
  |                         ^^^^^^^^^^^^^^ `test-recursion` not found
---> help: view a list of definitions using `def --list`
+--> help: recursion is not supported.
+for alternatives, please see <https://docs.daedalus.report/ogma.book/11%20(no)%20recursion.md>
 "
     );
 }

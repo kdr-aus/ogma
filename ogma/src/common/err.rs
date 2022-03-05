@@ -375,6 +375,7 @@ expected `{}`, found `{}`",
         // description
         {
             match self.cat {
+                Category::Internal => colour!(wtr, c, bright_red, "Internal Error"),
                 Category::Parsing => colour!(wtr, c, bright_red, "Parsing Error"),
                 Category::UnknownCommand => colour!(wtr, c, bright_red, "Unknown Command"),
                 Category::Semantics => colour!(wtr, c, bright_red, "Semantics Error"),
@@ -397,6 +398,39 @@ expected `{}`, found `{}`",
         }
 
         Ok(())
+    }
+}
+
+/// Syntax
+impl Error {}
+
+/// Internal
+impl Error {
+    fn internal_err_help() -> Option<String> {
+        Some(String::from(
+            "this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>",
+        ))
+    }
+
+    pub(crate) fn incomplete_expr_compilation(expr: &Tag) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: "expression is yet to be compiled".into(),
+            traces: trace(
+                expr,
+                Some("this expression has not finished compiling".into()),
+            ),
+            help_msg: Self::internal_err_help(),
+        }
+    }
+
+    pub(crate) fn ag_init_endless_loop(loop_counter: u32, block_tag: &Tag) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: format!("AST graph reach {} loops", loop_counter),
+            traces: trace(block_tag, None),
+            help_msg: Self::internal_err_help(),
+        }
     }
 }
 
@@ -459,16 +493,6 @@ impl Error {
             desc: "unable to infer argument's output type".into(),
             traces: trace(arg, None),
             help_msg: None,
-        }
-    }
-
-    pub(crate) fn incomplete_expr_compilation(expr: &Tag) -> Self {
-        Error {
-            // TODO - change to Type???
-            cat: Category::Semantics,
-            desc: "expression is yet to be compiled".into(),
-            traces: trace(expr, Some("this expression has not finished compiling".into())),
-            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
         }
     }
 }
@@ -630,7 +654,9 @@ fn trace_code_lines(code: &str, start: usize, end: usize) -> Vec<(&str, usize, u
 /// Error catgories.
 #[derive(Debug, PartialEq)]
 pub enum Category {
-    /// Parsign error.
+    /// Internal error. These should not occur.
+    Internal,
+    /// Parsing error.
     Parsing,
     /// Command is not recognised.
     UnknownCommand,

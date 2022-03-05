@@ -7,12 +7,11 @@ use lang::help::*;
 use libs::divvy::Str;
 use std::{fmt, iter::*};
 
+pub type IntrinsicFn = Arc<dyn Fn(Block) -> Result<Step> + Send + Sync>;
+
 #[derive(Clone)]
 pub enum Implementation {
-    Intrinsic {
-        loc: Location,
-        f: Arc<dyn Fn(Block) -> Result<Step> + Send + Sync>,
-    },
+    Intrinsic { loc: Location, f: IntrinsicFn },
     Definition(Box<ast::DefinitionImpl>),
 }
 

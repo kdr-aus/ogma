@@ -651,21 +651,24 @@ fn table_help() -> HelpMessage {
 }
 
 fn table_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!()
+    // table takes zero or more arguments that resolve to Str (header name)
+    let mut names = Vec::with_capacity(blk.args_len());
+    for _ in 0..blk.args_len() {
+        names.push(
+            blk.next_arg()?
+                .supplied(None)?
+                .returns(Ty::Str)?
+                .concrete()?,
+        );
+    }
 
-    //     // table takes zero or more arguments that resolve to Str (header name)
-    //     let mut names = Vec::with_capacity(blk.args_len());
-    //     for _ in 0..blk.args_len() {
-    //         names.push(blk.next_arg(None)?.returns(&Ty::Str)?);
-    //     }
-
-    //     blk.eval_o(move |i, cx| {
-    //         let mut t = table::Table::new();
-    //         for name in &names {
-    //             t.add_col(once(name.resolve(|| i.clone(), &cx)?));
-    //         }
-    //         cx.done_o(Table::from(t))
-    //     })
+    blk.eval_o(move |i, cx| {
+        let mut t = table::Table::new();
+        for name in &names {
+            t.add_col(once(name.resolve(|| i.clone(), &cx)?));
+        }
+        cx.done_o(Table::from(t))
+    })
 }
 
 // ------ To Str ---------------------------------------------------------------
