@@ -487,6 +487,28 @@ impl AstGraph {
             Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
         }
     }
+
+    /// Returns an iterator going from the root node to, and including, `to`.
+    pub fn path_from_root(&self, to: NodeIndex) -> impl DoubleEndedIterator<Item = NodeIndex> {
+        let mut v = vec![to];
+
+        let mut n = to;
+
+        while n != 0.into() {
+            let parent = self
+                .edges_directed(n, Direction::Incoming)
+                .filter(|e| e.weight().term().is_none())
+                .map(|e| e.source())
+                .next()
+                .expect("link should exist");
+            v.push(parent);
+            n = parent;
+        }
+
+        v.reverse();
+
+        v.into_iter()
+    }
 }
 
 #[cfg(debug_assertions)]
@@ -733,6 +755,14 @@ impl OpNode {
             .skip_while(|&n| n != self)
             .skip(1) // skip self
             .next()
+    }
+
+    pub fn op_tag(self, g: &AstGraph) -> &Tag {
+        g[self.idx()].op().expect("will be an op").0
+    }
+
+    pub fn blk_tag(self, g: &AstGraph) -> &Tag {
+        g[self.idx()].op().expect("will be an op").1
     }
 }
 

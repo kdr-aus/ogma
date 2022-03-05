@@ -28,20 +28,13 @@ pub fn compile(
     compiler.init_tg(input_ty); // initialise TG
 
     // initialise an empty Locals into the first op node
+    // route through Compiler::insert_locals, since it handles locals propagation
     // THIS IS THE RETURN LOCALS AS WELL!
     let vars = Locals::default();
-    compiler.locals.insert(
-        compiler
-            .ag
-            .neighbors(0.into())
-            .filter(|&x| compiler.ag[x].op().is_some())
-            .last()
-            .expect("there should be a root Op node")
-            .index(),
-        vars.clone(),
-    );
+    let root = ExprNode(0.into());
+    compiler.insert_locals(&vars, root.first_op(compiler.ag()));
 
-    let mut compiler = compiler.compile(ExprNode(0.into()))?;
+    let mut compiler = compiler.compile(root)?;
 
     let err = "should exist on successful compilation";
 
@@ -492,9 +485,26 @@ impl<'d> Compiler<'d> {
                     // the TG is updated with this information
                     chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty));
                 }
-                Err(e) => {
+                Err(mut e) => {
                     if infer_output {
                         self.output_infer_opnode = Some(node);
+                    }
+
+                    // add a stack trace by looking at the def interfaces
+                    let parents = self
+                        .ag
+                        .path_from_root(node.idx())
+                        // add traces backwards
+                        .rev()
+                        // interface between def calls
+                        .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
+                        // get the parent op
+                        .map(|def| def.parent(&self.ag))
+                        // use the block tage as the trace
+                        .map(|op| op.blk_tag(&self.ag));
+
+                    for parent in parents {
+                        e = e.add_trace(parent);
                     }
 
                     err = Some(e);
@@ -777,23 +787,31 @@ impl<'a> Compiler<'a> {
 
         writeln!(&mut report, "## Current Locals").unwrap();
         writeln!(&mut report, "---").unwrap();
-        self.debug_locals_map(&mut report).unwrap();
+        self.debug_index_map(&self.locals, &mut report).unwrap();
+
+        writeln!(&mut report, "## Current Compiled Ops").unwrap();
+        writeln!(&mut report, "---").unwrap();
+        self.debug_index_map(&self.compiled_ops, &mut report)
+            .unwrap();
 
         let path = file.as_ref();
 
         std::fs::write(path, report).unwrap();
     }
 
-    fn debug_locals_map(&self, buf: &mut String) -> std::fmt::Result {
+    fn debug_index_map<T>(&self, map: &IndexMap<T>, buf: &mut String) -> std::fmt::Result {
         use std::fmt::Write;
 
+        let mut keys = map.keys().copied().collect::<Vec<_>>();
+        keys.sort_unstable();
+
         writeln!(buf, "```")?;
-        for (n, _locals) in self.locals.iter() {
+        for n in keys {
             writeln!(
                 buf,
                 "{} :: {}",
                 n,
-                self.ag[petgraph::prelude::NodeIndex::from(*n as u32)]
+                self.ag[petgraph::prelude::NodeIndex::from(n as u32)]
             )?;
         }
         writeln!(buf, "```")?;
@@ -1121,5 +1139,10 @@ mod tests {
     #[test]
     fn compilation_test_11() {
         compile("\\ 3 | let $a | + { + { + { \\ $a } } }").unwrap();
+    }
+
+    #[test]
+    fn compilation_test_12() {
+        compile("\\ { let $b | \\ #t | \\ $b }").unwrap();
     }
 }

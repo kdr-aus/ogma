@@ -107,16 +107,13 @@ fn if_err_testing() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `Number`, found `String`
+        "Semantics Error: expecting argument with output type `Number`, found `String`
 --> <ogma>:18
  | def = (rhs) { eq $rhs }
  |                   ^^^ this argument returns type `String`
 --> shell:5
  | if { = 'foo' } 0 1
  |      ^^^^^^ invoked here
---> shell:0
- | if { = 'foo' } 0 1
- | ^^^^^^^^^^^^^^^^^^ invoked here
 --> help: commands may require specific argument types, use `--help` to view requirements
 "
     );
