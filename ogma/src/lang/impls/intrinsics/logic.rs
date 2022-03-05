@@ -21,7 +21,8 @@ fn and_help() -> HelpMessage {
     )
 }
 
-fn and_intrinsic(blk: Block) -> Result<Step> {
+fn and_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Bool);
     variadic_intrinsic::<bool, _>(blk, |prev, next| {
         let x = prev.unwrap_or(true);
         let x = x && next;
@@ -143,7 +144,9 @@ fn or_help() -> HelpMessage {
     )
 }
 
-fn or_intrinsic(blk: Block) -> Result<Step> {
+fn or_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Bool); // or returns boolean
+
     variadic_intrinsic::<bool, _>(blk, |prev, next| {
         let x = prev.unwrap_or(false);
         let x = x || next;

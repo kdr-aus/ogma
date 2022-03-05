@@ -24,6 +24,8 @@ fn cmp_help() -> HelpMessage {
 }
 
 fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+
     match blk.in_ty() {
         Ty::Nil => {
             blk.next_arg()?

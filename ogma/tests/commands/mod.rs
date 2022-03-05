@@ -15,7 +15,7 @@ mod arithmetic;
 // mod definitions;
 // mod diagnostics;
 mod io;
-// mod logic;
+mod logic;
 // mod morphism;
 // mod pipeline;
 // mod types;

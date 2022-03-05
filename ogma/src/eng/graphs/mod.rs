@@ -646,4 +646,33 @@ mod tests {
 
         init_graphs_w_defs("Foo::Bar | + Foo::Bar", defs);
     }
+
+    #[test]
+    fn path_from_root_test() {
+        let (ag, _) = init_graphs("let $a | + { > 3 }");
+
+        dbg!(&ag);
+
+        let f = |n: u32| ag.path_from_root(n.into()).collect::<Vec<_>>();
+        let e = |i: &[_]| i.iter().copied().map(Into::into).collect::<Vec<_>>();
+
+        assert_eq!(f(0), e(&[0]));
+        assert_eq!(f(1), e(&[0, 1]));
+        assert_eq!(f(2), e(&[0, 1, 2]));
+        assert_eq!(f(3), e(&[0, 3]));
+        assert_eq!(f(4), e(&[0, 3, 4]));
+        assert_eq!(f(5), e(&[0, 3, 4, 5]));
+        assert_eq!(f(6), e(&[0, 3, 4, 5, 6]));
+        assert_eq!(f(9), e(&[0, 3, 4, 5, 9]));
+        assert_eq!(f(10), e(&[0, 3, 4, 5, 9, 10]));
+        assert_eq!(f(11), e(&[0, 3, 4, 5, 9, 10, 11]));
+        assert_eq!(f(12), e(&[0, 3, 4, 5, 9, 10, 11, 12]));
+        assert_eq!(f(13), e(&[0, 3, 4, 5, 9, 10, 13]));
+        assert_eq!(f(14), e(&[0, 3, 4, 5, 9, 10, 13, 14]));
+        assert_eq!(f(15), e(&[0, 3, 4, 5, 9, 10, 13, 14, 15]));
+        assert_eq!(f(17), e(&[0, 3, 4, 5, 9, 10, 13, 17]));
+        assert_eq!(f(18), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18]));
+        assert_eq!(f(19), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18, 19]));
+        assert_eq!(f(20), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18, 19, 20]));
+    }
 }
