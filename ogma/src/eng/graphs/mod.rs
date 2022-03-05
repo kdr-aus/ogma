@@ -44,14 +44,16 @@ impl From<DefNode> for CmdNode {
 }
 
 #[cfg(debug_assertions)]
-fn debug_write_flowchart<N, E, W, F1, F2>(
+fn debug_write_flowchart<N, E, W, F0, F1, F2>(
     g: &petgraph::stable_graph::StableGraph<N, E>,
     buf: &mut W,
+    node_filter: F0,
     mut node_disp: F1,
     mut edge_disp: F2,
 ) -> fmt::Result
 where
     W: fmt::Write,
+    F0: Fn(petgraph::graph::NodeIndex, &N) -> bool,
     F1: FnMut(petgraph::graph::NodeIndex, &N, &mut W) -> fmt::Result,
     F2: FnMut(&E, &mut W) -> fmt::Result,
 {
@@ -59,7 +61,11 @@ where
     writeln!(buf, "flowchart TD")?;
 
     // nodes
-    for (idx, node) in g.node_indices().map(|i| (i, &g[i])) {
+    for (idx, node) in g
+        .node_indices()
+        .map(|i| (i, &g[i]))
+        .filter(|(i, n)| node_filter(*i, n))
+    {
         write!(buf, "i{}[\"", idx.index())?;
         node_disp(idx, node, buf)?;
         writeln!(buf, "\"]")?;
@@ -606,5 +612,38 @@ mod tests {
                 output: Knowledge::Unknown
             })
         ); // 3
+    }
+
+    #[test]
+    fn ag_init_endless_loop() {
+        let defs = &mut Definitions::default();
+        // point def
+        lang::process_definition(
+            "def-ty Point { x:Num y:Num }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+        lang::process_definition("def + Point (rhs) { Point { get x | + { \\ $rhs | get x } } { get y | + { \\ $rhs | get y } } }", Default::default(), None, defs).unwrap();
+
+        let _ = init_graphs_w_defs("Point 1 3", defs);
+        let _ = init_graphs_w_defs("Point 1 3 | + Point -2 2", defs);
+    }
+
+    #[test]
+    fn ag_recursion_testing() {
+        let defs = &mut Definitions::default();
+
+        lang::process_definition("def-ty Foo :: Bar", Default::default(), None, defs).unwrap();
+        lang::process_definition(
+            "def + Foo () { + Foo::Bar }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+
+        init_graphs_w_defs("Foo::Bar | + Foo::Bar", defs);
     }
 }

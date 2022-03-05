@@ -132,9 +132,20 @@ impl<'a> Block<'a> {
     /// the `fold` command will supply the `$row` variable which is a track of the TableRow
     ///
     /// The tag is usually `blk.op_tag`.
-    pub fn create_var_manually<N: Into<Str>>(&mut self, name: N, ty: Type, tag: Tag) -> Variable {
-        todo!()
-        //         self.vars.add_new_var(name.into(), ty, tag)
+    pub fn create_var_manually<N: Into<Str>>(
+        &mut self,
+        name: N,
+        ty: Type,
+        tag: Tag,
+    ) -> Result<Variable> {
+        // TODO: I believe this is an incorrect implementation, since it may expose the variables
+        // where they should not be exposed.
+        // A implementation will have to be thought up that can add a variable to a sub expression
+        // (so for map, the `$row` variable).
+        self.locals
+            .as_mut()
+            .map(|locals| locals.add_new_var(name.into(), ty, tag))
+            .ok_or_else(|| Error::locals_unavailable(self.blk_tag()))
     }
 
     /// Most flexible evaluation option, but also most brittle.

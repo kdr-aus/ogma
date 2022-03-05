@@ -3,7 +3,7 @@ use std::{cell::RefCell, cmp, collections::BTreeMap, mem, rc::Rc};
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-    //         (append, Morphism)
+    (append, Morphism)
     //         ("append-row", append_row, Morphism)
     //         (dedup, Morphism)
     (filter, Morphism)
@@ -11,7 +11,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     //         ("fold-while", fold_while, Morphism)
     //         (grp, Morphism)
     //         ("grp-by", grpby, Morphism)
-    //         (map, Morphism)
+    (map, Morphism)
     (pick, Morphism)
     //         (ren, Morphism)
     //         ("ren-with", ren_with, Morphism)
@@ -22,104 +22,104 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     //         (take, Morphism)
     };
 }
-//
-// // ------ Append ---------------------------------------------------------------
-// fn append_help() -> HelpMessage {
-//     HelpMessage{
-//         desc: "add new columns onto a table using one or more expressions
-// each expression adds a new column, populated by row with the result of the expression
-// tags can be optionally specified to name the columns".into(),
-//         params: vec![HelpParameter::Required("args..".into())],
-//         flags: vec![("<col-names>", "name each column in order of expression")],
-//         examples: vec![
-//             HelpExample {
-//                 desc: "flag if a filesystem item is a file",
-//                 code: "ls | append { get type --Str | eq file } --is-file",
-//             },
-//             HelpExample {
-//                 desc: "add more than one column",
-//                 code: "ls | append { get size | if { > 1e9 } 'big file' '' } { get ext --Str | eq csv }",
-//             },
-//         ],
-//         ..HelpMessage::new("append")
-//     }
-// }
-//
-// fn append_intrinsic(mut blk: Block) -> Result<Step> {
-//     if blk.in_ty() != &Ty::Tab {
-//         return Err(Error::wrong_input_type(blk.in_ty(), &blk.op_tag));
-//     }
-//
-//     let len = blk.args_len();
-//     if len == 0 {
-//         return Err(Error::insufficient_args(&blk.blk_tag, 0));
-//     }
-//
-//     let mut cols = Vec::with_capacity(len);
-//     let mut auto = 1;
-//     for _ in 0..len {
-//         let arg = blk.next_arg(Ty::TabRow)?;
-//         let col = blk
-//             .get_flag(None)
-//             .map(|x| Str::new(x.str()))
-//             .unwrap_or_else(|| (format!("_append{}", auto).into(), auto += 1).0);
-//         cols.push((arg, col));
-//     }
-//
-//     blk.eval_o(move |table, cx| {
-//         append_table(table.try_into()?, &cx, &cols).and_then(|x| cx.done_o(x))
-//     })
-// }
-//
-// fn append_table(mut table: Table, cx: &Context, with: &[(eng::Argument, Str)]) -> Result<Table> {
-//     let rows = table.rows_len();
-//     // seed column buffers
-//     let mut to_append = with
-//         .iter()
-//         .map(|(_, n)| {
-//             let mut v = Vec::new();
-//             v.resize_with(rows, Default::default);
-//             if let Some(x) = v.get_mut(0) {
-//                 *x = Entry::Obj(Value::Str(n.clone()));
-//             }
-//             v
-//         })
-//         .collect::<Vec<_>>();
-//
-//     // calculate appending values
-//     // parallelised over the expressions _and_ the rows
-//     let err = crate::Mutex::new(None);
-//     to_append
-//         .par_iter_mut()
-//         .enumerate()
-//         .for_each(|(withidx, av)| {
-//             let predicate = with[withidx].0.resolver_sync(cx);
-//             if let Err(e) = par_over_tablerows(av, &table, cx, |a, _, trow| {
-//                 *a = predicate(trow.into())?.into();
-//                 Ok(())
-//             }) {
-//                 *err.lock() = Some(e);
-//             }
-//         });
-//
-//     // return any error found
-//     if let Some(e) = err.into_inner() {
-//         return Err(e);
-//     }
-//
-//     // append to the column, if ref shared, clone with known expansion of cols
-//     let to_append = to_append.into_iter().map(|x| x.into_iter());
-//     if let Some(t) = table.get_mut() {
-//         t.add_cols(to_append);
-//     } else {
-//         let mut t = table.clone_with_col_capacity(table.cols_len() + with.len());
-//         t.add_cols(to_append);
-//         table = t.into();
-//     }
-//
-//     Ok(table)
-// }
-//
+
+// ------ Append ---------------------------------------------------------------
+fn append_help() -> HelpMessage {
+    HelpMessage{
+        desc: "add new columns onto a table using one or more expressions
+each expression adds a new column, populated by row with the result of the expression
+tags can be optionally specified to name the columns".into(),
+        params: vec![HelpParameter::Required("args..".into())],
+        flags: vec![("<col-names>", "name each column in order of expression")],
+        examples: vec![
+            HelpExample {
+                desc: "flag if a filesystem item is a file",
+                code: "ls | append { get type --Str | eq file } --is-file",
+            },
+            HelpExample {
+                desc: "add more than one column",
+                code: "ls | append { get size | if { > 1e9 } 'big file' '' } { get ext --Str | eq csv }",
+            },
+        ],
+        ..HelpMessage::new("append")
+    }
+}
+
+fn append_intrinsic(mut blk: Block) -> Result<Step> {
+    if blk.in_ty() != &Ty::Tab {
+        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
+    }
+
+    let len = blk.args_len();
+    if len == 0 {
+        return Err(Error::insufficient_args(blk.blk_tag(), 0));
+    }
+
+    let mut cols = Vec::with_capacity(len);
+    let mut auto = 1;
+    for _ in 0..len {
+        let arg = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
+        let col = blk
+            .get_flag(None)
+            .map(|x| Str::new(x.str()))
+            .unwrap_or_else(|| (format!("_append{}", auto).into(), auto += 1).0);
+        cols.push((arg, col));
+    }
+
+    blk.eval_o(move |table, cx| {
+        append_table(table.try_into()?, &cx, &cols).and_then(|x| cx.done_o(x))
+    })
+}
+
+fn append_table(mut table: Table, cx: &Context, with: &[(eng::Argument, Str)]) -> Result<Table> {
+    let rows = table.rows_len();
+    // seed column buffers
+    let mut to_append = with
+        .iter()
+        .map(|(_, n)| {
+            let mut v = Vec::new();
+            v.resize_with(rows, Default::default);
+            if let Some(x) = v.get_mut(0) {
+                *x = Entry::Obj(Value::Str(n.clone()));
+            }
+            v
+        })
+        .collect::<Vec<_>>();
+
+    // calculate appending values
+    // parallelised over the expressions _and_ the rows
+    let err = crate::Mutex::new(None);
+    to_append
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(withidx, av)| {
+            let predicate = with[withidx].0.resolver_sync(cx);
+            if let Err(e) = par_over_tablerows(av, &table, cx, |a, _, trow| {
+                *a = predicate(trow.into())?.into();
+                Ok(())
+            }) {
+                *err.lock() = Some(e);
+            }
+        });
+
+    // return any error found
+    if let Some(e) = err.into_inner() {
+        return Err(e);
+    }
+
+    // append to the column, if ref shared, clone with known expansion of cols
+    let to_append = to_append.into_iter().map(|x| x.into_iter());
+    if let Some(t) = table.get_mut() {
+        t.add_cols(to_append);
+    } else {
+        let mut t = table.clone_with_col_capacity(table.cols_len() + with.len());
+        t.add_cols(to_append);
+        table = t.into();
+    }
+
+    Ok(table)
+}
+
 // // ------ Append-Row -----------------------------------------------------------
 // fn append_row_help() -> HelpMessage {
 //     variadic_help(
@@ -754,110 +754,126 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
 //
 //     build_table_from_map(map, |k| k.value)
 // }
-//
-// // ------ Map ------------------------------------------------------------------
-// fn map_help() -> HelpMessage {
-//     HelpMessage {
-//         desc: "replace entry in column with result of an expression
-// `map` provides the variable `$row` which is the TableRow
-// the input into the expression is the value of the entry"
-//             .into(),
-//         params: vec![
-//             HelpParameter::Required("col-name".into()),
-//             HelpParameter::Required("value".into()),
-//         ],
-//         flags: vec![
-//             ("<type>", "the type that entry has"),
-//             ("force", "ignore entry types"),
-//         ],
-//         examples: vec![
-//             HelpExample {
-//                 desc: "scale 'size' by dividing by one million",
-//                 code: "ls | map size / 1e6",
-//             },
-//             HelpExample {
-//                 desc: "use a different column and result type",
-//                 code: "ls | map type --Str { \\$row.size | + 100 }",
-//             },
-//         ],
-//         ..HelpMessage::new("map")
-//     }
-// }
-//
-// fn map_intrinsic(blk: Block) -> Result<Step> {
-//     match blk.in_ty() {
-//         Ty::Tab => MapTable::map(blk),
-//         x => Err(Error::wrong_input_type(x, &blk.op_tag)),
-//     }
-// }
-//
-// struct MapTable {
-//     /// Expecting TableRow.
-//     transformation: eng::Argument,
-//     colarg: eng::Argument,
-//     colty: Option<Type>,
-//     row_var: eng::Variable,
-// }
-//
-// impl MapTable {
-//     fn map(mut blk: Block) -> Result<Step> {
-//         let colarg = blk.next_arg(Ty::Nil)?.returns(&Ty::Str)?;
-//         let colty = match blk.get_flag("force") {
-//             Some(_) => None,
-//             None => Some(type_flag(&mut blk, Type::Num)?),
-//         };
-//         let row_var = blk.create_var_manually("row", Ty::TabRow, blk.op_tag.clone());
-//         let transformation = blk.next_arg(colty.clone().unwrap_or(Ty::Nil))?;
-//
-//         let mp = Box::new(Self {
-//             transformation,
-//             colarg,
-//             colty,
-//             row_var,
-//         });
-//
-//         blk.eval_o::<_, Table>(move |table, cx| {
-//             mp.doit(table.try_into()?, &cx).and_then(|x| cx.done_o(x))
-//         })
-//     }
-//
-//     fn doit(&self, mut table: Table, cx: &Context) -> Result<Table> {
-//         let colname: Str = self.colarg.resolve(|| Value::Nil, cx)?.try_into()?;
-//         let ctag = &self.colarg.tag;
-//         let colidx = TableRow::col_idx(&table, &colname, ctag)?;
-//
-//         let mut replace_with: Vec<Value> =
-//             repeat_with(|| Value::Nil).take(table.rows_len()).collect();
-//         let tf = &self.transformation;
-//         let var = &self.row_var;
-//
-//         par_over_tablerows(&mut replace_with, &table, cx, |v, cx, trow| {
-//             let trowidx = trow.idx;
-//             var.set_data(&mut cx.env, trow.into());
-//             let outv = match &self.colty {
-//                 Some(ty) => {
-//                     let e = TableRow::entry_at(&table, trowidx, colidx);
-//                     let e = TableRow::cnv_value(e, ty, trowidx, &colname, ctag)?;
-//                     tf.resolve(|| e, cx)
-//                 }
-//                 None => tf.resolve(|| Value::Nil, cx),
-//             };
-//             *v = outv?;
-//             Ok(())
-//         })?;
-//
-//         table
-//             .make_mut()
-//             .col_mut(colidx)
-//             .expect("col should exist")
-//             .zip(replace_with.into_iter())
-//             .skip(1) // for header
-//             .for_each(|(e1, e2)| *e1 = e2.into());
-//
-//         Ok(table)
-//     }
-// }
-//
+
+// ------ Map ------------------------------------------------------------------
+fn map_help() -> HelpMessage {
+    HelpMessage {
+        desc: "replace entry in column with result of an expression
+`map` provides the variable `$row` which is the TableRow
+the input into the expression is the value of the entry"
+            .into(),
+        params: vec![
+            HelpParameter::Required("col-name".into()),
+            HelpParameter::Required("value".into()),
+        ],
+        flags: vec![
+            ("<type>", "the type that entry has"),
+            ("force", "ignore entry types"),
+        ],
+        examples: vec![
+            HelpExample {
+                desc: "scale 'size' by dividing by one million",
+                code: "ls | map size / 1e6",
+            },
+            HelpExample {
+                desc: "use a different column and result type",
+                code: "ls | map type --Str { \\$row.size | + 100 }",
+            },
+        ],
+        ..HelpMessage::new("map")
+    }
+}
+
+fn map_intrinsic(blk: Block) -> Result<Step> {
+    match blk.in_ty() {
+        Ty::Tab => MapTable::map(blk),
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+    }
+}
+
+struct MapTable {
+    /// Expecting TableRow.
+    transformation: eng::Argument,
+    colarg: eng::Argument,
+    force: bool,
+    row_var: eng::Variable,
+}
+
+impl MapTable {
+    fn map(mut blk: Block) -> Result<Step> {
+        blk.assert_output(Ty::Tab);
+
+        let colarg = blk
+            .next_arg()?
+            .supplied(Ty::Nil)?
+            .returns(Ty::Str)?
+            .concrete()?;
+        let force_flag = blk.get_flag("force").is_some();
+        let ty_flag = force_flag
+            .then(|| type_flag(&mut blk))
+            .transpose()?
+            .flatten();
+        let row_var = blk.create_var_manually("row", Ty::TabRow, blk.op_tag().clone())?;
+        let transformation = blk.next_arg()?;
+
+        let transformation = match (force_flag, ty_flag) {
+            (true, _) => transformation.supplied(Ty::Nil)?,
+            (false, Some(tyflag)) => transformation.supplied(tyflag)?,
+            _ => transformation,
+        }
+        .concrete()?;
+
+        let mp = Box::new(Self {
+            transformation,
+            colarg,
+            force: force_flag,
+            row_var,
+        });
+
+        blk.eval_o::<_, Table>(move |table, cx| {
+            mp.doit(table.try_into()?, &cx).and_then(|x| cx.done_o(x))
+        })
+    }
+
+    fn doit(&self, mut table: Table, cx: &Context) -> Result<Table> {
+        let colname: Str = self.colarg.resolve(|| Value::Nil, cx)?.try_into()?;
+        let ctag = &self.colarg.tag;
+        let colidx = TableRow::col_idx(&table, &colname, ctag)?;
+
+        let mut replace_with: Vec<Value> =
+            repeat_with(|| Value::Nil).take(table.rows_len()).collect();
+        let tf = &self.transformation;
+        let var = &self.row_var;
+        let force = self.force;
+        let in_ty = tf.in_ty();
+
+        par_over_tablerows(&mut replace_with, &table, cx, |v, cx, trow| {
+            let trowidx = trow.idx;
+            var.set_data(&mut cx.env, trow.into());
+            let outv = match force {
+                true => tf.resolve(|| Value::Nil, cx),
+                false => {
+                    let e = TableRow::entry_at(&table, trowidx, colidx);
+                    let e = TableRow::cnv_value(e, in_ty, trowidx, &colname, ctag)?;
+                    tf.resolve(|| e, cx)
+                }
+            };
+            *v = outv?;
+            Ok(())
+        })?;
+
+        table
+            .make_mut()
+            .col_mut(colidx)
+            .expect("col should exist")
+            .zip(replace_with.into_iter())
+            .skip(1) // for header
+            .for_each(|(e1, e2)| *e1 = e2.into());
+
+        Ok(table)
+    }
+}
+
 // ------ Pick -----------------------------------------------------------------
 fn pick_help() -> HelpMessage {
     HelpMessage {

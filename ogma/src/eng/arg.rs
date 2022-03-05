@@ -190,6 +190,24 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
             Pound { ch: 'n', tag: _ } => Ok(Hold::Lit(Value::Nil)),
             Pound { ch: 't', tag: _ } => Ok(Hold::Lit(true.into())),
             Pound { ch: 'f', tag: _ } => Ok(Hold::Lit(false.into())),
+            Pound { ch: 'i', tag: _ } => {
+                // The input literal is a single step which takes the input and passes it straight
+                // through
+                let out_ty = self.tg[self.node.idx()]
+                    .output
+                    .ty()
+                    .cloned()
+                    .expect("output type should be known");
+                let mut stack = eval::Stack::new(vec![Step {
+                    out_ty,
+                    f: Arc::new(|input, cx| cx.done(input)),
+                    type_annotation: String::new(),
+                }]);
+                #[cfg(debug_assertions)]
+                stack.add_types(&self.tg[self.node.idx()]);
+
+                Ok(Hold::Expr(stack))
+            }
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
             Var(tag) => self
                 .locals
