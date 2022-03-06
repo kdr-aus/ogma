@@ -224,13 +224,12 @@ impl Error {
         }
     }
 
-    pub(crate) fn unused_arg(arg: &Argument) -> Self {
-        let (tag, ty) = Self::span_arg(arg);
+    pub(crate) fn unused_arg(tag: &Tag) -> Self {
         Error {
             cat: Category::Semantics,
             desc: "too many arguments supplied".into(),
-            traces: trace(tag, format!("{} argument is unnecessary", ty)),
-            help_msg: Some("the command does not require or support additional arguments".into()),
+            traces: trace(tag, Some("this argument is unnecessary".into())),
+            help_msg: None,
         }
     }
 
@@ -379,6 +378,7 @@ expected `{}`, found `{}`",
                 Category::Parsing => colour!(wtr, c, bright_red, "Parsing Error"),
                 Category::UnknownCommand => colour!(wtr, c, bright_red, "Unknown Command"),
                 Category::Semantics => colour!(wtr, c, bright_red, "Semantics Error"),
+                Category::Type => colour!(wtr, c, bright_red, "Typing Error"),
                 Category::Evaluation => colour!(wtr, c, bright_red, "Evaluation Error"),
                 Category::Definitions => colour!(wtr, c, bright_red, "Definition Error"),
                 Category::Help => colour!(wtr, c, bright_yellow, "Help"),
@@ -429,6 +429,25 @@ impl Error {
             cat: Category::Internal,
             desc: format!("AST graph reach {} loops", loop_counter),
             traces: trace(block_tag, None),
+            help_msg: Self::internal_err_help(),
+        }
+    }
+
+    pub(crate) fn unexp_code_injection_output_ty(
+        ty: &Type,
+        exp_ty: &Type,
+        block_tag: &Tag,
+    ) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: "Internal code injection output type does not match expected output type".into(),
+            traces: trace(
+                block_tag,
+                Some(format!(
+                    "this block returns '{}', expecting '{}'",
+                    ty, exp_ty
+                )),
+            ),
             help_msg: Self::internal_err_help(),
         }
     }
@@ -662,6 +681,8 @@ pub enum Category {
     UnknownCommand,
     /// Semantic error at comp-time.
     Semantics,
+    /// Type inference failure.
+    Type,
     /// A run-time evaluation error.
     Evaluation,
     /// A definition error.

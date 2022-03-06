@@ -91,24 +91,6 @@ impl<'a> Block<'a> {
         self.args.len()
     }
 
-    /// Works in the same fashion as [`Block::next_arg`], but **does not remove the argument from
-    /// the argument stack**. This should not be used except in edge cases where the argument is
-    /// required more than once.
-    pub fn next_arg_do_not_remove<I: Into<Option<Type>>>(
-        &mut self,
-        input_type: I,
-    ) -> Result<Argument> {
-        todo!()
-        //         let arg = self.next_arg_raw()?;
-        //         self.args.push(arg.clone());
-        //         self.args_count = self.args_count.saturating_sub(1);
-        //         self.arg_recursive(
-        //             arg,
-        //             input_type.into().unwrap_or_else(|| self.in_ty().clone()),
-        //             self.vars,
-        //         )
-    }
-
     /// Gets the flag that matches a given name.
     ///
     /// If no name is given with `None`, _the first flag first is returned, if there is one._

@@ -27,6 +27,10 @@ impl Stack {
         }
     }
 
+    pub fn out_ty(&self) -> &Type {
+        &self.steps.last().expect("at least one step").out_ty
+    }
+
     pub fn eval(&self, value: Value, cx: Context) -> Result<(Value, Environment)> {
         debug_assert_eq!(
             value.ty(),

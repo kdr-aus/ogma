@@ -298,6 +298,39 @@ impl<'a> Block<'a> {
             compiled_exprs,
         ))
     }
+
+    /// Similar to [`Block::next_arg`], but does not pop the argument list.
+    pub fn next_arg_do_not_remove(&mut self) -> Result<ArgBuilder<'_, 'a>> {
+        let node = self
+            .args
+            .last()
+            .copied()
+            .ok_or_else(|| Error::insufficient_args(self.blk_tag(), self.args_count))?;
+
+        let btag = self.blk_tag().clone();
+
+        let Block {
+            ag,
+            tg_chgs,
+            in_ty: blk_in_ty,
+            tg,
+            locals,
+            compiled_exprs,
+            ..
+        } = self;
+
+        let blk_in_ty = Some(blk_in_ty.clone());
+
+        Ok(ArgBuilder::new(
+            node,
+            ag,
+            tg,
+            tg_chgs,
+            blk_in_ty,
+            locals,
+            compiled_exprs,
+        ))
+    }
 }
 
 impl Argument {

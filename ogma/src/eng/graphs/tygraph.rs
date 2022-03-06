@@ -51,6 +51,12 @@ pub enum Chg {
 pub enum Conflict {
     /// The source is `Unknown`.
     UnknownSrc,
+    /// There is an obligation to meet but concrete types do not match.
+    UnmatchedObligation {
+        src: Type,
+        /// Obligation.
+        dst: Type,
+    },
 }
 
 pub struct ResolutionError {
@@ -524,6 +530,11 @@ impl Knowledge {
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
             // An any source can flow into an Any or Unknown dest
             (Any, Any | Unknown) => Ok(()),
+            // Cannot flow if obliged types does not match
+            (Known(t1), Obliged(t2)) if t1 != t2 => Err(Conflict::UnmatchedObligation {
+                src: t1.clone(),
+                dst: t2.clone(),
+            }),
 
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }

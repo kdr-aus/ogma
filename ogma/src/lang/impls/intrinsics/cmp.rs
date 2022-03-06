@@ -198,22 +198,58 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
         Ty::Def(x) if x.name().str().starts_with("U_") => {
             // TODO
             // Tuple inferring will not since they are not stored in the types
-            todo!()
-            //             let els = match x.structure() {
-            //                 types::TypeVariant::Product(x) => x.len(),
-            //                 _ => 0,
-            //             };
-            //             blk.next_arg_do_not_remove(None)?.returns(blk.in_ty())?; // this checks same lhs=rhs type
-            //             let def = &lang::syntax::parse::definition_impl(
-            //                 build_tuple_eq_def_str(els),
-            //                 Location::Ogma,
-            //                 blk.defs,
-            //             )
-            //             .map_err(|(e, _)| e)?;
-            //             let evaltr = eng::DefImplEvaluator::build(&mut blk, def)?.returns(&Ty::Bool)?;
-            //             blk.eval(Ty::Bool, move |input, cx| {
-            //                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
-            //             })
+            let els = match x.structure() {
+                types::TypeVariant::Product(x) => x.len(),
+                _ => 0,
+            };
+
+            let inty = blk.in_ty().clone();
+
+            let rhs = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(inty.clone())?
+                .concrete()?; // this checks same lhs=rhs type
+
+            // TODO this code injection is fraught with fuck ups
+            // Encapsulate code injection with a structure which can handle the locals
+            // jiggery pokery
+
+            let (var, code) = build_tuple_eq_code(els);
+
+            let expr = lang::parse::expression(code, Location::Ogma, blk.defs).map_err(|e| e.0)?;
+            let mut inner_locals = eng::Locals::default();
+            let var = inner_locals.add_new_var(Str::from(var), inty.clone(), Tag::default());
+
+            let eng::FullCompilation { eval_stack, vars } =
+                eng::compile(expr, blk.defs, inty, inner_locals)?;
+
+            let mut vars = eng::Environment::new(vars);
+
+            let oty = eval_stack.out_ty();
+            let exp_ty = Ty::Bool;
+
+            if oty != &exp_ty {
+                Err(Error::unexp_code_injection_output_ty(
+                    oty,
+                    &exp_ty,
+                    blk.blk_tag(),
+                ))
+            } else {
+                blk.eval(exp_ty, move |input, cx| {
+                    // build an environment each invocation
+                    let mut vars = vars.clone();
+
+                    // evalulate the rhs argument
+                    let rhs_value = rhs.resolve(|| input.clone(), &cx)?;
+                    // set the rhs variable
+                    var.set_data(&mut vars, rhs_value);
+                    // evalulate the injected code
+                    let (val, _) = eval_stack.eval(input, Context { env: vars, ..cx })?;
+                    // return the caller's environment
+                    cx.done(val)
+                })
+            }
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
@@ -228,6 +264,20 @@ fn build_tuple_eq_def_str(els: usize) -> String {
     }
     s.push('}');
     s
+}
+
+/// follows the pattern `and {get t# | = $rhs.t#}`.
+fn build_tuple_eq_code(els: usize) -> (&'static str, String) {
+    use std::fmt::Write;
+
+    let var_name = "rhs";
+
+    let s = (0..els).fold(String::from("and "), |mut s, i| {
+        write!(&mut s, "{{ get t{0} | = ${var}.t{0} }} ", i, var = var_name).ok();
+        s
+    });
+
+    (var_name, s)
 }
 
 // ------ Max ------------------------------------------------------------------
