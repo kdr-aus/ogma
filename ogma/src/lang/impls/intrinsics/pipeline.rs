@@ -210,28 +210,28 @@ impl ast::DotOperatorBlock {
     /// Consists of 2 terms: `input.field`.
     /// For TableRow input we handle separately
     fn instrinsic(mut blk: Block) -> Result<Step> {
-        todo!();
+        let input = blk.next_arg()?.supplied(None)?.concrete()?;
+        let field = blk.next_arg()?.supplied(Ty::Nil)?;
+        match input.out_ty() {
+            Ty::TabRow => {
+                let colarg = field.returns(Ty::Str)?.concrete()?;
+                // TODO remove type flag and use type infererence
+                let ty = TableGetType::Flag(Type::Num); // '.' does not support flags
+                blk.eval(ty.ty().clone(), move |lhs_input, cx| {
+                    let trow: TableRow = input.resolve(|| lhs_input, &cx)?.try_into()?;
+                    table_row_get(&trow, &colarg, &ty, cx)
+                })
+            }
+            x => {
+                let field = field.concrete()?;
+                let (facc, out_ty) = FieldAccessor::construct(x, &field, blk.op_tag())?;
 
-        //         let input = blk.next_arg(None)?;
-        //         let field = blk.next_arg(Ty::Nil)?;
-        //         match input.out_ty() {
-        //             Ty::TabRow => {
-        //                 let colarg = field.returns(&Ty::Str)?;
-        //                 let ty = TableGetType::Flag(Type::Num); // '.' does not support flags
-        //                 blk.eval(ty.ty().clone(), move |lhs_input, cx| {
-        //                     let trow: TableRow = input.resolve(|| lhs_input, &cx)?.try_into()?;
-        //                     table_row_get(&trow, &colarg, &ty, cx)
-        //                 })
-        //             }
-        //             x => {
-        //                 let (facc, out_ty) = FieldAccessor::construct(x, &field, &blk.op_tag)?;
-        //
-        //                 blk.eval(out_ty, move |lhs_input, cx| {
-        //                     let input = input.resolve(|| lhs_input, &cx)?;
-        //                     facc.get(input).and_then(|x| cx.done(x))
-        //                 })
-        //             }
-        //         }
+                blk.eval(out_ty, move |lhs_input, cx| {
+                    let input = input.resolve(|| lhs_input, &cx)?;
+                    facc.get(input).and_then(|x| cx.done(x))
+                })
+            }
+        }
     }
 }
 

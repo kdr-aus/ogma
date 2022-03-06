@@ -5,9 +5,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
         (cmp, Cmp)
         (eq, Cmp)
-    //         (max, Cmp)
-    //         (min, Cmp)
-        };
+        (max, Cmp)
+        (min, Cmp)
+    };
 }
 
 // ------ Cmp ------------------------------------------------------------------
@@ -231,54 +231,56 @@ fn build_tuple_eq_def_str(els: usize) -> String {
 }
 
 // ------ Max ------------------------------------------------------------------
-// fn max_help() -> HelpMessage {
-//     variadic_help(
-//         "max",
-//         "return the maximum value",
-//         vec![
-//             HelpExample {
-//                 desc: "maximum of 2 and 3",
-//                 code: "\\ 2 | max 3",
-//             },
-//             HelpExample {
-//                 desc: "maximum of multiple args",
-//                 code: "max 1 2 3 4 5",
-//             },
-//         ],
-//     )
-// }
+fn max_help() -> HelpMessage {
+    variadic_help(
+        "max",
+        "return the maximum value",
+        vec![
+            HelpExample {
+                desc: "maximum of 2 and 3",
+                code: "\\ 2 | max 3",
+            },
+            HelpExample {
+                desc: "maximum of multiple args",
+                code: "max 1 2 3 4 5",
+            },
+        ],
+    )
+}
 
-// fn max_intrinsic(blk: Block) -> Result<Step> {
-//     variadic_intrinsic::<Number, _>(blk, |prev, next| {
-//         let x = prev.map(|prev| std::cmp::max(prev, next)).unwrap_or(next);
-//         (x, false)
-//     })
-// }
+fn max_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Num);
+    variadic_intrinsic::<Number, _>(blk, |prev, next| {
+        let x = prev.map(|prev| std::cmp::max(prev, next)).unwrap_or(next);
+        (x, false)
+    })
+}
 
 // ------ Min ------------------------------------------------------------------
-// fn min_help() -> HelpMessage {
-//     variadic_help(
-//         "min",
-//         "return the minimum value",
-//         vec![
-//             HelpExample {
-//                 desc: "minimum of 2 and 3",
-//                 code: "\\ 2 | min 3",
-//             },
-//             HelpExample {
-//                 desc: "minimum of multiple args",
-//                 code: "min 1 2 3 4 5",
-//             },
-//         ],
-//     )
-// }
+fn min_help() -> HelpMessage {
+    variadic_help(
+        "min",
+        "return the minimum value",
+        vec![
+            HelpExample {
+                desc: "minimum of 2 and 3",
+                code: "\\ 2 | min 3",
+            },
+            HelpExample {
+                desc: "minimum of multiple args",
+                code: "min 1 2 3 4 5",
+            },
+        ],
+    )
+}
 
-// fn min_intrinsic(blk: Block) -> Result<Step> {
-//     variadic_intrinsic::<Number, _>(blk, |prev, next| {
-//         let x = prev.map(|prev| std::cmp::min(prev, next)).unwrap_or(next);
-//         (x, false)
-//     })
-// }
+fn min_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Num);
+    variadic_intrinsic::<Number, _>(blk, |prev, next| {
+        let x = prev.map(|prev| std::cmp::min(prev, next)).unwrap_or(next);
+        (x, false)
+    })
+}
 
 #[cfg(test)]
 mod tests {

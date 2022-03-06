@@ -11,7 +11,7 @@ use table::Entry::{self, Nil};
 type Result<T> = std::result::Result<T, ogma::Error>;
 
 mod arithmetic;
-// mod cmp;
+mod cmp;
 // mod definitions;
 // mod diagnostics;
 mod io;
