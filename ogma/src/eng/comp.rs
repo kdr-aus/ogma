@@ -1145,4 +1145,14 @@ mod tests {
     fn compilation_test_12() {
         compile("\\ { let $b | \\ #t | \\ $b }").unwrap();
     }
+
+    #[test]
+    fn compilation_test_13() {
+        let defs = &mut Definitions::default();
+
+        lang::process_definition("def foo () { > 3 | \\ 3 }", Default::default(), None, defs)
+            .unwrap();
+
+        compile_w_defs("\\ 3 | > { foo }", defs).unwrap();
+    }
 }

@@ -173,7 +173,7 @@ impl AstGraph {
         let ops = self
             .node_indices()
             // is an Op
-            .filter_map(|n| self[n].op().is_some().then(|| n).map(OpNode))
+            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
             // have not already expanded it
             .filter(|&n| !self.op_expanded(n))
             .collect::<Vec<_>>();
@@ -181,8 +181,8 @@ impl AstGraph {
         let mut expanded = false;
 
         for op in ops {
-            expanded = true;
-            self.expand_def(op, defs, recursion_detector)?;
+            let x = self.expand_def(op, defs, recursion_detector)?;
+            expanded |= x;
         }
 
         Ok(expanded)
@@ -193,7 +193,7 @@ impl AstGraph {
         opnode: OpNode,
         defs: &Definitions,
         recursion_detector: &mut RecursionDetection,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let opnode_ = NodeIndex::from(opnode);
 
         let op = self[opnode_]
@@ -214,6 +214,8 @@ impl AstGraph {
 
         recursion_detector.clear_cache();
 
+        let mut expanded = false;
+
         for (name, key, im) in op_impls {
             // sub-root
             let cmd = match im {
@@ -225,10 +227,14 @@ impl AstGraph {
                 Implementation::Definition(def) => {
                     // first, test that this def is not already being used in the call chain,
                     // detecting recursion.
-                    let id = format!("{}:{:?}", name, key);
-                    let recursion_detected = recursion_detector.detect(self, opnode, &id);
+                    // make an exception for unkeyed impls, since the path taken may be differing
+                    let id = key.map(|t| format!("{}:{}", name, t));
 
-                    if recursion_detected {
+                    if id
+                        .as_ref()
+                        .map(|id| recursion_detector.detect(self, opnode, id))
+                        .unwrap_or(false)
+                    {
                         continue;
                     }
 
@@ -245,7 +251,9 @@ impl AstGraph {
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
                     // add the id into the recursion detector
-                    recursion_detector.add_id(cmd, id);
+                    if let Some(id) = id {
+                        recursion_detector.add_id(cmd, id);
+                    }
 
                     cmd
                 }
@@ -284,9 +292,12 @@ impl AstGraph {
             {
                 g.add_edge(arg, cmd, Relation::Term(i as u8));
             }
+
+            // if we got this far, update the flag
+            expanded = true;
         }
 
-        Ok(())
+        Ok(expanded)
     }
 
     /// Returns if the op has been expanded already, that is, it has children with keyed types.
