@@ -86,6 +86,7 @@ impl<'a, 'b> ArgBuilder<'a, 'b> {
     /// > difficult with mutable aliasing, the type argument is an `Option`, where the `None`
     /// > variant represents _using the block's input type_.
     pub fn supplied<T: Into<Option<Type>>>(mut self, ty: T) -> Result<Self> {
+        dbg!(&self.blk_in_ty);
         let ty = match ty.into().or_else(|| self.blk_in_ty.clone()) {
             Some(ty) => ty,
             None => return Ok(self),

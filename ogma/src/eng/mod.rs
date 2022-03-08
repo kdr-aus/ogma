@@ -16,7 +16,7 @@ type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
-    eval::{DefImplEvaluator, Evaluator},
+    eval::{CodeInjector, DefImplEvaluator, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals, Variable},
 };

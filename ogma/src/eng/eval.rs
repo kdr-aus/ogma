@@ -345,3 +345,104 @@ pub fn make_input_pound_expr(in_ty: Type, tag: Tag) -> Evaluator {
         type_annotation: tyan,
     }
 }
+
+pub struct CodeInjector<T> {
+    /// Map of block argument to an _injector's_ local variable.
+    args: Vec<(Argument, Variable, Option<Value>)>,
+    data: T,
+}
+
+pub struct Build {
+    expr: ast::Expression,
+    locals: Locals,
+}
+pub struct Eval {
+    stack: Stack,
+    env: Environment,
+}
+
+impl CodeInjector<Build> {
+    pub fn new(code: impl Into<String>, defs: &Definitions) -> Result<Self> {
+        let expr =
+            lang::parse::expression(code.into(), ast::Location::Ogma, defs).map_err(|e| e.0)?;
+
+        Ok(Self {
+            args: Vec::new(),
+            data: Build {
+                expr,
+                locals: Default::default(),
+            },
+        })
+    }
+
+    pub fn map_arg_to_var<N: Into<Str>>(
+        &mut self,
+        blk: &mut Block,
+        name: N,
+        input: Option<Value>,
+        returns: Type,
+    ) -> Result<()> {
+        let arg = blk
+            .next_arg()?
+            .supplied(input.as_ref().map(|x| x.ty()))?
+            .returns(returns)?
+            .concrete()?;
+        let ty = arg.out_ty().clone();
+        // TODO is there a way to not use a default tag?
+        let var = self
+            .data
+            .locals
+            .add_new_var(name.into(), ty, Tag::default());
+        self.args.push((arg, var, input));
+        Ok(())
+    }
+
+    pub fn compile(self, in_ty: Type, defs: &Definitions) -> Result<CodeInjector<Eval>> {
+        let CodeInjector {
+            data: Build { expr, locals },
+            args,
+        } = self;
+
+        let FullCompilation {
+            eval_stack: stack,
+            vars,
+        } = compile(expr, defs, in_ty, locals)?;
+
+        Ok(CodeInjector {
+            args,
+            data: Eval {
+                stack,
+                env: Environment::new(vars),
+            },
+        })
+    }
+}
+
+impl CodeInjector<Eval> {
+    pub fn out_ty(&self) -> &Type {
+        self.data.stack.out_ty()
+    }
+
+    pub fn eval(&self, input: Value, outer_cx: Context) -> StepR {
+        let CodeInjector {
+            args,
+            data: Eval { stack, env },
+        } = self;
+
+        // build a local environment on each invocation
+        let mut env = env.clone();
+
+        // evalulate any mapped args and set the variable
+        // NOTE: this uses the outer_cx since it needs the caller's env
+        for (arg, var, input2) in args {
+            let v = arg.resolve(|| input2.as_ref().unwrap_or(&input).clone(), &outer_cx)?;
+            var.set_data(&mut env, v);
+        }
+
+        // evalulate the injected code
+        let (val, _) = stack.eval(input, Context { env, ..outer_cx })?;
+
+        // return the caller's environment
+        outer_cx.done(val)
+    }
+}

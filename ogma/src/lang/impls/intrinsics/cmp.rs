@@ -80,24 +80,41 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
                 cx.done_o(lhs_variant.cmp(&rhs))
             })
         }
-        Ty::Def(x) if x.name().str().starts_with("U_") => {
-            todo!();
-            //             let els = match x.structure() {
-            //                 types::TypeVariant::Product(x) => x.len(),
-            //                 _ => 0,
-            //             };
-            //             blk.next_arg_do_not_remove(None)?.returns(blk.in_ty())?.concrete()?; // this checks same lhs=rhs type
-            //             let def = &lang::syntax::parse::definition_impl(
-            //                 build_tuple_cmp_def_str(els),
-            //                 Location::Ogma,
-            //                 blk.defs,
-            //             )
-            //             .map_err(|(e, _)| e)?;
-            //             let ordty = Ty::Def(types::ORD.get());
-            //             let evaltr = eng::DefImplEvaluator::build(&mut blk, def)?.returns(&ordty)?;
-            //             blk.eval(ordty, move |input, cx| {
-            //                 evaltr.eval(input, cx.clone()).and_then(|(x, _)| cx.done(x))
-            //             })
+        Ty::Def(x) if x.is_tuple() => {
+            dbg!("here");
+
+            let els = match x.structure() {
+                types::TypeVariant::Product(x) => x.len(),
+                _ => 0,
+            };
+
+            let (var, code) = build_tuple_cmp_code(els);
+
+            let mut injector = eng::CodeInjector::new(code, blk.defs)
+                .map_err(|e| eprintln!("{}", e))
+                .expect("this should parse fine");
+
+            let ty = blk.in_ty().clone();
+
+            dbg!("here");
+            // map the RHS to a var. RHS returns the same type as block's input
+            injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
+            dbg!("failed map");
+
+            let injector = injector.compile(ty, blk.defs)?;
+
+            let oty = injector.out_ty();
+            let exp_ty = Ty::Def(types::ORD.get());
+
+            if oty != &exp_ty {
+                Err(Error::unexp_code_injection_output_ty(
+                    oty,
+                    &exp_ty,
+                    blk.blk_tag(),
+                ))
+            } else {
+                blk.eval(exp_ty, move |input, cx| injector.eval(input, cx))
+            }
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
@@ -117,6 +134,36 @@ fn build_tuple_cmp_def_str(els: usize) -> String {
     }
     write!(&mut s, "$c{} }}", els).ok(); // instead of testing every element, pass the last through
     s
+}
+
+/// follows the pattern `let {get t# | cmp $rhs.t#} $c#` and `if {\\ $c# | != Ord::Eq} $c#`.
+fn build_tuple_cmp_code(els: usize) -> (&'static str, String) {
+    use std::fmt::Write;
+
+    let var_name = "rhs";
+
+    let mut code = (0..els).fold(String::from("let "), |mut s, i| {
+        write!(
+            &mut s,
+            "{{get t{0} | cmp ${var}.t{0}}} $c{0} ",
+            i,
+            var = var_name
+        )
+        .ok();
+        s
+    });
+
+    code += "| if ";
+
+    let els = els.saturating_sub(1); // don't test _every_ element, pass the last through
+    let mut code = (0..els).fold(code, |mut s, i| {
+        write!(&mut s, "{{\\ $c{0} | != Ord::Eq}} $c{0} ", i).ok();
+        s
+    });
+
+    write!(&mut code, "$c{}", els).ok();
+
+    (var_name, code)
 }
 
 // ------ Eq -------------------------------------------------------------------
@@ -195,7 +242,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
                 cx.done_o(lhs_variant.eq(&rhs))
             })
         }
-        Ty::Def(x) if x.name().str().starts_with("U_") => {
+        Ty::Def(x) if x.is_tuple() => {
             // TODO
             // Tuple inferring will not since they are not stored in the types
             let els = match x.structure() {
@@ -203,30 +250,20 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
                 _ => 0,
             };
 
-            let inty = blk.in_ty().clone();
-
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(inty.clone())?
-                .concrete()?; // this checks same lhs=rhs type
-
-            // TODO this code injection is fraught with fuck ups
-            // Encapsulate code injection with a structure which can handle the locals
-            // jiggery pokery
-
             let (var, code) = build_tuple_eq_code(els);
 
-            let expr = lang::parse::expression(code, Location::Ogma, blk.defs).map_err(|e| e.0)?;
-            let mut inner_locals = eng::Locals::default();
-            let var = inner_locals.add_new_var(Str::from(var), inty.clone(), Tag::default());
+            let mut injector = eng::CodeInjector::new(code, blk.defs)
+                .map_err(|e| eprintln!("{}", e))
+                .expect("this should parse fine");
 
-            let eng::FullCompilation { eval_stack, vars } =
-                eng::compile(expr, blk.defs, inty, inner_locals)?;
+            let ty = blk.in_ty().clone();
 
-            let mut vars = eng::Environment::new(vars);
+            // map the RHS to a var. RHS returns the same type as block's input
+            injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
 
-            let oty = eval_stack.out_ty();
+            let injector = injector.compile(ty, blk.defs)?;
+
+            let oty = injector.out_ty();
             let exp_ty = Ty::Bool;
 
             if oty != &exp_ty {
@@ -236,19 +273,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
                     blk.blk_tag(),
                 ))
             } else {
-                blk.eval(exp_ty, move |input, cx| {
-                    // build an environment each invocation
-                    let mut vars = vars.clone();
-
-                    // evalulate the rhs argument
-                    let rhs_value = rhs.resolve(|| input.clone(), &cx)?;
-                    // set the rhs variable
-                    var.set_data(&mut vars, rhs_value);
-                    // evalulate the injected code
-                    let (val, _) = eval_stack.eval(input, Context { env: vars, ..cx })?;
-                    // return the caller's environment
-                    cx.done(val)
-                })
+                blk.eval(exp_ty, move |input, cx| injector.eval(input, cx))
             }
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),

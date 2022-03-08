@@ -561,6 +561,7 @@ impl<'d> Compiler<'d> {
             }
         }
 
+        dbg!(&chgs);
         let tg_chgd = self.apply_tg_chgs(chgs.into_iter());
 
         (goto_resolve | tg_chgd)
