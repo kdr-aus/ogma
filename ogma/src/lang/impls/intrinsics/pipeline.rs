@@ -718,23 +718,26 @@ access of the fields is using `get t#` with the field number",
 }
 
 fn tuple_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!()
-    //     let len = blk.args_len();
-    //     if len < 2 {
-    //         return Err(Error::insufficient_args(&blk.blk_tag, len));
-    //     }
-    //     let mut v = Vec::with_capacity(len);
-    //     for _ in 0..len {
-    //         v.push(blk.next_arg(None)?);
-    //     }
+    let len = blk.args_len();
+    if len < 2 {
+        return Err(Error::insufficient_args(blk.blk_tag(), len as u8));
+    }
+    let mut v = Vec::with_capacity(len);
+    for _ in 0..len {
+        v.push(blk.next_arg()?.supplied(None)?.concrete()?);
+    }
 
-    //     let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
-    //
-    //     blk.eval(Type::Def(ty.clone()), move |input, cx| {
-    //         let mut data = Vec::with_capacity(v.len());
-    //         for arg in &v {
-    //             data.push(arg.resolve(|| input.clone(), &cx)?);
-    //         }
-    //         cx.done(OgmaData::new(ty.clone(), None, data))
-    //     })
+    let ty = Arc::new(Tuple::ty(v.iter().map(|x| x.out_ty().clone()).collect()));
+
+    let oty = Type::Def(ty.clone());
+
+    blk.assert_output(oty.clone());
+
+    blk.eval(oty, move |input, cx| {
+        let mut data = Vec::with_capacity(v.len());
+        for arg in &v {
+            data.push(arg.resolve(|| input.clone(), &cx)?);
+        }
+        cx.done(OgmaData::new(ty.clone(), None, data))
+    })
 }

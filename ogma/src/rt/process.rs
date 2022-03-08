@@ -24,7 +24,7 @@ where
 
     let expr = lang::syntax::parse::expression(expr, loc, defs).map_err(|e| e.0)?;
     handle_help(&expr, defs)?;
-    let eng::FullCompilation { eval_stack, vars } = eng::compile(expr, defs, I::as_type())?;
+    let eng::FullCompilation { eval_stack, vars } = eng::compile(expr, defs, I::as_type(), None)?;
     let cx = eng::Context {
         root,
         wd,

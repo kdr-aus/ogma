@@ -16,7 +16,7 @@ type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
-    eval::{DefImplEvaluator, Evaluator},
+    eval::{CodeInjector, DefImplEvaluator, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals, Variable},
 };
@@ -123,8 +123,7 @@ impl<'a> Block<'a> {
         if let Some(flag) = self.flags.last() {
             Err(Error::unused_flag(flag))
         } else if let Some(arg) = self.args.get(0) {
-            todo!()
-        //             Err(Error::unused_arg(arg))
+            Err(Error::unused_arg(self.ag[arg.idx()].tag()))
         } else {
             #[cfg(debug_assertions)]
             match &self.output_ty {

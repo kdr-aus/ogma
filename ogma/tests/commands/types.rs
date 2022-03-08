@@ -186,14 +186,13 @@ fn tuple_eq_testing() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `U_Num-Str_`, found `U_Str-Num_`
+        "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:19
  | Tuple 1 'foo' | eq Tuple 'foo' 1
- |                    ^^^^^^^^^^^^^ this argument returns type `U_Str-Num_`
+ |                    ^^^^^ this node has type `U_Str-Num_`
 --> shell:19
  | Tuple 1 'foo' | eq Tuple 'foo' 1
- |                    ^^^^^^^^^^^^^ invoked here
---> help: commands may require specific argument types, use `--help` to view requirements
+ |                    ^^^^^^^^^^^^^ but this node is obliged to return `U_Num-Str_`
 "
     );
 }
@@ -215,14 +214,13 @@ fn tuple_cmp_testing() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `U_Num-Str_`, found `U_Str-Num_`
+        "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:20
  | Tuple 1 'foo' | cmp Tuple 'foo' 1
- |                     ^^^^^^^^^^^^^ this argument returns type `U_Str-Num_`
+ |                     ^^^^^ this node has type `U_Str-Num_`
 --> shell:20
  | Tuple 1 'foo' | cmp Tuple 'foo' 1
- |                     ^^^^^^^^^^^^^ invoked here
---> help: commands may require specific argument types, use `--help` to view requirements
+ |                     ^^^^^^^^^^^^^ but this node is obliged to return `U_Num-Str_`
 "
     );
 }

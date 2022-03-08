@@ -96,6 +96,14 @@ impl Type {
             ..HelpMessage::new(self.to_string())
         }
     }
+
+    /// This type is a Tuple type with name `U_t1-t2-...-tN_`.
+    pub fn is_tuple(&self) -> bool {
+        match self {
+            Type::Def(n) => n.is_tuple(),
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Type {
@@ -470,6 +478,11 @@ impl TypeDef {
             desc,
             ..HelpMessage::new(cmd)
         }
+    }
+
+    /// This type is a Tuple type with name `U_t1-t2-...-tN_`.
+    pub fn is_tuple(&self) -> bool {
+        self.name.str().starts_with("U_")
     }
 }
 

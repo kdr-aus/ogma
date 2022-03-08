@@ -5,11 +5,20 @@ use astgraph::{AstGraph, AstNode};
 use graphs::*;
 use tygraph::TypeGraph;
 
-pub fn compile(
+/// Compile an expression.
+///
+/// `input_ty` and `locals` are optional. If not specified, `Nil` and an empty input locals are
+/// used. If they are specified, then compilation builds atop them.
+pub fn compile<I, L>(
     expr: ast::Expression,
     defs: &Definitions,
-    input_ty: Type,
-) -> Result<FullCompilation> {
+    input_ty: I,
+    locals: L,
+) -> Result<FullCompilation>
+where
+    I: Into<Option<Type>>,
+    L: Into<Option<Locals>>,
+{
     let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
 
@@ -25,12 +34,14 @@ pub fn compile(
         callsite_params: Default::default(),
     };
 
+    let input_ty = input_ty.into().unwrap_or(Type::Nil);
+
     compiler.init_tg(input_ty); // initialise TG
 
     // initialise an empty Locals into the first op node
     // route through Compiler::insert_locals, since it handles locals propagation
     // THIS IS THE RETURN LOCALS AS WELL!
-    let vars = Locals::default();
+    let vars = locals.into().unwrap_or_default();
     let root = ExprNode(0.into());
     compiler.insert_locals(&vars, root.first_op(compiler.ag()));
 
@@ -209,11 +220,49 @@ impl<'d> Compiler<'d> {
             match self.tg.flow_types(&mut self.flowed_edges) {
                 Ok(true) => (), // keep going!
                 Ok(false) => break Ok(()),
-                Err(reserr) => {
-                    todo!("need to handle resolution error properly")
-                }
+                Err(reserr) => break Err(self.ty_resolution_err(reserr)),
             }
         }
+    }
+
+    fn ty_resolution_err(&self, reserr: tygraph::ResolutionError) -> Error {
+        use crate::common::err::*;
+        use tygraph::Conflict;
+
+        let mut err = Error {
+            cat: Category::Type,
+            desc: "Type resolution failed".into(),
+            traces: Vec::new(),
+            help_msg: None,
+        };
+
+        let tygraph::ResolutionError { from, to, conflict } = reserr;
+
+        let from = self.ag[from].tag();
+        let to = self.ag[to].tag();
+
+        match conflict {
+            Conflict::UnknownSrc => {
+                err.desc.push_str(". Unknown source type");
+                err.traces.push(Trace::from_tag(
+                    from,
+                    "this node's type is unknown".to_string(),
+                ));
+            }
+            Conflict::UnmatchedObligation { src, dst } => {
+                err.desc.push_str(". Conflicting obligation type");
+                err.traces.push(Trace::from_tag(
+                    from,
+                    format!("this node has type `{}`", src),
+                ));
+                err.traces.push(Trace::from_tag(
+                    to,
+                    format!("but this node is obliged to return `{}`", dst),
+                ));
+            }
+        }
+
+        err
     }
 }
 
@@ -512,6 +561,7 @@ impl<'d> Compiler<'d> {
             }
         }
 
+        dbg!(&chgs);
         let tg_chgd = self.apply_tg_chgs(chgs.into_iter());
 
         (goto_resolve | tg_chgd)
@@ -1003,7 +1053,7 @@ mod tests {
     fn compile_w_defs(expr: &str, defs: &Definitions) -> Result<()> {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
-        super::compile(expr, defs, Type::Nil)
+        super::compile(expr, defs, None, None)
             .map_err(|e| {
                 eprintln!("{}", e);
                 e

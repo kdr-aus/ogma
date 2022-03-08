@@ -809,7 +809,7 @@ impl MapTable {
             .returns(Ty::Str)?
             .concrete()?;
         let force_flag = blk.get_flag("force").is_some();
-        let ty_flag = force_flag
+        let ty_flag = (!force_flag)
             .then(|| type_flag(&mut blk))
             .transpose()?
             .flatten();
