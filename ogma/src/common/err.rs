@@ -46,7 +46,7 @@ macro_rules! colourln {
 ///  |        ^^^^ short description
 /// --> help: help message
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Error {
     /// Category of error.
     pub cat: Category,
@@ -56,6 +56,13 @@ pub struct Error {
     pub traces: Vec<Trace>,
     /// Optional help message.
     pub help_msg: Option<String>,
+    /// Error should propogate immediately.
+    ///
+    /// This is a flag to the compiler that the error should be propogated through, exiting the
+    /// compiling loop early without further compilation processes.
+    /// This is usually done when a error is encountered that is unrelated to typing issues, and
+    /// will be an error even if _all_ type information was known.
+    pub hard: bool,
 }
 
 /// A single trace item for error messages.
@@ -113,11 +120,11 @@ pub fn help_as_error(msg: &HelpMessage) -> Error {
     Error {
         cat: Category::Help,
         desc: format!("`{}`", cmd),
-        help_msg: None,
         traces: vec![Trace {
             source,
             ..Default::default()
         }],
+        ..Error::default()
     }
 }
 
@@ -155,6 +162,7 @@ impl Error {
                 "use a different name, or try defining `{}` for a specific input type",
                 def.name
             )),
+            ..Self::default()
         }
     }
 
@@ -164,6 +172,7 @@ impl Error {
             desc: format!("operation `{}` not defined", op),
             traces: trace(op, format!("`{}` not found", op)),
             help_msg: Some("view a list of definitions using `def --list`".into()),
+            ..Self::default()
         }
     }
 
@@ -176,6 +185,7 @@ impl Error {
             ),
             traces: trace(op, format!("`{}` not implmented for `{}` input", op, in_ty)),
             help_msg: Some("view a list of definitions using `def --list`".into()),
+            ..Self::default()
         }
     }
 
@@ -187,7 +197,7 @@ impl Error {
                 exp, found
             ),
             traces: trace(arg, format!("this argument accepts type `{}`", found)),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -203,6 +213,7 @@ impl Error {
                 "commands may require specific argument types, use `--help` to view requirements"
                     .into(),
             ),
+            ..Self::default()
         }
     }
 
@@ -212,6 +223,7 @@ impl Error {
             desc: format!("expecting more than {} arguments", args_count),
             traces: trace(block_tag, "expecting additional argument(s)".to_string()),
             help_msg: Some("try using the `--help` flag to view requirements".into()),
+            ..Self::default()
         }
     }
 
@@ -221,6 +233,8 @@ impl Error {
             desc: format!("not expecting `{}` flag", flag),
             traces: trace(flag, "flag not supported".to_string()),
             help_msg: Some("try using the `--help` flag to view requirements".into()),
+            hard: true, // unrecoverable
+            ..Self::default()
         }
     }
 
@@ -229,7 +243,7 @@ impl Error {
             cat: Category::Semantics,
             desc: "too many arguments supplied".into(),
             traces: trace(tag, Some("this argument is unnecessary".into())),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -245,6 +259,7 @@ impl Error {
                 "commands may require specific argument types, use `--help` to view requirements"
                     .into(),
             ),
+            hard: true, // non-recoverable
         }
     }
 
@@ -256,7 +271,7 @@ impl Error {
                 Some(x) => trace(tag, format!("`{}` resolves to `{}`", tag.str(), x)),
                 None => trace(tag, None),
             },
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -265,7 +280,7 @@ impl Error {
             cat: Category::Evaluation,
             desc: format!("header `{}` not found in table", colname),
             traces: trace(tag, format!("`{}` resolves to `{}`", tag.str(), colname)),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -275,6 +290,7 @@ impl Error {
             desc: format!("row index `{}` is outside table bounds", index),
             traces: trace(tag, format!("`{}` resolves to {}", tag.str(), index)),
             help_msg: Some("use `len` command to check the size of the table".into()),
+            ..Self::default()
         }
     }
 
@@ -283,7 +299,7 @@ impl Error {
             cat: Category::Semantics,
             desc: format!("`{}` does not contain field `{}`", ty.name(), field),
             traces: trace(field, format!("`{}` not found", field)),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -312,7 +328,7 @@ expected `{}`, found `{}`",
             cat: Category::Semantics,
             desc: format!("special literal `{}` not supported", found),
             traces: trace(tag, format!("`{}` not supported", found)),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -327,6 +343,7 @@ expected `{}`, found `{}`",
             desc: desc.into(),
             traces: trace(tag, short_desc),
             help_msg: help.into(),
+            ..Self::default()
         }
     }
 
@@ -347,8 +364,8 @@ expected `{}`, found `{}`",
                 "converting value into `{}` failed, value has type `{}`",
                 exp, found
             ),
-            traces: Vec::new(),
-            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
+                ..Self::default()
         }
     }
 
@@ -421,6 +438,7 @@ impl Error {
                 Some("this expression has not finished compiling".into()),
             ),
             help_msg: Self::internal_err_help(),
+            ..Self::default()
         }
     }
 
@@ -430,6 +448,7 @@ impl Error {
             desc: format!("AST graph reach {} loops", loop_counter),
             traces: trace(block_tag, None),
             help_msg: Self::internal_err_help(),
+            ..Self::default()
         }
     }
 
@@ -449,6 +468,7 @@ impl Error {
                 )),
             ),
             help_msg: Self::internal_err_help(),
+            ..Self::default()
         }
     }
 }
@@ -461,6 +481,8 @@ impl Error {
             desc: format!("type `{}` not defined", ty),
             traces: trace(ty, format!("`{}` not defined", ty)),
             help_msg: Some("view a list of types using `def-ty --list`".into()),
+            hard: true, // unrecoverable
+            ..Self::default()
         }
     }
 
@@ -473,6 +495,7 @@ impl Error {
                 "use `{0} --help` to view requirements. consider implementing `def {0}`",
                 op
             )),
+            ..Self::default()
         }
     }
 
@@ -481,7 +504,7 @@ impl Error {
             cat: Category::Semantics,
             desc: "unable to infer block's output type".into(),
             traces: trace(blk, None),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -494,6 +517,7 @@ impl Error {
                 "use `{0} --help` to view requirements. consider implementing `def {0}`",
                 op
             )),
+            ..Self::default()
         }
     }
 
@@ -502,7 +526,7 @@ impl Error {
             cat: Category::Semantics,
             desc: "unable to infer argument's input type".into(),
             traces: trace(arg, None),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -511,7 +535,7 @@ impl Error {
             cat: Category::Semantics,
             desc: "unable to infer argument's output type".into(),
             traces: trace(arg, None),
-            help_msg: None,
+            ..Self::default()
         }
     }
 }
@@ -526,6 +550,7 @@ impl Error {
             help_msg: Some(
                 "variables must be in scope and can be defined using the `let` command".into(),
             ),
+            hard: true, // unrecoverable, variable not found in locals
         }
     }
 
@@ -534,7 +559,8 @@ impl Error {
             cat: Category::Semantics,
             desc: "locals map is unavailable".into(),
             traces: trace(var, Some("this variable needs access to the locals".into())),
-            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
+                ..Self::default()
         }
     }
 }
@@ -689,6 +715,12 @@ pub enum Category {
     Definitions,
     /// A help message (built atop the error infrastructure).
     Help,
+}
+
+impl Default for Category {
+    fn default() -> Self {
+        Category::Internal
+    }
 }
 
 #[cfg(test)]

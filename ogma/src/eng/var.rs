@@ -1,6 +1,7 @@
 use super::*;
 use ::libs::divvy::Str;
 use std::{cell::*, rc::Rc, sync::Arc};
+use graphs::OpNode;
 
 // ###### VARIABLE #############################################################
 #[derive(Debug, Clone)]
@@ -8,6 +9,7 @@ pub struct Variable {
     pub tag: Tag,
     ty: Type,
     env_idx: usize,
+    defined: OpNode,
 }
 
 #[derive(Debug, Clone)]
@@ -16,7 +18,8 @@ pub enum Local {
     Var(Variable),
 }
 
-#[derive(Clone)]
+// TODO can this be Arc<[Value]>???
+#[derive(Debug, Clone)]
 #[allow(clippy::rc_buffer)]
 pub struct Environment(Arc<Vec<Value>>);
 
@@ -31,21 +34,41 @@ impl Variable {
         &self.ty
     }
 
+    /// The index into the environment.
+    pub fn idx(&self) -> usize {
+        self.env_idx
+    }
+
     pub fn fetch<'a>(&self, env: &'a Environment) -> &'a Value {
+        dbg!(&self);
+        dbg!(env);
+
+        debug_assert!(
+            !self.is_noop(),
+            "tried fetching a value from a NOOP variable"
+        );
+
         let val = env
             .0
             .get(self.env_idx)
             .expect("environment should have variable at location");
+
         debug_assert!(
             self.ty == val.ty(),
             "trying to get a variable with type `{}` but the variable is of type `{}`. possibly it has not been set yet?",
             val.ty(),
             self.ty,
         );
+
         val
     }
 
     pub fn set_data(&self, env: &mut Environment, val: Value) {
+        dbg!("in set_data");
+        dbg!(self.is_noop());
+        dbg!(&val);
+        dbg!(&self);
+
         debug_assert!(
             self.ty == val.ty(),
             "trying to set a variable with type `{}` but the variable is of type `{}`",
@@ -53,9 +76,37 @@ impl Variable {
             self.ty
         );
 
+        if self.is_noop() {
+            return;
+        }
+
         *Arc::make_mut(&mut env.0)
             .get_mut(self.env_idx)
             .expect("environment should have variable at location") = val;
+    }
+
+    /// Create a no op variable.
+    ///
+    /// This variable is usually used when there is a variable being create but it is _unable_ to
+    /// be consumed, usually because it will be used in a literal.
+    ///
+    /// # Panics
+    /// Using a noop can cause runtime panics if trying to fetch from the variable.
+    pub fn noop(tag: Tag, ty: Type) -> Self {
+        todo!()
+//         Self {
+//             tag,
+//             ty,
+//             env_idx: usize::MAX,
+//         }
+    }
+
+    fn is_noop(&self) -> bool {
+        self.env_idx == usize::MAX
+    }
+
+    pub fn defined_at(&self) -> OpNode {
+        self.defined
     }
 }
 
@@ -83,6 +134,15 @@ pub struct Locals {
     vars: Rc<HashMap<Str, Local>>,
     count: Rc<Cell<usize>>,
 }
+
+/// Equality is done by reference.
+impl PartialEq for Locals {
+    fn eq(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.vars, &o.vars) && Rc::ptr_eq(&self.count, &o.count)
+    }
+}
+/// Equality is done by reference.
+impl Eq for Locals {}
 
 impl Locals {
     /// Enter a new impl environment where it does not have access to the caller scope.
@@ -115,15 +175,16 @@ impl Locals {
 
     /// Add a **new** variable (a new memory location) into the environment.
     pub fn add_new_var(&mut self, name: Str, ty: Type, tag: Tag) -> Variable {
-        // increment place location
-        let var = Variable {
-            tag,
-            ty,
-            env_idx: self.count.get(),
-        };
-        self.count.set(var.env_idx + 1);
-        self.add_var(name, var.clone());
-        var
+        todo!();
+//         // increment place location
+//         let var = Variable {
+//             tag,
+//             ty,
+//             env_idx: self.count.get(),
+//         };
+//         self.count.set(var.env_idx + 1);
+//         self.add_var(name, var.clone());
+//         var
     }
 }
 

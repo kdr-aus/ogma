@@ -17,7 +17,7 @@ mod cmp;
 mod io;
 mod logic;
 // mod morphism;
-// mod pipeline;
+mod pipeline;
 mod types;
 
 fn n<N: Into<::kserd::Number>>(n: N) -> Entry<Value> {

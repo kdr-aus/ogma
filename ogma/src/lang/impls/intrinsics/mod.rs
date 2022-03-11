@@ -331,6 +331,7 @@ impl<T> BinaryOp<T> {
                         "`{}` implementation expects T=>(rhs:T) -> {}",
                         cmd, out_ty
                     )),
+                    ..Error::default()
                 }
             })?;
 

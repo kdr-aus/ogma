@@ -14,6 +14,7 @@ mod var;
 
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
+type LocalsMap = IndexMap<Locals>;
 
 pub(crate) use self::{
     eval::{CodeInjector, DefImplEvaluator, Evaluator},
@@ -80,17 +81,12 @@ pub struct Block<'a> {
     /// Only 255 arguments are supported.
     args_count: u8,
 
-    /// Mutable local variables.
-    ///
-    /// This is similar to tg_chgs, where it is stored as a mutable reference since block is passed
-    /// by value.
-    /// Any changees made to the locals are not actually stored unless compilation succeeds.
-    locals: Option<&'a mut Locals>,
-
     /// The compiler's ast graph.
     ag: &'a graphs::astgraph::AstGraph,
     /// The compiler's type graph.
     tg: &'a graphs::tygraph::TypeGraph, // notice the immutability!
+    /// The compiler's local's graph.
+    lg: &'a graphs::locals_graph::LocalsGraph,
     /// The compiler's compiled expressions.
     compiled_exprs: &'a IndexMap<eval::Stack>,
 
@@ -101,7 +97,7 @@ pub struct Block<'a> {
     /// Any items here are actioned by the compiler to update the type graph, providing more
     /// information to conduct the type inferencing.
     /// This allows for block compilation to fail but the updates still be applied.
-    tg_chgs: &'a mut Vec<graphs::tygraph::Chg>,
+    chgs: &'a mut Vec<graphs::Chg>,
 
     /// Flag that this block's output should be inferred if getting to output inferencing phase.
     infer_output: &'a mut bool,
@@ -137,6 +133,7 @@ impl<'a> Block<'a> {
             Ok(())
         }
     }
+
 }
 
 // ###### STEP #################################################################
@@ -177,5 +174,7 @@ mod tests {
 
         // Evaluator is quite large
         assert_eq!(size_of::<Evaluator>(), 128);
+        assert_eq!(size_of::<Block>(), 128);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 128);
     }
 }

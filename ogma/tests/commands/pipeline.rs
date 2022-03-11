@@ -266,9 +266,6 @@ expected `String`, found `Number`
 --> shell:27
  | fold 0 { \$row | get snd --foo | \ 3 }
  |                            ^^^ `foo` not defined
---> shell:0
- | fold 0 { \$row | get snd --foo | \ 3 }
- | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invoked here
 --> help: view a list of types using `def-ty --list`
 "#
     );
@@ -283,9 +280,6 @@ expected `String`, found `Number`
 --> shell:33
  | fold 0 { \$row | get snd --Str --foo | \ 3 }
  |                                  ^^^ flag not supported
---> shell:0
- | fold 0 { \$row | get snd --Str --foo | \ 3 }
- | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invoked here
 --> help: try using the `--help` flag to view requirements
 "#
     );
@@ -543,6 +537,7 @@ fn variable_not_existing() {
     let x = process_w_table("\\ 5 | > $x", defs)
         .unwrap_err()
         .to_string();
+    println!("{}", x);
     assert_eq!(
         &x,
         r#"Semantics Error: variable `x` does not exist

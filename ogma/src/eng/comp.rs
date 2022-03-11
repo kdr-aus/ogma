@@ -4,6 +4,7 @@ use super::*;
 use astgraph::{AstGraph, AstNode};
 use graphs::*;
 use tygraph::TypeGraph;
+use locals_graph::LocalsGraph;
 
 /// Compile an expression.
 ///
@@ -21,15 +22,16 @@ where
 {
     let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
+    let lg = LocalsGraph::build(&ag);
 
     let mut compiler = Compiler {
         defs,
         ag,
         tg,
+        lg,
         flowed_edges: Default::default(),
         compiled_ops: Default::default(),
         compiled_exprs: Default::default(),
-        locals: Default::default(),
         output_infer_opnode: None,
         callsite_params: Default::default(),
     };
@@ -38,12 +40,10 @@ where
 
     compiler.init_tg(input_ty); // initialise TG
 
-    // initialise an empty Locals into the first op node
-    // route through Compiler::insert_locals, since it handles locals propagation
     // THIS IS THE RETURN LOCALS AS WELL!
     let vars = locals.into().unwrap_or_default();
     let root = ExprNode(0.into());
-    compiler.insert_locals(&vars, root.first_op(compiler.ag()));
+    compiler.lg.insert_root(vars.clone());
 
     let mut compiler = compiler.compile(root)?;
 
@@ -70,14 +70,13 @@ pub struct Compiler<'d> {
     pub defs: &'d Definitions,
     ag: AstGraph,
     tg: TypeGraph,
+    lg: LocalsGraph,
     /// The edges in the `tg` that have been resolved and flowed.
     flowed_edges: IndexSet,
     /// A map of **Op** nodes which have succesfully compiled into a `Step`.
     compiled_ops: IndexMap<Step>,
     /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
     compiled_exprs: IndexMap<eval::Stack>,
-    /// A map of **Op** nodes which have a _known **input** `Locals`_.
-    locals: IndexMap<Locals>,
     /// A op node which has been flag for output inferrence.
     output_infer_opnode: Option<OpNode>,
     /// A map of **Def** nodes which have had their call site parameters prepared as variables.
@@ -139,6 +138,8 @@ impl<'d> Compiler<'d> {
                     eprintln!("✅ SUCCESS");
                     continue;
                 }
+                // Break early if a hard error.
+                Err(e) if e.hard => return Err(e),
                 Err(e) => err = Some(e),
             }
 
@@ -170,8 +171,8 @@ impl<'d> Compiler<'d> {
                 Error {
                     cat: err::Category::Internal,
                     desc: "compilation failed with no other errors".into(),
-                    traces: vec![],
-                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into())
+                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
+                        ..Error::default()
         }
         ));
         }
@@ -179,12 +180,17 @@ impl<'d> Compiler<'d> {
         Ok(self)
     }
 
-    /// Returns if the TG was altered when applying the changes.
-    pub fn apply_tg_chgs<C>(&mut self, chgs: C) -> bool
+    /// Returns if any of the graphs were altered when applying the changes.
+    pub fn apply_graph_chgs<C>(&mut self, chgs: C) -> bool
     where
-        C: Iterator<Item = tygraph::Chg>,
+        C: Iterator<Item = graphs::Chg>,
     {
-        chgs.map(|c| self.tg.apply_chg(c))
+        use graphs::Chg::*;
+
+        chgs.map(|c| match c {
+            Tg(c) => self.tg.apply_chg(c),
+            Lg(c) => self.lg.apply_chg(c)
+        })
             .fold(false, std::ops::BitOr::bitor)
     }
 
@@ -192,24 +198,25 @@ impl<'d> Compiler<'d> {
     /// This function is recursive, it walks through child expression arguments and also inserts
     /// the locals entry into the _first_ op node.
     fn insert_locals(&mut self, locals: &Locals, op: OpNode) {
-        let _is_empty = self.locals.insert(op.index(), locals.clone()).is_none();
-
-        debug_assert!(
-            _is_empty,
-            "just replaced an already populated locals, which should not happen"
-        );
-
-        // repeat this process for each expr argument
-        let ops = self
-            .ag
-            .neighbors(op.idx())
-            .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
-            .map(|e| e.first_op(&self.ag))
-            .collect::<Vec<_>>();
-
-        for op in ops {
-            self.insert_locals(locals, op);
-        }
+        todo!("remove");
+//         let _is_empty = self.locals.insert(op.index(), locals.clone()).is_none();
+// 
+//         debug_assert!(
+//             _is_empty,
+//             "just replaced an already populated locals, which should not happen"
+//         );
+// 
+//         // repeat this process for each expr argument
+//         let ops = self
+//             .ag
+//             .neighbors(op.idx())
+//             .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
+//             .map(|e| e.first_op(&self.ag))
+//             .collect::<Vec<_>>();
+// 
+//         for op in ops {
+//             self.insert_locals(locals, op);
+//         }
     }
 }
 
@@ -232,8 +239,7 @@ impl<'d> Compiler<'d> {
         let mut err = Error {
             cat: Category::Type,
             desc: "Type resolution failed".into(),
-            traces: Vec::new(),
-            help_msg: None,
+            ..Default::default()
         };
 
         let tygraph::ResolutionError { from, to, conflict } = reserr;
@@ -309,40 +315,41 @@ impl<'d> Compiler<'d> {
     ///
     /// If the TG is altered, returns `true`.
     fn assign_variable_types(&mut self) -> bool {
-        let mut chgs = Vec::new();
-
-        for node in self.ag.node_indices() {
-            // just get the variables
-            let var_tag = match self.ag[node].var() {
-                Some(t) => t,
-                None => continue,
-            };
-
-            // output type is unknown
-            if !self.tg[node].output.is_unknown() {
-                continue;
-            }
-
-            // map in if has a Locals
-            let local = match self
-                .locals
-                .get(&ArgNode(node).op(&self.ag).index())
-                .and_then(|locals| locals.get(var_tag.str()))
-            {
-                Some(l) => l,
-                None => continue,
-            };
-
-            let chg = match local {
-                Local::Var(v) => tygraph::Chg::KnownOutput(node, v.ty().clone()),
-                Local::Param(x) => tygraph::Chg::KnownOutput(node, x.out_ty().clone()),
-            };
-
-            chgs.push(chg);
-            chgs.push(tygraph::Chg::AnyInput(node));
-        }
-
-        self.apply_tg_chgs(chgs.into_iter())
+        todo!("review this!");
+//         let mut chgs = Vec::new();
+// 
+//         for node in self.ag.node_indices() {
+//             // just get the variables
+//             let var_tag = match self.ag[node].var() {
+//                 Some(t) => t,
+//                 None => continue,
+//             };
+// 
+//             // output type is unknown
+//             if !self.tg[node].output.is_unknown() {
+//                 continue;
+//             }
+// 
+//             // map in if has a Locals
+//             let local = match self
+//                 .lg
+//                 .get(ArgNode(node).op(&self.ag))
+//                 .and_then(|locals| locals.get(var_tag.str()))
+//             {
+//                 Some(l) => l,
+//                 None => continue,
+//             };
+// 
+//             let chg = match local {
+//                 Local::Var(v) => tygraph::Chg::KnownOutput(node, v.ty().clone()),
+//                 Local::Param(x) => tygraph::Chg::KnownOutput(node, x.out_ty().clone()),
+//             };
+// 
+//             chgs.push(chg.into());
+//             chgs.push(tygraph::Chg::AnyInput(node).into());
+//         }
+// 
+//         self.apply_graph_chgs(chgs.into_iter())
     }
 }
 
@@ -352,84 +359,88 @@ impl<'d> Compiler<'d> {
     /// 1. The parent op has an available locals to scaffold off, and
     /// 2. _All_ parameters have a known type.
     fn insert_available_def_locals(&mut self) -> Result<bool> {
-        struct D {
-            def: DefNode,
-            parent: OpNode,
-            first: OpNode,
-        }
+        todo!("superseded by locals graphs?");
 
-        // repeat the process since a Def might have sub-Defs which would get processed by this.
-        let mut defs = Vec::new();
-        let mut skip = HashSet::default();
-
-        let mut chgd = false;
-        let tg_chgs = &mut Vec::new();
-
-        loop {
-            let getdefs = self
-                .ag
-                .node_indices()
-                // filter to just Def nodes
-                .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
-                // skip any defs previously processed
-                .filter(|def| !skip.contains(def))
-                // map to a D structure
-                .map(|def| D {
-                    def,
-                    parent: def.parent(&self.ag),
-                    first: def.expr(&self.ag).first_op(&self.ag),
-                })
-                // check that the op does not already have a locals map
-                .filter(|d| !self.locals.contains_key(&d.first.index()))
-                // get the Locals of the parent Op node
-                .filter_map(|d| self.locals.get(&d.parent.index()).map(|l| (d, l.clone())));
-
-            defs.clear();
-            defs.extend(getdefs);
-
-            if defs.is_empty() {
-                break; // finish the loop, no more to do
-            }
-
-            for (d, locals) in defs.drain(..) {
-                let D {
-                    def,
-                    parent: _,
-                    first,
-                } = d;
-
-                skip.insert(def);
-
-                let params = self.ag[def.idx()].def().expect("filtered to def node");
-
-                // TODO should this be an error pathway?
-                // since the error pathway is not having enough params (or too many??)
-                match locals.inject_params(self, params, def, tg_chgs)? {
-                    LocalInjection::Success {
-                        locals,
-                        callsite_params,
-                    } => {
-                        chgd = true;
-                        self.insert_locals(&locals, first);
-                        let _is_empty = self
-                            .callsite_params
-                            .insert(def.index(), callsite_params)
-                            .is_none();
-                        debug_assert!(
-                            _is_empty,
-                            "just replaced a callsite_params entry which should not happen"
-                        );
-                    }
-                    LocalInjection::UnknownReturnTy(argnode) => {
-                        // TODO what to do about unknown return arguments!?
-                    }
-                }
-            }
-        }
-
-        let tg_chgd = self.apply_tg_chgs(tg_chgs.drain(..));
-
-        Ok(chgd || tg_chgd)
+//         struct D {
+//             def: DefNode,
+//             parent: OpNode,
+//             first: OpNode,
+//         }
+// 
+//         // repeat the process since a Def might have sub-Defs which would get processed by this.
+//         let mut defs = Vec::new();
+//         let mut skip = HashSet::default();
+// 
+//         let mut chgd = false;
+//         let tg_chgs = &mut Vec::new();
+// 
+//         loop {
+//             todo!();
+// 
+// //             let getdefs = self
+// //                 .ag
+// //                 .node_indices()
+// //                 // filter to just Def nodes
+// //                 .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
+// //                 // skip any defs previously processed
+// //                 .filter(|def| !skip.contains(def))
+// //                 // map to a D structure
+// //                 .map(|def| D {
+// //                     def,
+// //                     parent: def.parent(&self.ag),
+// //                     first: def.expr(&self.ag).first_op(&self.ag),
+// //                 })
+// //                 // check that the op does not already have a locals map
+// //                 .filter(|d| self.lg.get(d.first).is_none())
+// //                 // get the Locals of the parent Op node
+// //                 .filter_map(|d| self.lg.get(d.parent).map(|l| (d, l.clone())));
+// // 
+// //             defs.clear();
+// //             defs.extend(getdefs);
+// 
+// //             if defs.is_empty() {
+// //                 break; // finish the loop, no more to do
+// //             }
+// // 
+// //             for (d, locals) in defs.drain(..) {
+// //                 let D {
+// //                     def,
+// //                     parent: _,
+// //                     first,
+// //                 } = d;
+// // 
+// //                 skip.insert(def);
+// // 
+// //                 let params = self.ag[def.idx()].def().expect("filtered to def node");
+// // 
+// //                 // TODO should this be an error pathway?
+// //                 // since the error pathway is not having enough params (or too many??)
+// //                 match locals.inject_params(self, params, def, tg_chgs)? {
+// //                     LocalInjection::Success {
+// //                         locals,
+// //                         callsite_params,
+// //                     } => {
+// //                         chgd = true;
+// //                         self.insert_locals(&locals, first);
+// //                         let _is_empty = self
+// //                             .callsite_params
+// //                             .insert(def.index(), callsite_params)
+// //                             .is_none();
+// //                         debug_assert!(
+// //                             _is_empty,
+// //                             "just replaced a callsite_params entry which should not happen"
+// //                         );
+// //                     }
+// //                     LocalInjection::UnknownReturnTy(argnode) => {
+// //                         // TODO what to do about unknown return arguments!?
+// //                     }
+// //                 }
+// //             }
+//         }
+// 
+//         let tg_chgd = self.apply_graph_chgs(tg_chgs.drain(..));
+// 
+//         Ok(chgd || tg_chgd)
     }
 }
 
@@ -510,29 +521,20 @@ impl<'d> Compiler<'d> {
             let mut infer_output = false;
 
             match self.compile_block(node, in_ty, &mut chgs, &mut infer_output) {
-                Ok((step, locals)) => {
+                Ok(step) => {
                     goto_resolve = true;
                     let out_ty = step.out_ty.clone();
 
                     // insert the compiled step into the map
-                    dbg!(node, locals.is_some());
                     let _is_empty = self.compiled_ops.insert(node.index(), step).is_none();
                     debug_assert!(
                         _is_empty,
                         "just replaced an already compiled step which should not happen"
                     );
 
-                    // insert the returned, mutated, locals into the locals map (if it is some).
-                    // need to insert it into the **next** op after this one.
-                    if let Some(locals) = locals {
-                        if let Some(next) = node.next(&self.ag) {
-                            self.insert_locals(&locals, next);
-                        }
-                    }
-
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
-                    chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty));
+                    chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty).into());
                 }
                 Err(mut e) => {
                     if infer_output {
@@ -561,10 +563,9 @@ impl<'d> Compiler<'d> {
             }
         }
 
-        dbg!(&chgs);
-        let tg_chgd = self.apply_tg_chgs(chgs.into_iter());
+        let chgd = self.apply_graph_chgs(chgs.into_iter());
 
-        (goto_resolve | tg_chgd)
+        (goto_resolve | chgd)
             .then(|| ())
             .ok_or_else(|| err.expect("error should be some if unsuccesful"))
     }
@@ -573,9 +574,9 @@ impl<'d> Compiler<'d> {
         &self,
         opnode: OpNode,
         in_ty: Type,
-        chgs: &mut Vec<tygraph::Chg>,
+        chgs: &mut Vec<Chg>,
         infer_output: &mut bool,
-    ) -> Result<(Step, Option<Locals>)> {
+    ) -> Result<Step> {
         let cmd_node = self
             .ag
             .get_impl(opnode, &in_ty)
@@ -583,12 +584,10 @@ impl<'d> Compiler<'d> {
 
         match &self.ag[cmd_node.idx()] {
             AstNode::Intrinsic { op, intrinsic } => {
-                let mut locals = self.locals.get(&opnode.index()).cloned();
-
                 let block =
-                    Block::construct(self, cmd_node, in_ty, locals.as_mut(), chgs, infer_output);
+                    Block::construct(self, cmd_node, in_ty, chgs, infer_output);
 
-                intrinsic(block).map(|step| (step, locals))
+                intrinsic(block)
             }
             AstNode::Def(params) => {
                 // check if there exists an entry for the sub-expression,
@@ -605,14 +604,12 @@ impl<'d> Compiler<'d> {
                             .ty()
                             .cloned()
                             .expect("shoud be known if a stack exists");
-                        let step = Step::def(params, stack.clone(), out_ty);
-                        let locals = self.locals.get(&opnode.index()).cloned();
-                        Ok((step, locals))
+                        Ok(Step::def(params, stack.clone(), out_ty))
                     }
                     None => {
                         // there is not, but we can add to the TG that this sub-expression will
                         // have input of `in_ty`.
-                        chgs.push(tygraph::Chg::KnownInput(expr.idx(), in_ty));
+                        chgs.push(tygraph::Chg::KnownInput(expr.idx(), in_ty).into());
 
                         Err(Error::incomplete_expr_compilation(
                             self.ag[expr.idx()].tag(),
@@ -647,56 +644,58 @@ impl<'d> Compiler<'d> {
         &self,
         def: DefNode,
         in_ty: &Type,
-        tg_chgs: &mut Vec<tygraph::Chg>,
+        chgs: &mut Vec<Chg>,
     ) -> Result<Vec<(Variable, Argument)>> {
         let Compiler {
             defs,
             ag,
             tg,
+            lg,
             flowed_edges,
             compiled_ops,
             compiled_exprs,
-            locals,
             output_infer_opnode,
             callsite_params,
         } = self;
 
-        let args = ag.get_args(def);
-        let mut locals = locals
-            .get(&def.parent(ag).index())
-            .expect("input locals should exist")
-            .clone();
-        let locals = &mut Some(&mut locals);
-
-        callsite_params
-            .get(&def.index())
-            .expect("if the sub-expression exists, there should be an associated callsite params")
-            .iter()
-            .map(
-                |CallsiteParam {
-                     param,
-                     var,
-                     arg_idx,
-                 }| {
-                    let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
-                    let arg = arg::ArgBuilder::new(
-                        arg,
-                        ag,
-                        tg,
-                        tg_chgs,
-                        Some(in_ty.clone()),
-                        locals,
-                        compiled_exprs,
-                    )
-                    .supplied(in_ty.clone());
-                    let arg = match param.ty().cloned() {
-                        Some(ty) => arg.and_then(|a| a.returns(ty)),
-                        None => arg,
-                    };
-                    arg.and_then(|a| a.concrete()).map(|arg| (var.clone(), arg))
-                },
-            )
-            .collect()
+        todo!();
+// 
+//         let args = ag.get_args(def);
+//         let mut locals = lg
+//             .get(def.parent(ag))
+//             .expect("input locals should exist")
+//             .clone();
+// 
+//         callsite_params
+//             .get(&def.index())
+//             .expect("if the sub-expression exists, there should be an associated callsite params")
+//             .iter()
+//             .map(
+//                 |CallsiteParam {
+//                      param,
+//                      var,
+//                      arg_idx,
+//                  }| {
+//                     let locals = Some(&locals);
+//                     let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
+//                     let arg = arg::ArgBuilder::new(
+//                         arg,
+//                         ag,
+//                         tg,
+//                         tg_chgs,
+//                         Some(in_ty.clone()),
+//                         locals,
+//                         compiled_exprs,
+//                     )
+//                     .supplied(in_ty.clone());
+//                     let arg = match param.ty().cloned() {
+//                         Some(ty) => arg.and_then(|a| a.returns(ty)),
+//                         None => arg,
+//                     };
+//                     arg.and_then(|a| a.concrete()).map(|arg| (var.clone(), arg))
+//                 },
+//             )
+//             .collect()
     }
 }
 
@@ -707,38 +706,40 @@ impl<'d> Compiler<'d> {
     /// 1. Op is compiled but next op has no locals.
     ///   - This may occur if the op can be compiled with `None` locals
     fn flow_compiled_ops_locals(&mut self) -> bool {
-        let ops = self
-            .ag
-            .node_indices()
-            // get just ops
-            .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
-            .collect::<Vec<_>>();
+        todo!("remove this");
 
-        let mut chgd = false;
-
-        for op in ops {
-            let opidx = &op.index();
-
-            let compiled = self.compiled_ops.contains_key(opidx);
-
-            // 1. op is compiled, but next op has no locals
-            if compiled {
-                if let Some(next) = op.next(&self.ag) {
-                    match (
-                        self.locals.get(opidx).cloned(),
-                        self.locals.contains_key(&next.index()),
-                    ) {
-                        (Some(locals), false) => {
-                            chgd = true;
-                            self.insert_locals(&locals, next);
-                        }
-                        _ => (),
-                    }
-                }
-            }
-        }
-
-        chgd
+//         let ops = self
+//             .ag
+//             .node_indices()
+//             // get just ops
+//             .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
+//             .collect::<Vec<_>>();
+// 
+//         let mut chgd = false;
+// 
+//         for op in ops {
+//             let opidx = &op.index();
+// 
+//             let compiled = self.compiled_ops.contains_key(opidx);
+// 
+//             // 1. op is compiled, but next op has no locals
+//             if compiled {
+//                 if let Some(next) = op.next(&self.ag) {
+//                     match (
+//                         self.locals.get(opidx).cloned(),
+//                         self.locals.contains_key(&next.index()),
+//                     ) {
+//                         (Some(locals), false) => {
+//                             chgd = true;
+//                             self.insert_locals(&locals, next);
+//                         }
+//                         _ => (),
+//                     }
+//                 }
+//             }
+//         }
+// 
+//         chgd
     }
 }
 
@@ -764,7 +765,7 @@ impl<'d> Compiler<'d> {
             .map(OpNode) // we've filtered to just Ops
             .fold((Vec::new(), None), |(mut chgs, mut err), op| {
                 match ty::infer::input(op, self) {
-                    Ok(ty) => chgs.push(tygraph::Chg::InferInput(op.idx(), ty)),
+                    Ok(ty) => chgs.push(tygraph::Chg::InferInput(op.idx(), ty).into()),
                     Err(e) if chgs.is_empty() => {
                         err = Some(e.crate_err(self.ag[op.idx()].op().unwrap().1))
                     }
@@ -776,7 +777,7 @@ impl<'d> Compiler<'d> {
 
         match x {
             (chgs, Some(err)) if chgs.is_empty() => Err(err),
-            (chgs, _) => Ok(self.apply_tg_chgs(chgs.into_iter())),
+            (chgs, _) => Ok(self.apply_graph_chgs(chgs.into_iter())),
         }
     }
 }
@@ -792,11 +793,11 @@ impl<'d> Compiler<'d> {
                 Compiler {
                     ag: Default::default(),
                     tg: Default::default(),
+                    lg: Default::default(),
                     compiled_ops: Default::default(),
                     compiled_exprs: Default::default(),
                     output_infer_opnode: Default::default(),
                     flowed_edges: Default::default(),
-                    locals: Default::default(),
                     callsite_params: Default::default(),
                     defs,
                 },
@@ -835,9 +836,10 @@ impl<'a> Compiler<'a> {
         writeln!(&mut report, "---").unwrap();
         self.tg.debug_write_flowchart(&self.ag, &mut report);
 
-        writeln!(&mut report, "## Current Locals").unwrap();
-        writeln!(&mut report, "---").unwrap();
-        self.debug_index_map(&self.locals, &mut report).unwrap();
+//         writeln!(&mut report, "## Current Locals").unwrap();
+//         writeln!(&mut report, "---").unwrap();
+//         dbg!(&self.locals);
+//         self.debug_index_map(&self.locals, &mut report).unwrap();
 
         writeln!(&mut report, "## Current Compiled Ops").unwrap();
         writeln!(&mut report, "---").unwrap();
@@ -875,8 +877,7 @@ impl<'a> Block<'a> {
         compiler: &'a Compiler,
         node: CmdNode,
         in_ty: Type,
-        locals: Option<&'a mut Locals>,
-        chgs: &'a mut Vec<tygraph::Chg>,
+        chgs: &'a mut Vec<Chg>,
         output_infer: &'a mut bool,
     ) -> Self {
         let opnode = node.parent(&compiler.ag);
@@ -887,17 +888,29 @@ impl<'a> Block<'a> {
         flags.reverse();
         args.reverse();
 
+        let Compiler {
+            defs,
+            ag,
+            tg,
+            lg,
+            flowed_edges,
+            compiled_ops,
+            output_infer_opnode,
+            callsite_params,
+            compiled_exprs,
+        } = compiler;
+
         Block {
             node: opnode,
             in_ty,
             flags,
             args,
             args_count: 0,
-            locals,
-            ag: &compiler.ag,
-            tg: &compiler.tg,
-            compiled_exprs: &compiler.compiled_exprs,
-            tg_chgs: chgs,
+            ag,
+            tg,
+            lg,
+            compiled_exprs,
+            chgs,
             infer_output: output_infer,
             defs,
             #[cfg(debug_assertions)]
@@ -983,7 +996,6 @@ impl Locals {
 
         let mut arg_count = 0;
         let blk_tag = compiler.ag()[defnode.parent(compiler.ag()).idx()].tag();
-        let locals = &mut Some(&mut self);
 
         let Compiler {
             ag,
@@ -993,7 +1005,7 @@ impl Locals {
         } = compiler;
 
         for (idx, param) in params.into_iter().enumerate() {
-            // only point of failure
+            // point of failure
             let argnode = arg::pop(&mut args, arg_count, blk_tag)?;
             arg_count += 1;
 
@@ -1001,6 +1013,7 @@ impl Locals {
             // astgraph::Parameter
 
             // the parameter is to be resolved at the call site
+            let locals = Some(&self);
             let arg =
                 arg::ArgBuilder::new(argnode, ag, tg, tygraph_chgs, None, locals, compiled_exprs);
 
@@ -1009,6 +1022,8 @@ impl Locals {
                 None => arg,
             };
 
+            arg.assert_var_exists()?;
+
             // we do not need to .concrete the arg, since we don't really want to get the Argument
             // that it returns. Instead, all we really want to know about this argument is it's
             // output type.
@@ -1016,7 +1031,10 @@ impl Locals {
                 Some(ty) => {
                     callsite_vars.push((idx, param, ty.clone()));
                 }
-                None => return Ok(LocalInjection::UnknownReturnTy(argnode)),
+                None => {
+                    dbg!("no return type");
+                    return Ok(LocalInjection::UnknownReturnTy(argnode));
+                }
             }
         }
 

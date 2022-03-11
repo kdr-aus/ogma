@@ -16,8 +16,8 @@ pub fn input(op: OpNode, compiler: &Compiler) -> std::result::Result<Type, Error
 
     let mut inferred = None;
 
-    let _sink = &mut Vec::new();
-    let _sink2 = &mut false;
+    let _sink1 = &mut Default::default();
+    let _sink2 = &mut Default::default();
 
     eprintln!(
         "Inferring input for {}",
@@ -28,7 +28,7 @@ pub fn input(op: OpNode, compiler: &Compiler) -> std::result::Result<Type, Error
         eprintln!("🔬 Testing compilation with inferred input: {}", _name);
 
         let compiled = compiler
-            .compile_block(op, ty.clone(), _sink, _sink2)
+            .compile_block(op, ty.clone(), _sink1, _sink2)
             .is_ok();
         if compiled {
             eprintln!("🏁 Able to be compiled with input type: {}", _name);
@@ -67,10 +67,10 @@ pub fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, C
 
         // set the OUTPUT of the block to 'ty'
         let mut compiler = compiler.clone();
-        let chgd = compiler.apply_tg_chgs(std::iter::once(tygraph::Chg::InferOutput(
+        let chgd = compiler.apply_graph_chgs(std::iter::once(tygraph::Chg::InferOutput(
             op.idx(),
             ty.clone(),
-        )));
+        ).into()));
 
         if !chgd {
             continue; // no point in trying to compile if nothing changed
@@ -101,12 +101,17 @@ impl Error {
                 desc: "op does not compile with any known types".into(),
                 traces: trace(blk, None),
                 help_msg: Some("try specifying input type to the block".into()),
+                ..Default::default()
             },
+            // TODO make this error better,
+            // name the attempeted types
+            // give a code example of type annotation
             Self::Ambiguous { ty1, ty2 } => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one input type can compile op".into(),
                 traces: trace(blk, None),
                 help_msg: Some("try specifying input type to the block".into()),
+                ..Default::default()
             },
         }
     }

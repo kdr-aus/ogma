@@ -787,6 +787,12 @@ impl ArgNode {
             .map(OpNode)
             .expect("argument nodes should have a parent op node")
     }
+
+    /// Try fetching a direct child op of this arg node.
+    /// This only occurs if the argument variant is an expression.
+    pub fn child_op(self, g: &AstGraph) -> Option<OpNode> {
+        g[self.idx()].expr().map(|_| ExprNode(self.0).first_op(g))
+    }
 }
 
 impl CmdNode {

@@ -290,6 +290,7 @@ pub fn process_definition<'a>(
                 ..Default::default()
             }],
             help_msg: Some("try using `def --help` or `def-ty --help` for more information".into()),
+            ..Error::default()
         })
     }
 }

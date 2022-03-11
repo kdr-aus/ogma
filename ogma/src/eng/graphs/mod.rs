@@ -3,6 +3,7 @@ use std::fmt;
 
 pub mod astgraph;
 pub mod tygraph;
+pub mod locals_graph;
 
 // To add a bit of comp-time checking that the _correct_ node index is being passed around,
 // I am going to implement struct wrappers which can iter-op with NodeIndex and move away from
@@ -40,6 +41,23 @@ impl From<IntrinsicNode> for CmdNode {
 impl From<DefNode> for CmdNode {
     fn from(x: DefNode) -> Self {
         CmdNode(x.0)
+    }
+}
+
+pub enum Chg {
+    Tg(tygraph::Chg),
+    Lg(locals_graph::Chg),
+}
+
+impl From<tygraph::Chg> for Chg {
+    fn from(x: tygraph::Chg) -> Self {
+        Chg::Tg(x)
+    }
+}
+
+impl From<locals_graph::Chg> for Chg {
+    fn from(x: locals_graph::Chg) -> Self {
+        Chg::Lg(x)
     }
 }
 

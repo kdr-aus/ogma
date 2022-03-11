@@ -256,6 +256,7 @@ fn in_help() -> HelpMessage {
 
 fn in_intrinsic(mut blk: Block) -> Result<Step> {
     let arg = blk.next_arg()?.supplied(None)?.concrete()?;
+    dbg!(&arg);
     blk.eval(arg.out_ty().clone(), move |val, cx| {
         arg.resolve(|| val, &cx).and_then(|x| cx.done(x))
     })
@@ -352,7 +353,8 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
 
     while blk.args_len() > 1 {
         let e = blk.next_arg()?.supplied(None)?.concrete()?;
-        let v = blk.next_arg()?.create_var_ref(e.out_ty().clone())?;
+        let argnode = blk.next_arg()?.node();
+        let v = blk.create_var_ref(argnode, e.out_ty().clone())?;
         bindings.push((v, e));
     }
 
@@ -362,7 +364,8 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
     let ty = blk.in_ty().clone();
 
     let trailing_binding = if blk.args_len() > 0 {
-        let v = blk.next_arg()?.create_var_ref(ty.clone())?;
+        let argnode = blk.next_arg()?.node();
+        let v = blk.create_var_ref(argnode, ty.clone())?;
         Some(v)
     } else {
         None
