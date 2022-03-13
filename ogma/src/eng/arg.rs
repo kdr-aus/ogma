@@ -1,9 +1,5 @@
 use super::*;
-use graphs::{
-    astgraph::AstGraph,
-    tygraph::{Chg, Knowledge, TypeGraph},
-    *,
-};
+use graphs::{astgraph::AstGraph, locals_graph::LocalsGraph, tygraph::Knowledge, *};
 use std::convert::TryInto;
 
 #[derive(Debug)]
@@ -39,22 +35,23 @@ pub struct ArgBuilder<'a> {
 
     // compiler references
     ag: &'a AstGraph,
+    lg: &'a LocalsGraph,
     blk_in_ty: Option<Type>,
     tg_chgs: &'a mut Vec<Chg>,
-    locals: Option<&'a Locals>,
     compiled_exprs: &'a IndexMap<eval::Stack>,
+
     #[cfg(debug_assertions)]
-    tg: &'a TypeGraph,
+    tg: &'a tygraph::TypeGraph,
 }
 
 impl<'a> ArgBuilder<'a> {
     pub fn new(
         node: ArgNode,
         ag: &'a AstGraph,
-        tg: &'a TypeGraph,
+        tg: &'a tygraph::TypeGraph,
+        lg: &'a LocalsGraph,
         tg_chgs: &'a mut Vec<Chg>,
         blk_in_ty: Option<Type>,
-        locals: Option<&'a Locals>,
         compiled_exprs: &'a IndexMap<eval::Stack>,
     ) -> Self {
         // see if the input and/or output types are known
@@ -67,10 +64,10 @@ impl<'a> ArgBuilder<'a> {
             in_ty,
             out_ty,
             ag,
+            lg,
             tg_chgs,
             blk_in_ty,
             compiled_exprs,
-            locals,
             tg,
         }
     }
@@ -90,7 +87,6 @@ impl<'a> ArgBuilder<'a> {
     /// > difficult with mutable aliasing, the type argument is an `Option`, where the `None`
     /// > variant represents _using the block's input type_.
     pub fn supplied<T: Into<Option<Type>>>(mut self, ty: T) -> Result<Self> {
-        dbg!(&self.blk_in_ty);
         let ty = match ty.into().or_else(|| self.blk_in_ty.clone()) {
             Some(ty) => ty,
             None => return Ok(self),
@@ -114,7 +110,8 @@ impl<'a> ArgBuilder<'a> {
             Kn::Unknown => {
                 // There is currently no knowledge about the input type
                 // add to the TG that this node will be supplied a type `ty`
-                self.tg_chgs.push(Chg::KnownInput(self.node.idx(), ty));
+                self.tg_chgs
+                    .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
             Kn::Any => unreachable!("any is reset to Kn::Ty"),
@@ -142,7 +139,8 @@ impl<'a> ArgBuilder<'a> {
             Kn::Unknown => {
                 // There is currently no knowledge about the output type
                 // add to the TG that this node is obliged to return the output type
-                self.tg_chgs.push(Chg::ObligeOutput(self.node.idx(), ty));
+                self.tg_chgs
+                    .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
             Kn::Any => unreachable!("logic error if output is Any type"),
@@ -159,6 +157,10 @@ impl<'a> ArgBuilder<'a> {
     /// Asserts that the arguments input and output types are known, and if so, returns a concrete
     /// [`Argument`] with the ability to evaluate.
     pub fn concrete(mut self) -> Result<Argument> {
+        // assert that if this is a variable type, the variable exists.
+        // This is done to ensure sane errors are returned
+        self.assert_var_exists()?;
+
         use Kn::*;
 
         let tag = self.tag().clone();
@@ -215,14 +217,8 @@ impl<'a> ArgBuilder<'a> {
             }
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
             Var(tag) => self
-                .locals
-                .as_ref()
-                .ok_or_else(|| Error::locals_unavailable(tag))
-                .and_then(|locals| {
-                    locals
-                        .get(tag.str())
-                        .ok_or_else(|| Error::var_not_found(tag))
-                })
+                .lg
+                .get_checked(self.node.idx(), tag.str(), tag)
                 .and_then(|local| match local {
                     Local::Var(var) => Ok(Hold::Var(var.clone())),
                     Local::Param(arg) => {
@@ -253,24 +249,25 @@ impl<'a> ArgBuilder<'a> {
     /// return type encodes some of the states. The `Err` variant is reserved for the hard error
     /// case where the variable does not exist in the locals.
     ///
-    /// - `Ok(None)`: No locals is available,
-    /// - `Ok(Some(false))`: Locals is available, but this is not a variable variant,
+    /// - `Ok(None)`: This is not a variable variant,
+    /// - `Ok(Some(false))`: `LocalsGraph` requires updating.
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
-        self.locals
-            .as_ref() // None if no locals available
-            .map(|locals| match &self.ag[self.node.idx()] {
-                astgraph::AstNode::Var(tag) => locals
-                    .get(tag.str())
-                    // Err if variable not found
-                    .ok_or_else(|| Error::var_not_found(tag))
+        match &self.ag[self.node.idx()] {
+            astgraph::AstNode::Var(tag) => {
+                self.lg
+                    .get(self.node.idx(), tag.str())
                     // Ok(Some(true)) if variable exists
-                    .map(|_| true),
-                // Ok(Some(false)) if not variable
-                _ => Ok(false),
-            })
-            .transpose()
+                    .map(|_| true)
+                    // if NOT sealed, return Ok(Some(false)) -- lg should be updated
+                    .or_else(|| (!self.lg.sealed(self.node.idx())).then(|| false))
+                    // Error with a HARD error
+                    .ok_or_else(|| Error::var_not_found(tag))
+                    .map(Some)
+            }
+            _ => Ok(None), // not a variable
+        }
     }
 }
 
@@ -283,73 +280,70 @@ impl<'a> Block<'a> {
     /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
     /// an [`Argument`] is produced.
     pub fn next_arg(&mut self) -> Result<ArgBuilder> {
-        todo!("wire in");
+        let btag = self.blk_tag().clone();
+        let node = pop(&mut self.args, self.args_count, &btag)?;
+        self.args_count += 1;
 
-//         let btag = self.blk_tag().clone();
-//         let node = pop(&mut self.args, self.args_count, &btag)?;
-//         self.args_count += 1;
-// 
-//         let Block {
-//             node: opnode,
-//             ag,
-//             tg,
-//             lg,
-//             tg_chgs,
-//             in_ty: blk_in_ty,
-//             compiled_exprs,
-//             ..
-//         } = self;
-// 
-//         let blk_in_ty = Some(blk_in_ty.clone());
-//         let locals = lg.get(*opnode);
-// 
-//         Ok(ArgBuilder::new(
-//             node,
-//             ag,
-//             tg,
-//             tg_chgs,
-//             blk_in_ty,
-//             locals,
-//             compiled_exprs,
-//         ))
+        let Block {
+            node: opnode,
+            ag,
+            tg,
+            lg,
+            chgs,
+            in_ty: blk_in_ty,
+            compiled_exprs,
+            ..
+        } = self;
+
+        let blk_in_ty = Some(blk_in_ty.clone());
+
+        Ok(ArgBuilder::new(
+            node,
+            ag,
+            tg,
+            lg,
+            chgs,
+            blk_in_ty,
+            compiled_exprs,
+        ))
     }
 
     /// Similar to [`Block::next_arg`], but does not pop the argument list.
     pub fn next_arg_do_not_remove(&mut self) -> Result<ArgBuilder> {
         todo!("wire in");
 
-//         // TODO remove this function???
-//         let node = self
-//             .args
-//             .last()
-//             .copied()
-//             .ok_or_else(|| Error::insufficient_args(self.blk_tag(), self.args_count))?;
-// 
-//         let btag = self.blk_tag().clone();
-// 
-//         let Block {
-//             node: opnode,
-//             ag,
-//             tg,
-//             lg,
-//             chgs,
-//             in_ty: blk_in_ty,
-//             compiled_exprs,
-//             ..
-//         } = self;
-// 
-//         let blk_in_ty = Some(blk_in_ty.clone());
-//         let locals = lg.get(*opnode);
-// 
-//         Ok(ArgBuilder::new(
-//             node,
-//             ag,
-//             tg,
-//             tg_chgs,
-//             blk_in_ty,
-//             locals,
-//             compiled_exprs,
-//         ))
+        //         // TODO remove this function???
+        //         let node = self
+        //             .args
+        //             .last()
+        //             .copied()
+        //             .ok_or_else(|| Error::insufficient_args(self.blk_tag(), self.args_count))?;
+        //
+        //         let btag = self.blk_tag().clone();
+        //
+        //         let Block {
+        //             node: opnode,
+        //             ag,
+        //             tg,
+        //             lg,
+        //             chgs,
+        //             in_ty: blk_in_ty,
+        //             compiled_exprs,
+        //             ..
+        //         } = self;
+        //
+        //         let blk_in_ty = Some(blk_in_ty.clone());
+        //         let locals = lg.get(*opnode);
+        //
+        //         Ok(ArgBuilder::new(
+        //             node,
+        //             ag,
+        //             tg,
+        //             tg_chgs,
+        //             blk_in_ty,
+        //             locals,
+        //             compiled_exprs,
+        //         ))
     }
 }
 

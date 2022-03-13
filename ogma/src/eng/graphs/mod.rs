@@ -2,8 +2,8 @@ use super::*;
 use std::fmt;
 
 pub mod astgraph;
-pub mod tygraph;
 pub mod locals_graph;
+pub mod tygraph;
 
 // To add a bit of comp-time checking that the _correct_ node index is being passed around,
 // I am going to implement struct wrappers which can iter-op with NodeIndex and move away from

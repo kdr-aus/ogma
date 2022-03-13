@@ -67,10 +67,9 @@ pub fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, C
 
         // set the OUTPUT of the block to 'ty'
         let mut compiler = compiler.clone();
-        let chgd = compiler.apply_graph_chgs(std::iter::once(tygraph::Chg::InferOutput(
-            op.idx(),
-            ty.clone(),
-        ).into()));
+        let chgd = compiler.apply_graph_chgs(std::iter::once(
+            tygraph::Chg::InferOutput(op.idx(), ty.clone()).into(),
+        ));
 
         if !chgd {
             continue; // no point in trying to compile if nothing changed

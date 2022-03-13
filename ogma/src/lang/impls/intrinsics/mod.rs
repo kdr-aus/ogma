@@ -344,17 +344,21 @@ impl<T> BinaryOp<T> {
             return Err(err);
         }
 
-        Ok(Self {
-            env: eng::Environment::new(locals),
-            rhs,
-            evaluator,
-            transformation: value_trns,
-        })
-        .map(Box::new)
+        todo!("this'll need some thought...");
+        // probably just use the code injector?
+
+        //         Ok(Self {
+        //             env: eng::Environment::new(locals),
+        //             rhs,
+        //             evaluator,
+        //             transformation: value_trns,
+        //         })
+        //         .map(Box::new)
     }
 
     /// Creates the expression: `<cmd> $rhs`. Returns the variable tag.
     fn create_expr_and_var(cmd: &str) -> (ast::Expression, Tag) {
+        // probably can just use the code injector
         use ast::*;
         let line: Arc<str> = Arc::from(format!("{} $rhs", cmd));
         let end = line.len();

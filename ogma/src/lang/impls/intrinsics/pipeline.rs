@@ -256,7 +256,6 @@ fn in_help() -> HelpMessage {
 
 fn in_intrinsic(mut blk: Block) -> Result<Step> {
     let arg = blk.next_arg()?.supplied(None)?.concrete()?;
-    dbg!(&arg);
     blk.eval(arg.out_ty().clone(), move |val, cx| {
         arg.resolve(|| val, &cx).and_then(|x| cx.done(x))
     })
@@ -418,55 +417,53 @@ Table: retrieves the nth row and applies the expression"
 }
 
 fn nth_intrinsic(mut blk: Block) -> Result<Step> {
-    todo!()
-    //     match blk.in_ty() {
-    //         Ty::Tab => {
-    //             let n = blk.next_arg(None)?.returns(&Ty::Num)?;
-    //             let expr = blk.next_arg(Ty::TabRow)?;
-    //             let oty = expr.out_ty().clone();
-    //             blk.eval(oty, move |table, cx| {
-    //                 // nth is adj by one to account for header
-    //                 let nth = n
-    //                     .resolve(|| table.clone(), &cx)
-    //                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-    //                 let table = Table::try_from(table)?;
-    //                 if nth + 1 >= table.rows_len() {
-    //                     return Err(Error::eval(
-    //                         &n.tag,
-    //                         "index is outside table bounds",
-    //                         format!("this resolves to `{}`", nth),
-    //                         None,
-    //                     ));
-    //                 }
-    //
-    //                 let trow = TableRow::new(table, Default::default(), nth + 1);
-    //                 expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
-    //             })
-    //         }
-    //         Ty::Str => {
-    //             let n = blk.next_arg(None)?.returns(&Ty::Num)?;
-    //             blk.eval_o::<_, Str>(move |string, cx| {
-    //                 let nth = n
-    //                     .resolve(|| string.clone(), &cx)
-    //                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-    //                 Str::try_from(string)
-    //                     .and_then(|s| {
-    //                         s.chars().nth(nth).ok_or_else(|| {
-    //                             Error::eval(
-    //                                 &n.tag,
-    //                                 "index is outside string bounds",
-    //                                 format!("this resolves to `{}`", nth),
-    //                                 None,
-    //                             )
-    //                         })
-    //                     })
-    //                     .map(String::from)
-    //                     .map(Str::from)
-    //                     .and_then(|x| cx.done_o(x))
-    //             })
-    //         }
-    //         x => Err(Error::wrong_input_type(x, &blk.op_tag)),
-    //     }
+    match blk.in_ty() {
+         Ty::Tab => {
+             let n = blk.next_arg()?.supplied(None)?.returns(Ty::Num)?.concrete()?;
+             let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
+             let oty = expr.out_ty().clone();
+             blk.eval(oty, move |table, cx| {
+                 // nth is adj by one to account for header
+                 let nth = n
+                     .resolve(|| table.clone(), &cx)
+                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+                 let table = Table::try_from(table)?;
+                 if nth + 1 >= table.rows_len() {
+                     return Err(Error::eval(
+                         &n.tag,
+                         "index is outside table bounds",
+                         format!("this resolves to `{}`", nth),
+                         None,
+                     ));
+                 }
+
+                 let trow = TableRow::new(table, Default::default(), nth + 1);
+                 expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
+             })
+         }
+         Ty::Str => {
+             let n = blk.next_arg()?.supplied(None)?.returns(Ty::Num)?.concrete()?;
+             blk.eval_o::<_, Str>(move |string, cx| {
+                 let nth = n
+                     .resolve(|| string.clone(), &cx)
+                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+                 Str::try_from(string)
+                     .and_then(|s| {
+                         s.chars().nth(nth).ok_or_else(|| {
+                             Error::eval(
+                                 &n.tag,
+                                 "index is outside string bounds",
+                                 format!("this resolves to `{}`", nth),
+                                 None,
+                             )
+                         })
+                     })
+                     .map(Str::from)
+                     .and_then(|x| cx.done_o(x))
+             })
+         }
+         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+     }
 }
 
 // ------ Rand -----------------------------------------------------------------
@@ -602,7 +599,6 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
         .returns(Type::Num)?
         .concrete()?;
     let alen = blk.args_len();
-    dbg!(alen);
     match (alen, blk.in_ty()) {
         (0, Ty::Num) => {
             let blktag = blk.blk_tag().clone();
@@ -615,13 +611,11 @@ fn range_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         _ => {
-            dbg!("here");
             let to = blk
                 .next_arg()?
                 .supplied(None)?
                 .returns(Type::Num)?
                 .concrete()?;
-            dbg!("got next arg");
             blk.eval_o(move |input, cx| {
                 let from = from
                     .resolve(|| input.clone(), &cx)

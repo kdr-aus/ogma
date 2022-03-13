@@ -424,8 +424,11 @@ impl Error {}
 /// Internal
 impl Error {
     fn internal_err_help() -> Option<String> {
-        Some(String::from(
-            "this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>",
+        let bt = backtrace::Backtrace::new();
+        Some(format!(
+            "this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>
+Please supply this BACKTRACE:
+{:?}", bt
         ))
     }
 
@@ -470,6 +473,24 @@ impl Error {
             help_msg: Self::internal_err_help(),
             ..Self::default()
         }
+    }
+
+    pub(crate) fn update_locals_graph(tag: &Tag) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: "the locals graph has been changed and needs updating".into(),
+            traces: trace(tag, None),
+            help_msg: Self::internal_err_help(),
+            ..Self::default()
+        }
+    }
+
+    /// Wrap an error coming from a `CodeInjector`.
+    pub(crate) fn wrap_code_injection(mut self, blk_tag: &Tag) -> Self {
+        self.traces.push(Trace::from_tag(blk_tag, Some("this block internally injects code".into())));
+        self.cat = Category::Internal;
+        self.help_msg = Self::internal_err_help();
+        self
     }
 }
 
@@ -554,6 +575,7 @@ impl Error {
         }
     }
 
+    // TODO obsolete with LG
     pub(crate) fn locals_unavailable(var: &Tag) -> Self {
         Error {
             cat: Category::Semantics,

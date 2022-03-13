@@ -50,31 +50,37 @@ impl<'a> Block<'a> {
     ///
     /// If the block does not contain a reference to an up-to-date locals, and error is returned.
     ///
+    /// **Note** that the variable will be defined at the **_next_** block in the chain, not the
+    /// current one.
+    ///
     /// # Type safety
     /// The variable will be created expecting the type `ty`. `set_data` only validates types in
     /// debug builds, be sure that testing occurs of code path to avoid UB in release.
     pub fn create_var_ref(&mut self, arg: ArgNode, ty: Type) -> Result<Variable> {
-        todo!()
-//         match (self.locals.as_mut(), &self.ag[self.node.idx()]) {
-//             (Some(locals), astgraph::AstNode::Var(var)) => {
-//                 todo!()
-// //                 Ok(locals.add_new_var(Str::new(var.str()), ty, var.clone()))
-//             }
-//             (None, astgraph::AstNode::Var(var)) => Err(Error::locals_unavailable(var)),
-//             (_, x) => {
-//                 use astgraph::AstNode::*;
-//                 let v = match x {
-//                     Ident(_) => "identifier",
-//                     Num { .. } => "number",
-//                     Expr(_) => "expression",
-//                     Var(_) => "variable",
-//                     Pound { .. } => "special-literal",
-//                     Op { .. } | Intrinsic { .. } | Def(_) | Flag(_) => unreachable!(),
-//                 };
-// 
-//                 Err(Error::unexp_arg_variant(x.tag(), v))
-//             }
-//         }
+        match &self.ag[arg.idx()] {
+            astgraph::AstNode::Var(var) => match arg.op(&self.ag).next(&self.ag) {
+                Some(next) => self.lg.new_var(next.idx(), Str::new(var.str()), ty, var.clone())
+                    .map_err(|chg| {
+                        self.chgs.push(chg.into());
+                        dbg!("this one");
+                        Error::update_locals_graph(var)
+                    }),
+                None => Ok(Variable::noop(var.clone(), ty)),
+            },
+            x => {
+                use astgraph::AstNode::*;
+                let v = match x {
+                    Ident(_) => "identifier",
+                    Num { .. } => "number",
+                    Expr(_) => "expression",
+                    Var(_) => "variable",
+                    Pound { .. } => "special-literal",
+                    Op { .. } | Intrinsic { .. } | Def(_) | Flag(_) => unreachable!(),
+                };
+
+                Err(Error::unexp_arg_variant(x.tag(), v))
+            }
+        }
     }
 
     /// Create a variable reference not off a specific argument, but by manually specifying the
@@ -94,73 +100,13 @@ impl<'a> Block<'a> {
     where
         N: Into<Str>,
     {
-        todo!("review and wire in");
-
-        // this is a little hairy...
-        // Calling Locals::add_new_var will always update the locals, which will end up creating an
-        // infinite loop since there would always be a change to the local map.
-        // This indicated at a deeper bug, where a secondary call for injection would cause
-        // stacking of variables.
-        // But! If a variable is tested for existence, it might be referencing something that is
-        // scoped _outside_ of the node. The node **definitely** needs a **new** variable location.
-        //
-        // To combat this, we basically test twice.
-        // First, see if there is a variable reference in the blk's locals,
-        // Second, see if there is a variable reference in the arg's locals,
-        // Third, if the indices match, then a new variable should be created
-
-//         let argop = arg.child_op(&self.ag);
-//         let argtag = self.ag[arg.idx()].tag().clone();
-//         match argop {
-//             // there is no child arg op, which means no locals to add a variable to
-//             // in this case we add a noop variable
-//             None => Ok(Variable::noop(argtag, ty)),
-//             Some(argop) => {
-//                 let name = name.into();
-// 
-//                 let blk_var = self
-//                     .lg
-//                     .get(self.node)
-//                     .and_then(|locals| locals.get(name.as_str()))
-//                     .and_then(|local| match local {
-//                         Local::Var(v) => Some(v),
-//                         _ => None,
-//                     });
-// 
-//                 let mut locals = self.lg.get(argop).ok_or_else(||
-//             // if there are no locals for arg, error out
-//             Error::locals_unavailable(&argtag))?;
-// 
-//                 let existing_var = match (blk_var, locals.get(name.as_str())) {
-//                     // No block match, return existing
-//                     (None, Some(Local::Var(v))) => Some(v),
-//                     // Block matches
-//                     (Some(bv), Some(Local::Var(v))) => {
-//                         // block index doesn't match, return existing
-//                         (bv.idx() != v.idx()).then(|| v)
-//                     }
-//                     // definitely not the previously created variable
-//                     (_, Some(Local::Param(_))) => None,
-//                     // no match, create new
-//                     (_, None) => None,
-//                 };
-// 
-//                 match existing_var {
-//                     Some(v) => Ok(v.clone()),
-//                     None => {
-//                         // add a **new variable location**
-//                         todo!();
-//                         // clone the locals and add a variable
-//                         // error out, but add this locals as a change to the lg
-// //                         Ok(self
-// //                             .lg
-// //                             .get_mut(&argop.index())
-// //                             .expect("tested for existence")
-// //                             .add_new_var(name, ty, argtag))
-//                     }
-//                 }
-//             }
-//         }
+        // we define it into the arg node
+        let tag = arg.tag(&self.ag);
+        self.lg.new_var(arg.idx(), name, ty, tag.clone()).map_err(|chg| {
+            self.chgs.push(chg.into());
+                        dbg!("this one");
+            Error::update_locals_graph(tag)
+        })
     }
 
     /// Helper for `Block::inject_manual_var_into_arg_locals` which peeks the next argument on the
@@ -175,25 +121,31 @@ impl<'a> Block<'a> {
         self.inject_manual_var_into_arg_locals(n, name, ty)
     }
 
-    fn get_var_def_or_add_change(&mut self, name: Str, ty: Type, tag: Tag, op: OpNode) -> Result<Variable> {
+    fn get_var_def_or_add_change(
+        &mut self,
+        name: Str,
+        ty: Type,
+        tag: Tag,
+        op: OpNode,
+    ) -> Result<Variable> {
         todo!("wire in");
-//         let locals = self.lg.get(op).ok_or_else(|| Error::locals_unavailable(&tag))?;
-// 
-//         match locals.get(&name) {
-//             Some(Local::Var(v)) if v.defined_at() == op => Ok(v.clone()),
-//             _ => {
-//                 let e = Error::locals_unavailable(&tag);
-//                 // flag to add
-//                 todo!();
-// //                 self.chgs.push(locals_graph::Chg::NewVar {
-// //                     name,
-// //                     ty,
-// //                     tag,
-// //                     defined_at: op
-// //                 }.into());
-// 
-//                 Err(e)
-//             }
-//         }
+        //         let locals = self.lg.get(op).ok_or_else(|| Error::locals_unavailable(&tag))?;
+        //
+        //         match locals.get(&name) {
+        //             Some(Local::Var(v)) if v.defined_at() == op => Ok(v.clone()),
+        //             _ => {
+        //                 let e = Error::locals_unavailable(&tag);
+        //                 // flag to add
+        //                 todo!();
+        // //                 self.chgs.push(locals_graph::Chg::NewVar {
+        // //                     name,
+        // //                     ty,
+        // //                     tag,
+        // //                     defined_at: op
+        // //                 }.into());
+        //
+        //                 Err(e)
+        //             }
+        //         }
     }
 }

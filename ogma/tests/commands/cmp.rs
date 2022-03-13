@@ -217,6 +217,9 @@ fn point_eq_overload() {
     let x = process_w_nil("Point 1 3 | eq Point 1 3", defs);
     assert_eq!(x, Ok(Value::Bool(true)));
     let x = process_w_nil("Point 1 3 | = Point 1 3", defs);
+    if let Err(e) = &x {
+        println!("{}", e);
+    }
     assert_eq!(x, Ok(Value::Bool(true)));
 }
 

@@ -519,7 +519,7 @@ fn wrong_variable_type() {
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: expecting argument with type `Number`, found `Table`
+        r#"Semantics Error: expecting argument with output type `Number`, found `Table`
 --> <ogma>:19
  | def > (rhs) { cmp $rhs | = Ord::Gt }
  |                    ^^^ this argument returns type `Table`

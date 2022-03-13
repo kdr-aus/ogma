@@ -101,7 +101,8 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
             dbg!("failed map");
 
-            let injector = injector.compile(ty, blk.defs)?;
+            let injector = injector.compile(ty, blk.defs)
+                .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();
             let exp_ty = Ty::Def(types::ORD.get());
@@ -261,7 +262,8 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             // map the RHS to a var. RHS returns the same type as block's input
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
 
-            let injector = injector.compile(ty, blk.defs)?;
+            let injector = injector.compile(ty, blk.defs)
+                .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();
             let exp_ty = Ty::Bool;

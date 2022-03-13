@@ -90,11 +90,7 @@ pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<AstGraph> {
     let recursion_detector = &mut RecursionDetection::default();
 
     let mut count = 0;
-    dbg!(graph.node_count(), graph.edge_count());
     while graph.expand_defs(defs, recursion_detector)? {
-        dbg!(graph.node_count(), graph.edge_count());
-        dbg!(&graph);
-
         count += 1;
         if count > LOOPLIM {
             return Err(Error::ag_init_endless_loop(count, &expr_tag));
@@ -520,6 +516,27 @@ impl AstGraph {
 
         v.into_iter()
     }
+
+    pub fn op_nodes(&self) -> impl Iterator<Item = OpNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self[n].op().map(|_| OpNode(n)))
+    }
+
+    pub fn expr_nodes(&self) -> impl Iterator<Item = ExprNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self[n].expr().map(|_| ExprNode(n)))
+    }
+
+    pub fn arg_nodes(&self) -> impl Iterator<Item = ArgNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self.is_arg_node(n).then(|| ArgNode(n)))
+    }
+
+    pub fn def_nodes(&self) -> impl Iterator<Item = DefNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self[n].def().map(|_| DefNode(n)))
+    }
+
 }
 
 #[cfg(debug_assertions)]
@@ -730,6 +747,12 @@ impl Parameter {
     }
 }
 
+impl ParameterTy {
+    pub fn is_expr(&self) -> bool {
+        matches!(self, ParameterTy::Expr)
+    }
+}
+
 impl OpNode {
     fn debug_assert_is_op_node(self, g: &AstGraph) {
         debug_assert!(g[self.idx()].op().is_some(), "expecting an op node");
@@ -778,6 +801,10 @@ impl OpNode {
 }
 
 impl ArgNode {
+    pub fn tag(self, g: &AstGraph) -> &Tag {
+        g[self.idx()].tag()
+    }
+
     /// Fetches the block's OpNode that this argument comprises.
     pub fn op(self, g: &AstGraph) -> OpNode {
         debug_assert!(g.is_arg_node(self.idx()), "expecting an argument node");
@@ -819,6 +846,7 @@ impl IntrinsicNode {
 }
 
 impl DefNode {
+    #[inline(always)]
     fn debug_assert_is_def_node(self, g: &AstGraph) {
         debug_assert!(
             matches!(g[self.idx()], AstNode::Def(_)),
@@ -840,6 +868,11 @@ impl DefNode {
             .next()
             .map(ExprNode)
             .expect("definition node should have a sub expression")
+    }
+
+    pub fn params(self, g: &AstGraph) -> &[Parameter] {
+        self.debug_assert_is_def_node(g);
+        g[self.idx()].def().expect("filtered to def node")
     }
 }
 

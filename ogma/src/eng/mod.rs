@@ -19,7 +19,7 @@ type LocalsMap = IndexMap<Locals>;
 pub(crate) use self::{
     eval::{CodeInjector, DefImplEvaluator, Evaluator},
     hir::Context,
-    var::{Environment, Local, Locals, Variable},
+    var::{Environment, Local, Locals},
 };
 
 pub use self::comp::{compile, FullCompilation};
@@ -133,7 +133,6 @@ impl<'a> Block<'a> {
             Ok(())
         }
     }
-
 }
 
 // ###### STEP #################################################################
@@ -157,7 +156,14 @@ pub struct Step {
 
 type StepR = Result<(Value, Environment)>;
 
-// ###### FUNCTIONS ############################################################
+// ###### VARIABLE #############################################################
+#[derive(Debug, Clone)]
+pub struct Variable {
+    pub tag: Tag,
+    ty: Type,
+    env_idx: usize,
+}
+
 
 // ###### testing ##############################################################
 #[cfg(test)]
@@ -174,7 +180,7 @@ mod tests {
 
         // Evaluator is quite large
         assert_eq!(size_of::<Evaluator>(), 128);
-        assert_eq!(size_of::<Block>(), 128);
-        assert_eq!(size_of::<arg::ArgBuilder>(), 128);
+        assert_eq!(size_of::<Block>(), 144);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 96);
     }
 }

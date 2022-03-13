@@ -1,17 +1,9 @@
 use super::*;
 use ::libs::divvy::Str;
-use std::{cell::*, rc::Rc, sync::Arc};
 use graphs::OpNode;
+use std::{cell::*, rc::Rc, sync::Arc};
 
 // ###### VARIABLE #############################################################
-#[derive(Debug, Clone)]
-pub struct Variable {
-    pub tag: Tag,
-    ty: Type,
-    env_idx: usize,
-    defined: OpNode,
-}
-
 #[derive(Debug, Clone)]
 pub enum Local {
     Param(Argument),
@@ -24,8 +16,8 @@ pub enum Local {
 pub struct Environment(Arc<Vec<Value>>);
 
 impl Environment {
-    pub fn new(locals: Locals) -> Self {
-        Environment(Arc::new(vec![Value::Nil; locals.count.get()]))
+    pub fn new(lg: &graphs::locals_graph::LocalsGraph) -> Self {
+        Environment(Arc::new(vec![Value::Nil; lg.var_count()]))
     }
 }
 
@@ -94,19 +86,15 @@ impl Variable {
     /// Using a noop can cause runtime panics if trying to fetch from the variable.
     pub fn noop(tag: Tag, ty: Type) -> Self {
         todo!()
-//         Self {
-//             tag,
-//             ty,
-//             env_idx: usize::MAX,
-//         }
+        //         Self {
+        //             tag,
+        //             ty,
+        //             env_idx: usize::MAX,
+        //         }
     }
 
     fn is_noop(&self) -> bool {
         self.env_idx == usize::MAX
-    }
-
-    pub fn defined_at(&self) -> OpNode {
-        self.defined
     }
 }
 
@@ -176,15 +164,15 @@ impl Locals {
     /// Add a **new** variable (a new memory location) into the environment.
     pub fn add_new_var(&mut self, name: Str, ty: Type, tag: Tag) -> Variable {
         todo!();
-//         // increment place location
-//         let var = Variable {
-//             tag,
-//             ty,
-//             env_idx: self.count.get(),
-//         };
-//         self.count.set(var.env_idx + 1);
-//         self.add_var(name, var.clone());
-//         var
+        //         // increment place location
+        //         let var = Variable {
+        //             tag,
+        //             ty,
+        //             env_idx: self.count.get(),
+        //         };
+        //         self.count.set(var.env_idx + 1);
+        //         self.add_var(name, var.clone());
+        //         var
     }
 }
 
@@ -194,5 +182,27 @@ impl Clone for Locals {
             vars: Rc::clone(&self.vars),
             count: Rc::clone(&self.count),
         }
+    }
+}
+
+// ###### SEED VARS ############################################################
+#[derive(Default, Debug)]
+pub struct SeedVars(Vec<(Str, Variable)>);
+
+impl SeedVars {
+    pub fn add(&mut self, name: Str, ty: Type, tag: Tag) -> Variable {
+        let env_idx = self.0.len();
+        let var = Variable {
+            tag,
+            ty,
+            env_idx
+        };
+        self.0.push((name, var.clone()));
+
+        var
+    }
+
+    pub fn drain(self) -> impl ExactSizeIterator<Item = (Str, Variable)> {
+        self.0.into_iter()
     }
 }
