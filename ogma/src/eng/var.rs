@@ -10,6 +10,15 @@ pub enum Local {
     Var(Variable),
 }
 
+impl Local {
+    pub fn ty(&self) -> &Type {
+        match self {
+            Local::Var(x) => x.ty(),
+            Local::Param(x) => x.out_ty(),
+        }
+    }
+}
+
 // TODO can this be Arc<[Value]>???
 #[derive(Debug, Clone)]
 #[allow(clippy::rc_buffer)]
@@ -192,11 +201,7 @@ pub struct SeedVars(Vec<(Str, Variable)>);
 impl SeedVars {
     pub fn add(&mut self, name: Str, ty: Type, tag: Tag) -> Variable {
         let env_idx = self.0.len();
-        let var = Variable {
-            tag,
-            ty,
-            env_idx
-        };
+        let var = Variable { tag, ty, env_idx };
         self.0.push((name, var.clone()));
 
         var

@@ -254,14 +254,20 @@ impl<'a> ArgBuilder<'a> {
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
+        dbg!("assert_var_exists");
         match &self.ag[self.node.idx()] {
             astgraph::AstNode::Var(tag) => {
+                dbg!("arg is a var", tag);
                 self.lg
                     .get(self.node.idx(), tag.str())
                     // Ok(Some(true)) if variable exists
                     .map(|_| true)
                     // if NOT sealed, return Ok(Some(false)) -- lg should be updated
-                    .or_else(|| (!self.lg.sealed(self.node.idx())).then(|| false))
+                    // NOTE we check the parent op for seal, not the argument itself.
+                    .or_else(|| {
+                        let sealed = self.lg.sealed(self.node.op(self.ag).idx());
+                        (!sealed).then(|| false)
+                    })
                     // Error with a HARD error
                     .ok_or_else(|| Error::var_not_found(tag))
                     .map(Some)

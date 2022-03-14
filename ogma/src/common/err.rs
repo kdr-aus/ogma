@@ -428,7 +428,8 @@ impl Error {
         Some(format!(
             "this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>
 Please supply this BACKTRACE:
-{:?}", bt
+{:?}",
+            bt
         ))
     }
 
@@ -487,7 +488,10 @@ Please supply this BACKTRACE:
 
     /// Wrap an error coming from a `CodeInjector`.
     pub(crate) fn wrap_code_injection(mut self, blk_tag: &Tag) -> Self {
-        self.traces.push(Trace::from_tag(blk_tag, Some("this block internally injects code".into())));
+        self.traces.push(Trace::from_tag(
+            blk_tag,
+            Some("this block internally injects code".into()),
+        ));
         self.cat = Category::Internal;
         self.help_msg = Self::internal_err_help();
         self

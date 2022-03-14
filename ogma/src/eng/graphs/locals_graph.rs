@@ -1,4 +1,5 @@
 use super::*;
+use astgraph::AstGraph;
 use petgraph::prelude::*;
 use std::{cell::Cell, ops::Deref, rc::Rc};
 
@@ -8,7 +9,12 @@ struct Local {
     defined: NodeIndex,
 }
 
-type Vars = HashMap<Str, Local>;
+#[derive(Default, Debug, Clone)]
+struct Vars {
+    map: HashMap<Str, Local>,
+    /// Marker indicating that this map will not have any more variables introduced into it.
+    sealed: bool,
+}
 
 type LocalsGraphInner = petgraph::stable_graph::StableGraph<Vars, (), petgraph::Directed, u32>;
 
@@ -31,12 +37,11 @@ pub struct LocalsGraph {
     graph: LocalsGraphInner,
     count: usize,
     locals: Vec<eng::Local>,
-    sealed: HashSet<NodeIndex>
 }
 
 impl LocalsGraph {
     /// Builds a locals graph based off the ast graph.
-    pub fn build(ast_graph: &astgraph::AstGraph) -> Self {
+    pub fn build(ast_graph: &AstGraph) -> Self {
         let mut graph = ast_graph.map(|_, _| Default::default(), |_, _| ());
 
         graph.clear_edges(); // remove all the edges
@@ -45,12 +50,11 @@ impl LocalsGraph {
             graph,
             count: 0,
             locals: Vec::new(),
-            sealed: Default::default()
         }
         .init_edges(ast_graph);
 
-        // seal initial nodes since no variables will be introduced into them
-        this.seal_node(ExprNode(0.into()).first_op(ast_graph));
+        // seal initial node since no variables will be introduced into them
+        this.seal_node_inner(0.into(), ast_graph);
 
         this
     }
@@ -58,7 +62,7 @@ impl LocalsGraph {
     /// Crucially, no edges are provided between def boundaries.
     /// The idea is that the compiler will add variables into the def subexpression when injecting
     /// parameters.
-    fn init_edges(mut self, ag: &astgraph::AstGraph) -> Self {
+    fn init_edges(mut self, ag: &AstGraph) -> Self {
         let g = &mut self.graph;
 
         // blocks flow between each other in expressions
@@ -86,10 +90,9 @@ impl LocalsGraph {
             graph,
             count,
             locals,
-            sealed
         } = self;
 
-        let map = graph.node_weight_mut(0.into()).expect("exists");
+        let Vars { map, sealed } = graph.node_weight_mut(0.into()).expect("exists");
 
         for (name, var) in vars.drain() {
             let idx = locals.len();
@@ -119,6 +122,7 @@ impl LocalsGraph {
     /// Fetch a variable if it is found on the node's locals map.
     pub fn get(&self, node: NodeIndex, name: &str) -> Option<&eng::Local> {
         self.graph[node]
+            .map
             .get(name)
             .map(|l| l.local as usize)
             .map(|i| &self.locals[i])
@@ -130,17 +134,13 @@ impl LocalsGraph {
     /// If `name` is not found but there could be updates to the graph which introduce `name`, then
     /// a soft error is returned.
     pub fn get_checked(&self, node: NodeIndex, name: &str, tag: &Tag) -> Result<&eng::Local> {
-        self.get(node, name).ok_or_else(|| if self.sealed.contains(&node) {
-            Error::var_not_found(tag)
-        } else {
-                        dbg!("this one");
-            Error::update_locals_graph(tag)
+        self.get(node, name).ok_or_else(|| {
+            if self.sealed(node) {
+                Error::var_not_found(tag)
+            } else {
+                Error::update_locals_graph(tag)
+            }
         })
-    }
-
-    /// Returns if this node will not be updated, sealing the variable set.
-    pub fn sealed(&self, node: NodeIndex) -> bool {
-        self.sealed.contains(&node)
     }
 
     /// A new variable should be added.
@@ -155,9 +155,18 @@ impl LocalsGraph {
     ///
     /// `Ok(Variable)` indicates that the variable has been created and can be used.
     /// `Err(Chg)` will return a change entry that can be process via [`apply_chg`].
-    pub fn new_var<N: Into<Str>>(&self, defined_at: NodeIndex, name: N, ty: Type, tag: Tag) -> std::result::Result<Variable, Chg> {
+    pub fn new_var<N: Into<Str>>(
+        &self,
+        defined_at: NodeIndex,
+        name: N,
+        ty: Type,
+        tag: Tag,
+    ) -> std::result::Result<Variable, Chg> {
         let name = name.into();
-        self.graph[defined_at].get(&name).filter(|l| l.defined == defined_at)
+        self.graph[defined_at]
+            .map
+            .get(&name)
+            .filter(|l| l.defined == defined_at)
             .map(|l| match &self.locals[l.local as usize] {
                 eng::Local::Var(var) => var.clone(),
                 _ => unreachable!("this call should not create a param local"),
@@ -166,7 +175,7 @@ impl LocalsGraph {
                 name,
                 ty,
                 tag,
-                defined_at
+                defined_at,
             })
     }
 
@@ -177,7 +186,7 @@ impl LocalsGraph {
                 name,
                 ty,
                 tag,
-                defined_at
+                defined_at,
             } => {
                 self.add_new_var(name, ty, tag, defined_at);
                 self.flow(defined_at); // propogate change
@@ -205,8 +214,8 @@ impl LocalsGraph {
     fn accrete(&mut self, from: NodeIndex, to_idx: NodeIndex) {
         // to get around lifetime issues, we swap out the `to` map to mutate it,
         // then swap it back in once we are done
-        let mut to = std::mem::take(&mut self.graph[to_idx]);
-        let from = &self.graph[from];
+        let mut to = std::mem::take(&mut self.graph[to_idx].map);
+        let from = &self.graph[from].map;
 
         for (k, v) in from {
             // if to does not contain this key, add it in!
@@ -223,38 +232,120 @@ impl LocalsGraph {
         }
 
         // reinstate the map
-        self.graph[to_idx] = to;
+        self.graph[to_idx].map = to;
     }
 
     fn add_new_var(&mut self, name: Str, ty: Type, tag: Tag, defined: NodeIndex) {
-                debug_assert!(!matches!(self.graph[defined].get(&name), Some(l) if l.defined == defined), "sense check that a new variable is not being created over an existing, matching one");
+        debug_assert!(
+            !matches!(self.graph[defined].map.get(&name), Some(l) if l.defined == defined),
+            "sense check that a new variable is not being created over an existing, matching one"
+        );
 
-                let var = Variable {
-                    tag,
-                    ty,
-                    env_idx: self.count
-                };
+        let var = Variable {
+            tag,
+            ty,
+            env_idx: self.count,
+        };
 
-                self.count += 1;
-                let local = self.locals.len() as u32;
+        self.count += 1;
+        let local = self.locals.len() as u32;
 
-                self.locals.push(eng::Local::Var(var));
-                
-                self.graph[defined].insert(name, Local {
-                    local,
-                    defined
-                });
+        self.locals.push(eng::Local::Var(var));
+
+        self.graph[defined]
+            .map
+            .insert(name, Local { local, defined });
     }
 
     /// Seal a op node, flagging that there will not be any more variables introduced.
     /// An op's successful compilation would seal it.
-    pub fn seal_node(&mut self, op: OpNode) {
-        // sealing will seal itself, but also it's flow targets, since that is where changes would
-        // be made
-        let op = op.idx();
-        self.sealed.insert(op);
-        for n in self.graph.neighbors(op) {
-            self.sealed.insert(n);
+    pub fn seal_node(&mut self, op: OpNode, ag: &AstGraph) {
+        self.seal_node_inner(op.idx(), ag);
+    }
+
+    fn seal_node_inner(&mut self, node: NodeIndex, ag: &AstGraph) {
+        self.graph[node].sealed = true; // seal itself
+        let mut wlkr = self.graph.neighbors(node).detach();
+        while let Some(n) = wlkr.next_node(&self.graph) {
+            self.graph[n].sealed = true; // seal flow targets
+            if let Some(e) = ag[n].expr().map(|_| ExprNode(n)) {
+                // if flow target is an expression, seal the expr's first op as well
+                self.graph[e.first_op(ag).idx()].sealed = true;
+            }
         }
+    }
+
+    /// Returns if this node will not be updated, sealing the variable set.
+    ///
+    /// This not only looks at itself, but the parent paths, since an unsealed node in the chain
+    /// might introduce a variable which propogates along.
+    pub fn sealed(&self, node: NodeIndex) -> bool {
+        // self is sealed,
+        self.graph[node].sealed
+            // and its ancestors are sealed (notice the recursion)
+            && self.graph.neighbors_directed(node, Incoming).all(|n| self.sealed(n))
+    }
+}
+
+#[cfg(debug_assertions)]
+impl LocalsGraph {
+    pub fn debug_write(&self, s: &mut String, ag: &AstGraph) -> fmt::Result {
+        use fmt::Write;
+
+        writeln!(s, "```kserd").unwrap();
+        writeln!(s, r#"header = ["Index","Tag","Sealed","Vars"]"#).unwrap();
+        writeln!(s, "data = [").unwrap();
+
+        struct X<'a> {
+            n: NodeIndex,
+            tag: &'a str,
+            sealed: bool,
+            vars: String,
+        }
+
+        let mut xs = ag
+            .op_nodes()
+            .map(|x| x.idx())
+            .chain(ag.expr_nodes().map(|x| x.idx()))
+            .chain(ag.arg_nodes().map(|x| x.idx()))
+            .map(|n| {
+                let Vars { map, sealed } = &self.graph[n];
+                let mut vars = map
+                    .iter()
+                    .map(|(name, i)| {
+                        let ty = self.locals[i.local as usize].ty();
+                        format!("{}:{}", name, ty)
+                    })
+                    .collect::<Vec<_>>();
+                vars.sort_unstable();
+                let vars = vars.into_iter().fold(String::new(), |s, x| s + &x + ", ");
+
+                X {
+                    n,
+                    tag: ag[n].tag().str(),
+                    sealed: *sealed,
+                    vars,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        xs.sort_unstable_by(|a, b| a.n.cmp(&b.n));
+        xs.dedup_by_key(|x| x.n);
+
+        for X {
+            n,
+            tag,
+            sealed,
+            vars,
+        } in xs
+        {
+            writeln!(s, r#"    [{},"{}",{},"{}"]"#, n.index(), tag, sealed, vars)?;
+        }
+
+        writeln!(s, "]").unwrap();
+        writeln!(s, "rowslim = 200").unwrap();
+        writeln!(s, "```").unwrap();
+
+        Ok(())
     }
 }

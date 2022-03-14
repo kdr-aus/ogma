@@ -418,52 +418,60 @@ Table: retrieves the nth row and applies the expression"
 
 fn nth_intrinsic(mut blk: Block) -> Result<Step> {
     match blk.in_ty() {
-         Ty::Tab => {
-             let n = blk.next_arg()?.supplied(None)?.returns(Ty::Num)?.concrete()?;
-             let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
-             let oty = expr.out_ty().clone();
-             blk.eval(oty, move |table, cx| {
-                 // nth is adj by one to account for header
-                 let nth = n
-                     .resolve(|| table.clone(), &cx)
-                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                 let table = Table::try_from(table)?;
-                 if nth + 1 >= table.rows_len() {
-                     return Err(Error::eval(
-                         &n.tag,
-                         "index is outside table bounds",
-                         format!("this resolves to `{}`", nth),
-                         None,
-                     ));
-                 }
+        Ty::Tab => {
+            let n = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Ty::Num)?
+                .concrete()?;
+            let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
+            let oty = expr.out_ty().clone();
+            blk.eval(oty, move |table, cx| {
+                // nth is adj by one to account for header
+                let nth = n
+                    .resolve(|| table.clone(), &cx)
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+                let table = Table::try_from(table)?;
+                if nth + 1 >= table.rows_len() {
+                    return Err(Error::eval(
+                        &n.tag,
+                        "index is outside table bounds",
+                        format!("this resolves to `{}`", nth),
+                        None,
+                    ));
+                }
 
-                 let trow = TableRow::new(table, Default::default(), nth + 1);
-                 expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
-             })
-         }
-         Ty::Str => {
-             let n = blk.next_arg()?.supplied(None)?.returns(Ty::Num)?.concrete()?;
-             blk.eval_o::<_, Str>(move |string, cx| {
-                 let nth = n
-                     .resolve(|| string.clone(), &cx)
-                     .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                 Str::try_from(string)
-                     .and_then(|s| {
-                         s.chars().nth(nth).ok_or_else(|| {
-                             Error::eval(
-                                 &n.tag,
-                                 "index is outside string bounds",
-                                 format!("this resolves to `{}`", nth),
-                                 None,
-                             )
-                         })
-                     })
-                     .map(Str::from)
-                     .and_then(|x| cx.done_o(x))
-             })
-         }
-         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-     }
+                let trow = TableRow::new(table, Default::default(), nth + 1);
+                expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
+            })
+        }
+        Ty::Str => {
+            let n = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Ty::Num)?
+                .concrete()?;
+            blk.eval_o::<_, Str>(move |string, cx| {
+                let nth = n
+                    .resolve(|| string.clone(), &cx)
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+                Str::try_from(string)
+                    .and_then(|s| {
+                        s.chars().nth(nth).ok_or_else(|| {
+                            Error::eval(
+                                &n.tag,
+                                "index is outside string bounds",
+                                format!("this resolves to `{}`", nth),
+                                None,
+                            )
+                        })
+                    })
+                    .map(Str::from)
+                    .and_then(|x| cx.done_o(x))
+            })
+        }
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+    }
 }
 
 // ------ Rand -----------------------------------------------------------------

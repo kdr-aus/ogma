@@ -164,7 +164,6 @@ pub struct Variable {
     env_idx: usize,
 }
 
-
 // ###### testing ##############################################################
 #[cfg(test)]
 mod tests {

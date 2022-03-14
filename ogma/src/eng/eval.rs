@@ -382,10 +382,7 @@ impl CodeInjector<Build> {
             .concrete()?;
         let ty = arg.out_ty().clone();
         // TODO is there a way to not use a default tag?
-        let var = self
-            .data
-            .locals
-            .add(name.into(), ty, Tag::default());
+        let var = self.data.locals.add(name.into(), ty, Tag::default());
         self.args.push((arg, var, input));
         Ok(())
     }

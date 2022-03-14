@@ -130,11 +130,11 @@ impl<'d> Compiler<'d> {
                 continue;
             }
 
-                        eprintln!("Inserting available def locals");
-                         if self.insert_available_def_locals()? {
-                             eprintln!("✅ SUCCESS");
-                             continue;
-                         }
+            eprintln!("Inserting available def locals");
+            if self.insert_available_def_locals()? {
+                eprintln!("✅ SUCCESS");
+                continue;
+            }
 
             eprintln!("Linking def's args for known paths");
             if self.link_known_def_path_args() {
@@ -366,45 +366,41 @@ impl<'d> Compiler<'d> {
     /// 2. _All_ parameters have a known type.
     fn insert_available_def_locals(&mut self) -> Result<bool> {
         let defs = self
-                   .ag
-                   .def_nodes()
-                   // defs without constructed callsite params
-                   .filter(|d| !self.callsite_params.contains_key(&d.index()))
-                   .collect::<Vec<_>>();
+            .ag
+            .def_nodes()
+            // defs without constructed callsite params
+            .filter(|d| !self.callsite_params.contains_key(&d.index()))
+            .collect::<Vec<_>>();
 
         let chgs = &mut Vec::new();
         let mut chgd = false;
-   
-                 for def in defs {
-                    let params = def.params(&self.ag);
-      
-                       // TODO should this be an error pathway?
-                       // since the error pathway is not having enough params (or too many??)
-                          match map_def_params_into_variables(self, def, chgs)? {
-                              LocalInjection::LgChange => (), // continue,
-                            LocalInjection::Success {
-                                 callsite_params,
-                             } => {
-                                 chgd = true;
-                                 let _is_empty = self
-                                     .callsite_params
-                                     .insert(def.index(), callsite_params)
-                                     .is_none();
-                                 debug_assert!(
-                                     _is_empty,
-                                     "just replaced a callsite_params entry which should not happen"
-                                 );
-                             }
-                             LocalInjection::UnknownReturnTy(argnode) => {
-                                 // TODO what to do about unknown return arguments!?
-                             }
-                         }
-                     }
-        
-              let chgd2 = self.apply_graph_chgs(chgs.drain(..));
-              Ok
-              (chgd || chgd2)
 
+        for def in defs {
+            let params = def.params(&self.ag);
+
+            // TODO should this be an error pathway?
+            // since the error pathway is not having enough params (or too many??)
+            match map_def_params_into_variables(self, def, chgs)? {
+                LocalInjection::LgChange => (), // continue,
+                LocalInjection::Success { callsite_params } => {
+                    chgd = true;
+                    let _is_empty = self
+                        .callsite_params
+                        .insert(def.index(), callsite_params)
+                        .is_none();
+                    debug_assert!(
+                        _is_empty,
+                        "just replaced a callsite_params entry which should not happen"
+                    );
+                }
+                LocalInjection::UnknownReturnTy(argnode) => {
+                    // TODO what to do about unknown return arguments!?
+                }
+            }
+        }
+
+        let chgd2 = self.apply_graph_chgs(chgs.drain(..));
+        Ok(chgd || chgd2)
     }
 }
 
@@ -499,6 +495,10 @@ impl<'d> Compiler<'d> {
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
                     chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty).into());
+
+                    // we also seal off the op node in the locals graph, this op is not going to
+                    // alter it's dependent locals maps
+                    self.lg.seal_node(node, &self.ag);
                 }
                 Err(mut e) => {
                     if infer_output {
@@ -621,37 +621,37 @@ impl<'d> Compiler<'d> {
             callsite_params,
         } = self;
 
-               let args = ag.get_args(def);
-       
-            callsite_params
-                   .get(&def.index())
-                   .expect("if the sub-expression exists, there should be an associated callsite params")
-                   .iter()
-                   .map(
-                       |CallsiteParam {
-                            param,
-                            var,
-                            arg_idx,
-                        }| {
-                           let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
-                           let arg = arg::ArgBuilder::new(
-                               arg,
-                               ag,
-                               tg,
-                               lg,
-                               chgs,
-                               Some(in_ty.clone()),
-                               compiled_exprs,
-                           )
-                           .supplied(in_ty.clone());
-                           let arg = match param.ty().cloned() {
-                               Some(ty) => arg.and_then(|a| a.returns(ty)),
-                               None => arg,
-                           };
-                           arg.and_then(|a| a.concrete()).map(|arg| (var.clone(), arg))
-                       },
-                   )
-                   .collect()
+        let args = ag.get_args(def);
+
+        callsite_params
+            .get(&def.index())
+            .expect("if the sub-expression exists, there should be an associated callsite params")
+            .iter()
+            .map(
+                |CallsiteParam {
+                     param,
+                     var,
+                     arg_idx,
+                 }| {
+                    let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
+                    let arg = arg::ArgBuilder::new(
+                        arg,
+                        ag,
+                        tg,
+                        lg,
+                        chgs,
+                        Some(in_ty.clone()),
+                        compiled_exprs,
+                    )
+                    .supplied(in_ty.clone());
+                    let arg = match param.ty().cloned() {
+                        Some(ty) => arg.and_then(|a| a.returns(ty)),
+                        None => arg,
+                    };
+                    arg.and_then(|a| a.concrete()).map(|arg| (var.clone(), arg))
+                },
+            )
+            .collect()
     }
 }
 
@@ -792,10 +792,9 @@ impl<'a> Compiler<'a> {
         writeln!(&mut report, "---").unwrap();
         self.tg.debug_write_flowchart(&self.ag, &mut report);
 
-        //         writeln!(&mut report, "## Current Locals").unwrap();
-        //         writeln!(&mut report, "---").unwrap();
-        //         dbg!(&self.locals);
-        //         self.debug_index_map(&self.locals, &mut report).unwrap();
+        writeln!(&mut report, "## Locals").unwrap();
+        writeln!(&mut report, "---").unwrap();
+        self.lg.debug_write(&mut report, &self.ag).unwrap();
 
         writeln!(&mut report, "## Current Compiled Ops").unwrap();
         writeln!(&mut report, "---").unwrap();
@@ -919,9 +918,7 @@ impl eval::Stack {
 }
 
 enum LocalInjection {
-    Success {
-        callsite_params: Vec<CallsiteParam>,
-    },
+    Success { callsite_params: Vec<CallsiteParam> },
     LgChange,
     UnknownReturnTy(ArgNode),
 }
@@ -933,92 +930,97 @@ struct CallsiteParam {
     arg_idx: u8,
 }
 
-    fn map_def_params_into_variables(
-        compiler: &Compiler,
-        defnode: DefNode,
-        chgs: Chgs
-    ) -> Result<LocalInjection> {
-        let Compiler {
-            ag,
-            tg,
-            lg,
-            compiled_exprs,
-            ..
-        } = compiler;
+fn map_def_params_into_variables(
+    compiler: &Compiler,
+    defnode: DefNode,
+    chgs: Chgs,
+) -> Result<LocalInjection> {
+    let Compiler {
+        ag,
+        tg,
+        lg,
+        compiled_exprs,
+        ..
+    } = compiler;
 
-        let mut args = ag.get_args(defnode);
-        args.reverse();
+    let mut args = ag.get_args(defnode);
+    args.reverse();
 
-        let params = defnode.params(ag);
+    let params = defnode.params(ag);
 
-        let mut callsite_params = Vec::with_capacity(params.len());
-        //         let mut expr_vars = Vec::with_capacity(params.len());
+    let mut callsite_params = Vec::with_capacity(params.len());
+    //         let mut expr_vars = Vec::with_capacity(params.len());
 
-        let blk_tag = defnode.parent(ag).blk_tag(ag);
+    let blk_tag = defnode.parent(ag).blk_tag(ag);
 
-        let mut lg_chg = false;
+    let mut lg_chg = false;
 
-        for (idx, param) in params.into_iter().enumerate() {
-            let idx = idx as u8;
+    for (idx, param) in params.into_iter().enumerate() {
+        let idx = idx as u8;
+        // point of failure
+        let argnode = arg::pop(&mut args, idx, blk_tag)?;
+
+        // TODO need to handle Expr parameter types, will need to alter the structure of
+        // astgraph::Parameter
+
+        if param.ty.is_expr() {
+            todo!("need to handle parameter expression: {:?}", param);
+        }
+
+        // the parameter is to be resolved at the call site
+        let arg = arg::ArgBuilder::new(argnode, ag, tg, lg, chgs, None, compiled_exprs);
+
+        let arg = match param.ty() {
             // point of failure
-            let argnode = arg::pop(&mut args, idx, blk_tag)?;
+            Some(ty) => arg.returns(ty.clone())?,
+            None => arg,
+        };
 
-            // TODO need to handle Expr parameter types, will need to alter the structure of
-            // astgraph::Parameter
-
-            if param.ty.is_expr() {
-                todo!("need to handle parameter expression: {:?}", param);
-            }
-
-            // the parameter is to be resolved at the call site
-            let arg = arg::ArgBuilder::new(argnode, ag, tg, lg, chgs, None, compiled_exprs);
-
-            let arg = match param.ty() {
-                // point of failure
-                Some(ty) => arg.returns(ty.clone())?,
-                None => arg,
-            };
-
-            // point of failure; if returns Some(false), LgChange should occur
-            if let Some(false) = arg.assert_var_exists()? {
-                return Ok(LocalInjection::LgChange);
-            }
-
-            // we do not need to .concrete the arg, since we don't really want to get the Argument
-            // that it returns. Instead, all we really want to know about this argument is it's
-            // output type.
-            let ty = match arg.return_ty() {
-                Some(ty) => ty,
-                None => {
-                    return Ok(LocalInjection::UnknownReturnTy(argnode));
-                }
-            };
-
-            // this callsite param would create a new variable available at the expression node of
-            // the def
-            let expr = defnode.expr(ag);
-            match lg.new_var(expr.idx(), Str::new(param.name.str()), ty.clone(), param.name.clone()) {
-                Ok(var) => callsite_params.push(CallsiteParam {
-                    param: param.clone(),
-                    var,
-                    arg_idx: idx
-                }),
-                Err(chg) => {
-                    chgs.push(chg.into());
-                    lg_chg = true;
-                }
-            }
+        dbg!(arg.tag());
+        // point of failure - we need to test if variable exists.
+        // This is only necessary if the argument is a variable variant.
+        // The `assert_var_exists` call will check if the locals are sealed, along with
+        // checks if the argument is a variable.
+        if let Some(false) = arg.assert_var_exists()? {
+            return Ok(LocalInjection::LgChange);
         }
 
+        // we do not need to .concrete the arg, since we don't really want to get the Argument
+        // that it returns. Instead, all we really want to know about this argument is it's
+        // output type.
+        let ty = match arg.return_ty() {
+            Some(ty) => ty,
+            None => {
+                return Ok(LocalInjection::UnknownReturnTy(argnode));
+            }
+        };
 
-        Ok(if lg_chg {
-            LocalInjection::LgChange
-        } else {
-        LocalInjection::Success {
-            callsite_params,
+        // this callsite param would create a new variable available at the expression node of
+        // the def
+        let expr = defnode.expr(ag);
+        match lg.new_var(
+            expr.idx(),
+            Str::new(param.name.str()),
+            ty.clone(),
+            param.name.clone(),
+        ) {
+            Ok(var) => callsite_params.push(CallsiteParam {
+                param: param.clone(),
+                var,
+                arg_idx: idx,
+            }),
+            Err(chg) => {
+                chgs.push(chg.into());
+                lg_chg = true;
+            }
         }
-        })
+    }
 
+    Ok(if lg_chg {
+        LocalInjection::LgChange
+    } else {
+        LocalInjection::Success { callsite_params }
+    })
 }
 
 #[cfg(test)]
@@ -1190,11 +1192,14 @@ mod tests {
     fn compilation_test_14() {
         let x = compile("\\ $x").unwrap_err().to_string();
         println!("{}", x);
-        assert_eq!(&x, "Semantics Error: variable `x` does not exist
+        assert_eq!(
+            &x,
+            "Semantics Error: variable `x` does not exist
 --> shell:3
  | \\ $x
  |    ^ `x` not in scope
 --> help: variables must be in scope and can be defined using the `let` command
-");
+"
+        );
     }
 }

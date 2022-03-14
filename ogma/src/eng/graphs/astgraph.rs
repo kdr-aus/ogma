@@ -536,7 +536,6 @@ impl AstGraph {
         self.node_indices()
             .filter_map(move |n| self[n].def().map(|_| DefNode(n)))
     }
-
 }
 
 #[cfg(debug_assertions)]

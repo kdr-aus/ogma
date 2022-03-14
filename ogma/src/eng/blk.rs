@@ -59,7 +59,9 @@ impl<'a> Block<'a> {
     pub fn create_var_ref(&mut self, arg: ArgNode, ty: Type) -> Result<Variable> {
         match &self.ag[arg.idx()] {
             astgraph::AstNode::Var(var) => match arg.op(&self.ag).next(&self.ag) {
-                Some(next) => self.lg.new_var(next.idx(), Str::new(var.str()), ty, var.clone())
+                Some(next) => self
+                    .lg
+                    .new_var(next.idx(), Str::new(var.str()), ty, var.clone())
                     .map_err(|chg| {
                         self.chgs.push(chg.into());
                         dbg!("this one");
@@ -102,11 +104,13 @@ impl<'a> Block<'a> {
     {
         // we define it into the arg node
         let tag = arg.tag(&self.ag);
-        self.lg.new_var(arg.idx(), name, ty, tag.clone()).map_err(|chg| {
-            self.chgs.push(chg.into());
-                        dbg!("this one");
-            Error::update_locals_graph(tag)
-        })
+        self.lg
+            .new_var(arg.idx(), name, ty, tag.clone())
+            .map_err(|chg| {
+                self.chgs.push(chg.into());
+                dbg!("this one");
+                Error::update_locals_graph(tag)
+            })
     }
 
     /// Helper for `Block::inject_manual_var_into_arg_locals` which peeks the next argument on the
