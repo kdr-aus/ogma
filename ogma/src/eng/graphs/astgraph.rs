@@ -484,13 +484,21 @@ impl AstGraph {
 
     /// This node is an argument node, that is, matches the node type of an argument and has a
     /// single edge coming into it (from the op node).
-    fn is_arg_node(&self, node: NodeIndex) -> bool {
+    pub fn is_arg_node(&self, node: NodeIndex) -> bool {
         use AstNode::*;
 
         match self[node] {
-            Ident(_) | Num { .. } | Pound { .. } | Var(_) | Expr(_) => {
-                self.edges_directed(node, Incoming).count() == 1
-            }
+            // these are always in argument positions
+            Ident(_) | Num { .. } | Pound { .. } | Var(_) => true,
+            // expr might be a root or under a Def
+            Expr(_) => self
+                // get incoming node
+                .edges_directed(node, Incoming)
+                .next()
+                // check it is an op
+                .map(|e| self[e.source()].op().is_some())
+                // if no edge, would be a root
+                .unwrap_or(false),
             Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
         }
     }

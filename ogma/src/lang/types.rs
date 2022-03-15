@@ -417,6 +417,8 @@ pub struct Variant {
 pub struct Field {
     name: Tag,
     // TODO this will probably be used with generics
+    // I also do not know what this is anymore....
+    // It looks like it is just the tag of the `ty`
     _typedef: Tag,
     ty: Type,
     // TODO this will probably be used with generics

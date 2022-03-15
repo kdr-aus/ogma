@@ -392,6 +392,10 @@ impl<'d> Compiler<'d> {
                         _is_empty,
                         "just replaced a callsite_params entry which should not happen"
                     );
+
+                    // seal off the def's expr node
+                    // no more changes should occur since we have had succcess building.
+                    self.lg.seal_node(def.expr(&self.ag).idx(), &self.ag);
                 }
                 LocalInjection::UnknownReturnTy(argnode) => {
                     // TODO what to do about unknown return arguments!?
@@ -498,7 +502,7 @@ impl<'d> Compiler<'d> {
 
                     // we also seal off the op node in the locals graph, this op is not going to
                     // alter it's dependent locals maps
-                    self.lg.seal_node(node, &self.ag);
+                    self.lg.seal_node(node.idx(), &self.ag);
                 }
                 Err(mut e) => {
                     if infer_output {
@@ -1016,11 +1020,11 @@ fn map_def_params_into_variables(
         }
     }
 
-    Ok(if lg_chg {
-        LocalInjection::LgChange
-    } else {
-        LocalInjection::Success { callsite_params }
-    })
+    if lg_chg {
+        return Ok(LocalInjection::LgChange);
+    }
+
+    Ok(LocalInjection::Success { callsite_params })
 }
 
 #[cfg(test)]

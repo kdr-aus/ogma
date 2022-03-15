@@ -167,6 +167,7 @@ fn tuple_err_testing() {
 --> shell:20
  | Tuple 1 'foo' | get t3
  |                     ^^ `t3` not found
+--> help: `U_Num-Str_` has the following fields: t0, t1
 "
     );
 }
@@ -318,6 +319,7 @@ fn field_does_not_exist() {
 --> shell:16
  | Point 1 3 | get z
  |                 ^ `z` not found
+--> help: `Point` has the following fields: x, y
 "
     );
 }

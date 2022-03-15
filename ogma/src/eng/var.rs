@@ -94,12 +94,11 @@ impl Variable {
     /// # Panics
     /// Using a noop can cause runtime panics if trying to fetch from the variable.
     pub fn noop(tag: Tag, ty: Type) -> Self {
-        todo!()
-        //         Self {
-        //             tag,
-        //             ty,
-        //             env_idx: usize::MAX,
-        //         }
+        Self {
+            tag,
+            ty,
+            env_idx: usize::MAX,
+        }
     }
 
     fn is_noop(&self) -> bool {

@@ -54,7 +54,7 @@ impl LocalsGraph {
         .init_edges(ast_graph);
 
         // seal initial node since no variables will be introduced into them
-        this.seal_node_inner(0.into(), ast_graph);
+        this.seal_node(0.into(), ast_graph);
 
         this
     }
@@ -257,13 +257,9 @@ impl LocalsGraph {
             .insert(name, Local { local, defined });
     }
 
-    /// Seal a op node, flagging that there will not be any more variables introduced.
+    /// Seal an op or expr node, flagging that there will not be any more variables introduced.
     /// An op's successful compilation would seal it.
-    pub fn seal_node(&mut self, op: OpNode, ag: &AstGraph) {
-        self.seal_node_inner(op.idx(), ag);
-    }
-
-    fn seal_node_inner(&mut self, node: NodeIndex, ag: &AstGraph) {
+    pub fn seal_node(&mut self, node: NodeIndex, ag: &AstGraph) {
         self.graph[node].sealed = true; // seal itself
         let mut wlkr = self.graph.neighbors(node).detach();
         while let Some(n) = wlkr.next_node(&self.graph) {
@@ -278,7 +274,7 @@ impl LocalsGraph {
     /// Returns if this node will not be updated, sealing the variable set.
     ///
     /// This not only looks at itself, but the parent paths, since an unsealed node in the chain
-    /// might introduce a variable which propogates along.
+    /// might introduce a variable which propagates along.
     pub fn sealed(&self, node: NodeIndex) -> bool {
         // self is sealed,
         self.graph[node].sealed
@@ -292,9 +288,10 @@ impl LocalsGraph {
     pub fn debug_write(&self, s: &mut String, ag: &AstGraph) -> fmt::Result {
         use fmt::Write;
 
-        writeln!(s, "```kserd").unwrap();
-        writeln!(s, r#"header = ["Index","Tag","Sealed","Vars"]"#).unwrap();
-        writeln!(s, "data = [").unwrap();
+        writeln!(s, "### State")?;
+        writeln!(s, "```kserd")?;
+        writeln!(s, r#"header = ["Index","Tag","Sealed","Vars"]"#)?;
+        writeln!(s, "data = [")?;
 
         struct X<'a> {
             n: NodeIndex,
@@ -342,9 +339,26 @@ impl LocalsGraph {
             writeln!(s, r#"    [{},"{}",{},"{}"]"#, n.index(), tag, sealed, vars)?;
         }
 
-        writeln!(s, "]").unwrap();
-        writeln!(s, "rowslim = 200").unwrap();
-        writeln!(s, "```").unwrap();
+        writeln!(s, "]")?;
+        writeln!(s, "rowslim = 200")?;
+        writeln!(s, "```")?;
+
+        writeln!(s, "### Graph")?;
+        debug_write_flowchart(
+            &self.graph,
+            s,
+            |n, _| ag.is_arg_node(n) || ag[n].op().is_some() || ag[n].expr().is_some(),
+            |n, w, s| {
+                write!(
+                    s,
+                    "{}: {}{}",
+                    n.index(),
+                    ag[n].tag(),
+                    if w.sealed { " <br> sealed" } else { "" }
+                )
+            },
+            |_, s| write!(s, " "),
+        )?;
 
         Ok(())
     }

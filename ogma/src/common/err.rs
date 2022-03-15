@@ -1,10 +1,10 @@
 //! Error infrastructure.
 
-use crate::lang::{
+use crate::{lang::{
     help::*,
     syntax::ast::*,
     types::{Type, TypeDef},
-};
+}, prelude::*};
 use ::libs::colored::*;
 use std::{
     error, fmt,
@@ -294,15 +294,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn field_not_found(field: &Tag, ty: &TypeDef) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("`{}` does not contain field `{}`", ty.name(), field),
-            traces: trace(field, format!("`{}` not found", field)),
-            ..Self::default()
-        }
-    }
-
     pub(crate) fn unexp_entry_ty<C: fmt::Display>(
         exp: &Type,
         found: &Type,
@@ -542,6 +533,7 @@ impl Error {
                 "use `{0} --help` to view requirements. consider implementing `def {0}`",
                 op
             )),
+            hard: true,
             ..Self::default()
         }
     }
@@ -561,6 +553,35 @@ impl Error {
             desc: "unable to infer argument's output type".into(),
             traces: trace(arg, None),
             ..Self::default()
+        }
+    }
+
+    pub(crate) fn field_not_found(field: &Tag, ty: &TypeDef) -> Self {
+        fn hlp(ty: &TypeDef) -> Option<String> {
+            use types::TypeVariant::*;
+
+            match ty.structure() {
+                Sum(_) => None,
+                Product(fields) => {
+                    let delim = ", ";
+                    let list = fields
+                        .iter()
+                        .fold(String::new(), |s, f| s + f.name().str() + delim);
+                    Some(format!(
+                        "`{}` has the following fields: {}",
+                        ty.name(),
+                        list.trim_end_matches(delim)
+                    ))
+                }
+            }
+        }
+
+        Error {
+            cat: Category::Semantics,
+            desc: format!("`{}` does not contain field `{}`", ty.name(), field),
+            traces: trace(field, format!("`{}` not found", field)),
+            help_msg: hlp(ty),
+            hard: true
         }
     }
 }
