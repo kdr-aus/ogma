@@ -7,10 +7,10 @@ use locals_graph::LocalsGraph;
 use tygraph::TypeGraph;
 
 mod params;
+mod resolve_tg;
 
 use params::*;
 
-type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
 /// Compile an expression.
 ///
@@ -232,58 +232,6 @@ impl<'d> Compiler<'d> {
         //         for op in ops {
         //             self.insert_locals(locals, op);
         //         }
-    }
-}
-
-/// Resolve TG
-impl<'d> Compiler<'d> {
-    fn resolve_tg(&mut self) -> Result<()> {
-        loop {
-            match self.tg.flow_types(&mut self.flowed_edges) {
-                Ok(true) => (), // keep going!
-                Ok(false) => break Ok(()),
-                Err(reserr) => break Err(self.ty_resolution_err(reserr)),
-            }
-        }
-    }
-
-    fn ty_resolution_err(&self, reserr: tygraph::ResolutionError) -> Error {
-        use crate::common::err::*;
-        use tygraph::Conflict;
-
-        let mut err = Error {
-            cat: Category::Type,
-            desc: "Type resolution failed".into(),
-            ..Default::default()
-        };
-
-        let tygraph::ResolutionError { from, to, conflict } = reserr;
-
-        let from = self.ag[from].tag();
-        let to = self.ag[to].tag();
-
-        match conflict {
-            Conflict::UnknownSrc => {
-                err.desc.push_str(". Unknown source type");
-                err.traces.push(Trace::from_tag(
-                    from,
-                    "this node's type is unknown".to_string(),
-                ));
-            }
-            Conflict::UnmatchedObligation { src, dst } => {
-                err.desc.push_str(". Conflicting obligation type");
-                err.traces.push(Trace::from_tag(
-                    from,
-                    format!("this node has type `{}`", src),
-                ));
-                err.traces.push(Trace::from_tag(
-                    to,
-                    format!("but this node is obliged to return `{}`", dst),
-                ));
-            }
-        }
-
-        err
     }
 }
 
@@ -1123,5 +1071,23 @@ mod tests {
         let x = compile("Table | last { get foo --Num }").unwrap();
 
         let defs = &mut Definitions::default();
+    }
+
+    #[test]
+    fn compilation_test_16() {
+        // testing that defs do not resolve their OO if other defs are available
+
+        let defs = &mut Definitions::default();
+
+        lang::process_definition("def foo Num () { \\ 3 }", Default::default(), None, defs)
+            .unwrap();
+        lang::process_definition("def foo Str () { \\ 'foo' }", Default::default(), None, defs)
+            .unwrap();
+
+
+
+
+        compile_w_defs("\\ 3 | foo", defs).unwrap();
+        compile_w_defs("\\ 'foo' | foo", defs).unwrap();
     }
 }

@@ -24,6 +24,9 @@ pub(crate) use self::{
 
 pub use self::comp::{compile, FullCompilation};
 
+type Chgs<'a> = &'a mut Vec<graphs::Chg>;
+
+
 // ###### ARGUMENT #############################################################
 /// Compiled argument.
 ///

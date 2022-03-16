@@ -495,7 +495,7 @@ mod tests {
         // Type graph nodes
         use tygraph::Flow;
 
-        assert_eq!(tg.edge_count(), 7);
+        assert_eq!(tg.edge_count(), 6);
 
         // Type graph edges
         let getedge = |a: u32, b: u32| &tg[tg.find_edge(a.into(), b.into()).unwrap()];
@@ -507,7 +507,8 @@ mod tests {
 
         assert_eq!(getedge(4, 5), &Flow::II); // Def -> Expr: II
         assert_eq!(getedge(5, 4), &Flow::OO); // Expr -> Def: OO
-        assert_eq!(getedge(4, 1), &Flow::OO); // Def -> cmp: OO
+
+                                              // NOTE: there is NO 4 -> 1 (Def -> cmp) since we do not know which path would be taken
                                               // NOTE: there is NO 1 -> 4 (cmp -> Def) since this is not a keyed type
     }
 
@@ -571,7 +572,7 @@ mod tests {
         // Type graph nodes
         use tygraph::Flow;
 
-        assert_eq!(tg.edge_count(), 18);
+        assert_eq!(tg.edge_count(), 15);
 
         // Type graph edges
         let getedge = |a: u32, b: u32| &tg[tg.find_edge(a.into(), b.into()).unwrap()];
@@ -587,15 +588,12 @@ mod tests {
 
         assert_eq!(getedge(5, 6), &Flow::II); // Def -> Expr: II
         assert_eq!(getedge(6, 5), &Flow::OO); // Expr -> Def: OO
-        assert_eq!(getedge(5, 1), &Flow::OO); // Def -> foo: OO
 
         assert_eq!(getedge(9, 10), &Flow::II); // Def -> Expr: II
         assert_eq!(getedge(10, 9), &Flow::OO); // Expr -> Def: OO
-        assert_eq!(getedge(9, 1), &Flow::OO); // Def -> foo: OO
 
         assert_eq!(getedge(13, 14), &Flow::II); // Def -> Expr: II
         assert_eq!(getedge(14, 13), &Flow::OO); // Expr -> Def: OO
-        assert_eq!(getedge(13, 1), &Flow::OO); // Def -> foo: OO
 
         // Argument linking!
         assert_eq!(getedge(1, 3), &Flow::II); // foo -> 2 (2nd arg)

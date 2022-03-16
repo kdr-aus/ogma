@@ -634,7 +634,7 @@ impl AstNode {
 
         match self {
             Op { op, blk: _ } => op,
-            Intrinsic { op, intrinsic: _ } => op,
+            Intrinsic { op, intrinsic: _ } => op, // TODO remove the op
             Def(_) => panic!("should not call tag on a CmdNode"),
             Flag(f) => f,
             Ident(s) => s,

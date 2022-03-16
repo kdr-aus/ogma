@@ -37,7 +37,7 @@ pub struct ArgBuilder<'a> {
     ag: &'a AstGraph,
     lg: &'a LocalsGraph,
     blk_in_ty: Option<Type>,
-    tg_chgs: &'a mut Vec<Chg>,
+    chgs: Chgs<'a>,
     compiled_exprs: &'a IndexMap<eval::Stack>,
 
     #[cfg(debug_assertions)]
@@ -50,7 +50,7 @@ impl<'a> ArgBuilder<'a> {
         ag: &'a AstGraph,
         tg: &'a tygraph::TypeGraph,
         lg: &'a LocalsGraph,
-        tg_chgs: &'a mut Vec<Chg>,
+        chgs: Chgs<'a>,
         blk_in_ty: Option<Type>,
         compiled_exprs: &'a IndexMap<eval::Stack>,
     ) -> Self {
@@ -65,10 +65,26 @@ impl<'a> ArgBuilder<'a> {
             out_ty,
             ag,
             lg,
-            tg_chgs,
+            chgs,
             blk_in_ty,
             compiled_exprs,
             tg,
+        }.follow_local_arg_ptr()
+    }
+
+    fn follow_local_arg_ptr(mut self) -> Self {
+        let new_node = self.ag[self.node.idx()].var().and_then(|t|
+            self.lg.get(self.node.idx(), t.str())
+        ).and_then(|l| match l {
+            Local::Ptr { to, tag: _ } => Some(to),
+            _ => None
+        }).copied();
+
+        if let Some(node) = new_node {
+            self.node = node;
+            self.follow_local_arg_ptr()
+        } else {
+            self
         }
     }
 
@@ -110,7 +126,7 @@ impl<'a> ArgBuilder<'a> {
             Kn::Unknown => {
                 // There is currently no knowledge about the input type
                 // add to the TG that this node will be supplied a type `ty`
-                self.tg_chgs
+                self.chgs
                     .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
@@ -139,7 +155,7 @@ impl<'a> ArgBuilder<'a> {
             Kn::Unknown => {
                 // There is currently no knowledge about the output type
                 // add to the TG that this node is obliged to return the output type
-                self.tg_chgs
+                self.chgs
                     .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
