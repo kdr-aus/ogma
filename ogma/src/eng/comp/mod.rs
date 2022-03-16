@@ -6,6 +6,10 @@ use graphs::*;
 use locals_graph::LocalsGraph;
 use tygraph::TypeGraph;
 
+mod params;
+
+use params::*;
+
 type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
 /// Compile an expression.
@@ -326,6 +330,8 @@ impl<'d> Compiler<'d> {
     ///
     /// If the TG is altered, returns `true`.
     fn assign_variable_types(&mut self) -> bool {
+        use tygraph::{Chg::*, Flow};
+
         let mut chgs = Vec::new();
 
         for node in self.ag.node_indices() {
@@ -346,17 +352,28 @@ impl<'d> Compiler<'d> {
                 None => continue,
             };
 
-            let chg = match local {
-                Local::Var(v) => tygraph::Chg::KnownOutput(node, v.ty().clone()),
-                Local::Param(x) => todo!(),
-//                 tygraph::Chg::KnownOutput(node, x.out_ty().clone()),
-            };
-
-            chgs.push(chg.into());
-            chgs.push(tygraph::Chg::AnyInput(node).into());
+            match local {
+                Local::Var(v) => {
+                    chgs.push(KnownOutput(node, v.ty().clone()));
+                    chgs.push(AnyInput(node));
+                }
+                Local::Ptr { to, tag: _ } => {
+                    // connect the type flow from the pointed to arg node
+                    chgs.push(AddEdge {
+                        src: to.idx(),
+                        dst: node,
+                        flow: Flow::II,
+                    });
+                    chgs.push(AddEdge {
+                        src: to.idx(),
+                        dst: node,
+                        flow: Flow::OO,
+                    });
+                }
+            }
         }
 
-        self.apply_graph_chgs(chgs.into_iter())
+        self.apply_graph_chgs(chgs.into_iter().map(Into::into))
     }
 }
 
@@ -918,112 +935,6 @@ impl eval::Stack {
 
         Some(stack)
     }
-}
-
-enum LocalInjection {
-    Success { callsite_params: Vec<CallsiteParam> },
-    LgChange,
-    UnknownReturnTy(ArgNode),
-}
-
-#[derive(Debug, Clone)]
-struct CallsiteParam {
-    param: astgraph::Parameter,
-    var: Variable,
-    arg_idx: u8,
-}
-
-fn map_def_params_into_variables(
-    compiler: &Compiler,
-    defnode: DefNode,
-    chgs: Chgs,
-) -> Result<LocalInjection> {
-    let Compiler {
-        ag,
-        tg,
-        lg,
-        compiled_exprs,
-        ..
-    } = compiler;
-
-    let mut args = ag.get_args(defnode);
-    args.reverse();
-
-    let params = defnode.params(ag);
-
-    let mut callsite_params = Vec::with_capacity(params.len());
-    //         let mut expr_vars = Vec::with_capacity(params.len());
-
-    let blk_tag = defnode.parent(ag).blk_tag(ag);
-
-    let mut lg_chg = false;
-
-    for (idx, param) in params.into_iter().enumerate() {
-        let idx = idx as u8;
-        // point of failure
-        let argnode = arg::pop(&mut args, idx, blk_tag)?;
-
-        // TODO need to handle Expr parameter types, will need to alter the structure of
-        // astgraph::Parameter
-
-        if param.ty.is_expr() {
-            todo!("need to handle parameter expression: {:?}", param);
-        }
-
-        // the parameter is to be resolved at the call site
-        let arg = arg::ArgBuilder::new(argnode, ag, tg, lg, chgs, None, compiled_exprs);
-
-        let arg = match param.ty() {
-            // point of failure
-            Some(ty) => arg.returns(ty.clone())?,
-            None => arg,
-        };
-
-        dbg!(arg.tag());
-        // point of failure - we need to test if variable exists.
-        // This is only necessary if the argument is a variable variant.
-        // The `assert_var_exists` call will check if the locals are sealed, along with
-        // checks if the argument is a variable.
-        if let Some(false) = arg.assert_var_exists()? {
-            return Ok(LocalInjection::LgChange);
-        }
-
-        // we do not need to .concrete the arg, since we don't really want to get the Argument
-        // that it returns. Instead, all we really want to know about this argument is it's
-        // output type.
-        let ty = match arg.return_ty() {
-            Some(ty) => ty,
-            None => {
-                return Ok(LocalInjection::UnknownReturnTy(argnode));
-            }
-        };
-
-        // this callsite param would create a new variable available at the expression node of
-        // the def
-        let expr = defnode.expr(ag);
-        match lg.new_var(
-            expr.idx(),
-            Str::new(param.name.str()),
-            ty.clone(),
-            param.name.clone(),
-        ) {
-            Ok(var) => callsite_params.push(CallsiteParam {
-                param: param.clone(),
-                var,
-                arg_idx: idx,
-            }),
-            Err(chg) => {
-                chgs.push(chg.into());
-                lg_chg = true;
-            }
-        }
-    }
-
-    if lg_chg {
-        return Ok(LocalInjection::LgChange);
-    }
-
-    Ok(LocalInjection::Success { callsite_params })
 }
 
 #[cfg(test)]

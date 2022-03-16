@@ -221,19 +221,20 @@ impl<'a> ArgBuilder<'a> {
                 .get_checked(self.node.idx(), tag.str(), tag)
                 .and_then(|local| match local {
                     Local::Var(var) => Ok(Hold::Var(var.clone())),
-                    Local::Param(_) => unreachable!("a param argument should shadow the referencer arg node"),
-                    // TODO remove this comment
-//                     {
-//                         // debug checking about types here
-//                         #[cfg(debug_assertions)]
-//                         {
-//                             let tys = &self.tg[self.node.idx()];
-//                             assert_eq!(tys.output.ty(), Some(arg.out_ty()));
-//                             assert_eq!(tys.input.ty(), Some(arg.in_ty()));
-//                         }
-// 
-//                         Ok(arg.hold.clone())
-//                     }
+                    Local::Ptr { .. } => {
+                        unreachable!("a param argument should shadow the referencer arg node")
+                    } // TODO remove this comment
+                      //                     {
+                      //                         // debug checking about types here
+                      //                         #[cfg(debug_assertions)]
+                      //                         {
+                      //                             let tys = &self.tg[self.node.idx()];
+                      //                             assert_eq!(tys.output.ty(), Some(arg.out_ty()));
+                      //                             assert_eq!(tys.input.ty(), Some(arg.in_ty()));
+                      //                         }
+                      //
+                      //                         Ok(arg.hold.clone())
+                      //                     }
                 }),
             Expr(tag) => self
                 .compiled_exprs

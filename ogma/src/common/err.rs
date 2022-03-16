@@ -1,10 +1,13 @@
 //! Error infrastructure.
 
-use crate::{lang::{
-    help::*,
-    syntax::ast::*,
-    types::{Type, TypeDef},
-}, prelude::*};
+use crate::{
+    lang::{
+        help::*,
+        syntax::ast::*,
+        types::{Type, TypeDef},
+    },
+    prelude::*,
+};
 use ::libs::colored::*;
 use std::{
     error, fmt,
@@ -581,7 +584,7 @@ impl Error {
             desc: format!("`{}` does not contain field `{}`", ty.name(), field),
             traces: trace(field, format!("`{}` not found", field)),
             help_msg: hlp(ty),
-            hard: true
+            hard: true,
         }
     }
 }

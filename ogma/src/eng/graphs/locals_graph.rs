@@ -25,6 +25,13 @@ pub enum Chg {
         tag: Tag,
         defined_at: NodeIndex,
     },
+    /// A pointer to an argument node to be used in place of the variable.
+    NewLazy {
+        name: Str,
+        to: ArgNode,
+        tag: Tag,
+        defined_at: NodeIndex,
+    },
 }
 
 /// A graph structure which tracks variables, allowing for lexical scoping and shadowing.
@@ -154,7 +161,7 @@ impl LocalsGraph {
     /// does ensure that no duplicates of variables occur.
     ///
     /// `Ok(Variable)` indicates that the variable has been created and can be used.
-    /// `Err(Chg)` will return a change entry that can be process via [`apply_chg`].
+    /// `Err(Chg)` will return a change entry that can be process via [`Self::apply_chg`].
     pub fn new_var<N: Into<Str>>(
         &self,
         defined_at: NodeIndex,
@@ -179,6 +186,38 @@ impl LocalsGraph {
             })
     }
 
+    /// A new lazy argument pointer should be added.
+    ///
+    /// To be robust against partial compilation, adding a new pointer is done by applying changes
+    /// to the locals graph. This way it is gated on success and can be applied later, rather than
+    /// in this call, similar to `new_var`.
+    ///
+    /// `Ok(())` indicates that the pointer has been created.
+    /// `Err(Chg)` will return a change entry that can be process via [`Self::apply_chg`].
+    pub fn new_lazy<N: Into<Str>>(
+        &self,
+        defined_at: NodeIndex,
+        name: N,
+        point_to: ArgNode,
+        tag: Tag,
+    ) -> std::result::Result<(), Chg> {
+        let name = name.into();
+        self.graph[defined_at]
+            .map
+            .get(&name)
+            .filter(|l| l.defined == defined_at)
+            .map(|l| match &self.locals[l.local as usize] {
+                eng::Local::Var(_) => unreachable!("this call should not create a var local"),
+                _ => (),
+            })
+            .ok_or_else(|| Chg::NewLazy {
+                name,
+                to: point_to,
+                tag,
+                defined_at,
+            })
+    }
+
     /// Returns if the graph as altered.
     pub fn apply_chg(&mut self, chg: Chg) -> bool {
         match chg {
@@ -189,6 +228,16 @@ impl LocalsGraph {
                 defined_at,
             } => {
                 self.add_new_var(name, ty, tag, defined_at);
+                self.flow(defined_at); // propogate change
+                true // graph altered
+            }
+            Chg::NewLazy {
+                name,
+                to,
+                tag,
+                defined_at,
+            } => {
+                self.add_new_lazy(name, to, tag, defined_at);
                 self.flow(defined_at); // propogate change
                 true // graph altered
             }
@@ -257,6 +306,20 @@ impl LocalsGraph {
             .insert(name, Local { local, defined });
     }
 
+    fn add_new_lazy(&mut self, name: Str, to: ArgNode, tag: Tag, defined: NodeIndex) {
+        debug_assert!(
+            !matches!(self.graph[defined].map.get(&name), Some(l) if l.defined == defined),
+            "sense check that a new variable is not being created over an existing, matching one"
+        );
+
+        let local = self.locals.len() as u32;
+        self.locals.push(eng::Local::Ptr { to, tag });
+
+        self.graph[defined]
+            .map
+            .insert(name, Local { local, defined });
+    }
+
     /// Seal an op or expr node, flagging that there will not be any more variables introduced.
     /// An op's successful compilation would seal it.
     pub fn seal_node(&mut self, node: NodeIndex, ag: &AstGraph) {
@@ -312,7 +375,7 @@ impl LocalsGraph {
                     .map(|(name, i)| {
                         let ty = match &self.locals[i.local as usize] {
                             eng::Local::Var(v) => v.ty().to_string(),
-                            eng::Local::Param(_) => "?".into()
+                            eng::Local::Ptr { .. } => "?".into(),
                         };
                         format!("{}:{}", name, ty)
                     })

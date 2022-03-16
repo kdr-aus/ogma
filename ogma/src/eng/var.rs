@@ -1,13 +1,13 @@
 use super::*;
 use ::libs::divvy::Str;
-use graphs::OpNode;
+use graphs::ArgNode;
 use std::{cell::*, rc::Rc, sync::Arc};
 
 // ###### VARIABLE #############################################################
 #[derive(Debug, Clone)]
 pub enum Local {
-    Param(Argument),
     Var(Variable),
+    Ptr { to: ArgNode, tag: Tag },
 }
 
 // TODO can this be Arc<[Value]>???
@@ -157,8 +157,8 @@ impl Locals {
     /// Add a parameter mapped to this name.
     pub fn add_param(&mut self, name: Str, arg: Argument) {
         todo!()
-//         let vars = Rc::make_mut(&mut self.vars);
-//         vars.insert(name, Local::Param(arg));
+        //         let vars = Rc::make_mut(&mut self.vars);
+        //         vars.insert(name, Local::Param(arg));
     }
 
     /// Add a **new** variable (a new memory location) into the environment.
