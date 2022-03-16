@@ -53,10 +53,7 @@ pub enum Conflict {
     UnknownSrc,
     /// There is a direct conflict where a _known_ source is trying to overwrite a _known_
     /// destination and the types do not match.
-    ConflictingKnown {
-        src: Type,
-        dst: Type,
-    },
+    ConflictingKnown { src: Type, dst: Type },
     /// There is an obligation to meet but concrete types do not match.
     UnmatchedObligation {
         src: Type,

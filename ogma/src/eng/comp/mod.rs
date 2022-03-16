@@ -11,7 +11,6 @@ mod resolve_tg;
 
 use params::*;
 
-
 /// Compile an expression.
 ///
 /// `input_ty` is optional. If not specified, `Nil` is
@@ -520,7 +519,7 @@ impl<'d> Compiler<'d> {
 
                 intrinsic(block)
             }
-            AstNode::Def(params) => {
+            AstNode::Def { expr, params } => {
                 // check if there exists an entry for the sub-expression,
                 // if so, wrap that in a Step and call it done!
                 let defnode = DefNode(cmd_node.idx());
@@ -1081,11 +1080,13 @@ mod tests {
 
         lang::process_definition("def foo Num () { \\ 3 }", Default::default(), None, defs)
             .unwrap();
-        lang::process_definition("def foo Str () { \\ 'foo' }", Default::default(), None, defs)
-            .unwrap();
-
-
-
+        lang::process_definition(
+            "def foo Str () { \\ 'foo' }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
 
         compile_w_defs("\\ 3 | foo", defs).unwrap();
         compile_w_defs("\\ 'foo' | foo", defs).unwrap();

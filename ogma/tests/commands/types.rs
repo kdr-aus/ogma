@@ -190,7 +190,7 @@ fn tuple_eq_testing() {
         "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:19
  | Tuple 1 'foo' | eq Tuple 'foo' 1
- |                    ^^^^^ this node has type `U_Str-Num_`
+ |                    ^^^^^ this node returns a `U_Str-Num_`
 --> shell:19
  | Tuple 1 'foo' | eq Tuple 'foo' 1
  |                    ^^^^^^^^^^^^^ but this node is obliged to return `U_Num-Str_`
@@ -218,7 +218,7 @@ fn tuple_cmp_testing() {
         "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:20
  | Tuple 1 'foo' | cmp Tuple 'foo' 1
- |                     ^^^^^ this node has type `U_Str-Num_`
+ |                     ^^^^^ this node returns a `U_Str-Num_`
 --> shell:20
  | Tuple 1 'foo' | cmp Tuple 'foo' 1
  |                     ^^^^^^^^^^^^^ but this node is obliged to return `U_Num-Str_`

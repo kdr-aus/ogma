@@ -88,7 +88,7 @@ fn dotop_identifier_tests() {
         "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:27
  | fold 0 + $row.Testing-weird\\string
- |                            ^ this node has type `String`
+ |                            ^ this node returns a `String`
 --> shell:27
  | fold 0 + $row.Testing-weird\\string
  |                            ^^^^^^^ but this node is obliged to return `Number`

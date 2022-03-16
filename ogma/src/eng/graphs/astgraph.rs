@@ -27,7 +27,10 @@ pub enum AstNode {
         op: Tag,
         intrinsic: lang::impls::IntrinsicFn,
     },
-    Def(Vec<Parameter>),
+    Def {
+        expr: Tag,
+        params: Vec<Parameter>,
+    },
     Flag(Tag),
     Ident(Tag),
     Num {
@@ -242,7 +245,10 @@ impl AstGraph {
                         .map(|p| Parameter::from_ast(p, tys))
                         .collect::<Result<Vec<Parameter>>>()?;
 
-                    let cmd = self.0.add_node(AstNode::Def(params));
+                    let cmd = self.0.add_node(AstNode::Def {
+                        expr: def.expr.tag.clone(),
+                        params,
+                    });
                     let expr = self.flatten_expr(def.expr.clone())?;
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
@@ -300,10 +306,6 @@ impl AstGraph {
     fn op_expanded(&self, opnode: OpNode) -> bool {
         self.edges(opnode.into())
             .any(|e| matches!(e.weight(), Relation::Keyed(_)))
-    }
-
-    fn detect_recusion(defnode: DefNode) -> bool {
-        todo!()
     }
 }
 
@@ -499,7 +501,7 @@ impl AstGraph {
                 .map(|e| self[e.source()].op().is_some())
                 // if no edge, would be a root
                 .unwrap_or(false),
-            Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
+            Op { .. } | Def { .. } | Intrinsic { .. } | Flag(_) => false,
         }
     }
 
@@ -600,7 +602,7 @@ impl AstNode {
     /// If this is a def node, returns the params as `Some`.
     pub fn def(&self) -> Option<&[Parameter]> {
         match self {
-            AstNode::Def(x) => Some(x.as_slice()),
+            AstNode::Def { expr: _, params } => Some(params.as_slice()),
             _ => None,
         }
     }
@@ -634,8 +636,8 @@ impl AstNode {
 
         match self {
             Op { op, blk: _ } => op,
-            Intrinsic { op, intrinsic: _ } => op, // TODO remove the op
-            Def(_) => panic!("should not call tag on a CmdNode"),
+            Intrinsic { op, intrinsic: _ } => op,
+            Def { expr, params: _ } => expr,
             Flag(f) => f,
             Ident(s) => s,
             Num { val: _, tag } => tag,
@@ -653,7 +655,7 @@ impl fmt::Display for AstNode {
         match self {
             Op { op, blk } => write!(f, "Op({})", op.str()),
             Intrinsic { op, intrinsic: _ } => write!(f, "Intrinsic"),
-            Def(_) => write!(f, "Def"),
+            Def { expr, params } => write!(f, "Def"),
             Flag(t) => write!(f, "Flag(--{})", t.str()),
             Ident(x) => write!(f, "Ident({})", x.str()),
             Num { val, tag } => write!(f, "Num({})", val),
@@ -856,7 +858,7 @@ impl DefNode {
     #[inline(always)]
     fn debug_assert_is_def_node(self, g: &AstGraph) {
         debug_assert!(
-            matches!(g[self.idx()], AstNode::Def(_)),
+            matches!(g[self.idx()], AstNode::Def { .. }),
             "expecting a def node"
         );
     }

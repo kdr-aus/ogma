@@ -376,7 +376,7 @@ mod tests {
         assert!(matches!(ag.node_weight(0.into()), Some(Expr(_)))); // root
         assert!(matches!(ag.node_weight(1.into()), Some(Op { .. }))); // =
         assert!(matches!(ag.node_weight(2.into()), Some(Num { .. }))); // 3
-        assert!(matches!(ag.node_weight(3.into()), Some(Def(_)))); // Def
+        assert!(matches!(ag.node_weight(3.into()), Some(Def { .. }))); // Def
         assert!(matches!(ag.node_weight(4.into()), Some(Expr(_)))); // eq $rhs
         assert!(matches!(ag.node_weight(5.into()), Some(Op { .. }))); // eq
         assert!(matches!(ag.node_weight(6.into()), Some(Var(_)))); // $rhs
@@ -508,8 +508,8 @@ mod tests {
         assert_eq!(getedge(4, 5), &Flow::II); // Def -> Expr: II
         assert_eq!(getedge(5, 4), &Flow::OO); // Expr -> Def: OO
 
-                                              // NOTE: there is NO 4 -> 1 (Def -> cmp) since we do not know which path would be taken
-                                              // NOTE: there is NO 1 -> 4 (cmp -> Def) since this is not a keyed type
+        // NOTE: there is NO 4 -> 1 (Def -> cmp) since we do not know which path would be taken
+        // NOTE: there is NO 1 -> 4 (cmp -> Def) since this is not a keyed type
     }
 
     #[test]

@@ -77,7 +77,7 @@ impl<'a> Block<'a> {
                     Expr(_) => "expression",
                     Var(_) => "variable",
                     Pound { .. } => "special-literal",
-                    Op { .. } | Intrinsic { .. } | Def(_) | Flag(_) => unreachable!(),
+                    Op { .. } | Intrinsic { .. } | Def { .. } | Flag(_) => unreachable!(),
                 };
 
                 Err(Error::unexp_arg_variant(x.tag(), v))

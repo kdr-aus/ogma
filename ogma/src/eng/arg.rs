@@ -69,16 +69,19 @@ impl<'a> ArgBuilder<'a> {
             blk_in_ty,
             compiled_exprs,
             tg,
-        }.follow_local_arg_ptr()
+        }
+        .follow_local_arg_ptr()
     }
 
     fn follow_local_arg_ptr(mut self) -> Self {
-        let new_node = self.ag[self.node.idx()].var().and_then(|t|
-            self.lg.get(self.node.idx(), t.str())
-        ).and_then(|l| match l {
-            Local::Ptr { to, tag: _ } => Some(to),
-            _ => None
-        }).copied();
+        let new_node = self.ag[self.node.idx()]
+            .var()
+            .and_then(|t| self.lg.get(self.node.idx(), t.str()))
+            .and_then(|l| match l {
+                Local::Ptr { to, tag: _ } => Some(to),
+                _ => None,
+            })
+            .copied();
 
         if let Some(node) = new_node {
             self.node = node;

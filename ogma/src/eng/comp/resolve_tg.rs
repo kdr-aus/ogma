@@ -13,7 +13,7 @@ impl<'d> Compiler<'d> {
 
     fn ty_resolution_err(&self, reserr: tygraph::ResolutionError) -> Error {
         use crate::common::err::*;
-        use tygraph::{Flow::*, Conflict::*};
+        use tygraph::{Conflict::*, Flow::*};
 
         let mut err = Error {
             cat: Category::Type,
@@ -21,10 +21,14 @@ impl<'d> Compiler<'d> {
             ..Default::default()
         };
 
-        let tygraph::ResolutionError { from, to, flow, conflict } = reserr;
+        let tygraph::ResolutionError {
+            from,
+            to,
+            flow,
+            conflict,
+        } = reserr;
 
-        dbg!(&self.ag[from]);
-        let from = self.ag[DefNode(from).expr(&self.ag).idx()].tag();
+        let from = self.ag[from].tag();
         let to = self.ag[to].tag();
 
         match (flow, conflict) {
@@ -35,40 +39,59 @@ impl<'d> Compiler<'d> {
                     "this node's type is unknown".to_string(),
                 ));
             }
-            (II, ConflictingKnown { src, dst }) => {
-                err.desc.push_str(". Conflicting source input into destination input");
-                err.traces.push(Trace::from_tag(
-                    from,
-                    format!("the source node has a known input type of `{}`", src),
-                ));
-                err.traces.push(Trace::from_tag(
-                    to,
-                    format!("but the destination node expects a `{}` input", dst),
-                ));
+            (flow, ConflictingKnown { src, dst }) => {
+                let (from_ty, to_ty) = match flow {
+                    II => ("input", "input"),
+                    IO => ("input", "output"),
+                    OI => ("output", "input"),
+                    OO => ("output", "output"),
+                };
+                let from_trace = match flow {
+                    II | IO => Trace::from_tag(
+                        from,
+                        format!("the source node has a known input type of `{}`", src),
+                    ),
+                    OI | OO => {
+                        Trace::from_tag(from, format!("the source node returns a `{}`", src))
+                    }
+                };
+                let to_trace = match flow {
+                    II | IO => Trace::from_tag(
+                        to,
+                        format!("but the flow target expects a `{}` input", dst),
+                    ),
+                    OI | OO => Trace::from_tag(
+                        to,
+                        format!("but the flow target already returns a `{}`", dst),
+                    ),
+                };
+
+                err.desc += &format!(
+                    ". Conflicting source {} into destination {}",
+                    from_ty, to_ty
+                );
+                err.traces.push(from_trace);
+                err.traces.push(to_trace);
             }
-            (OO, ConflictingKnown { src, dst }) => {
-                err.desc.push_str(". Conflicting source output into destination output");
-                err.traces.push(Trace::from_tag(
-                    from,
-                    format!("the source node returns a `{}`", src),
-                ));
-                err.traces.push(Trace::from_tag(
-                    to,
-                    format!("but the flow target already returns a `{}`", dst),
-                ));
-            }
-            (II, UnmatchedObligation { src, dst }) => {
+            (flow, UnmatchedObligation { src, dst }) => {
+                let from_trace = match flow {
+                    II | IO => Trace::from_tag(from, format!("this node has input type `{}`", src)),
+                    OI | OO => Trace::from_tag(from, format!("this node returns a `{}`", src)),
+                };
+                let to_trace = match flow {
+                    II | IO => Trace::from_tag(
+                        to,
+                        format!("but this node is obliged to use input `{}`", dst),
+                    ),
+                    OI | OO => {
+                        Trace::from_tag(to, format!("but this node is obliged to return `{}`", dst))
+                    }
+                };
+
                 err.desc.push_str(". Conflicting obligation type");
-                err.traces.push(Trace::from_tag(
-                    from,
-                    format!("this node has type `{}`", src),
-                ));
-                err.traces.push(Trace::from_tag(
-                    to,
-                    format!("but this node is obliged to return `{}`", dst),
-                ));
+                err.traces.push(from_trace);
+                err.traces.push(to_trace);
             }
-            _ => todo!()
         }
 
         err
