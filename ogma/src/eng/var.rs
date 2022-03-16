@@ -10,15 +10,6 @@ pub enum Local {
     Var(Variable),
 }
 
-impl Local {
-    pub fn ty(&self) -> &Type {
-        match self {
-            Local::Var(x) => x.ty(),
-            Local::Param(x) => x.out_ty(),
-        }
-    }
-}
-
 // TODO can this be Arc<[Value]>???
 #[derive(Debug, Clone)]
 #[allow(clippy::rc_buffer)]
@@ -165,8 +156,9 @@ impl Locals {
 
     /// Add a parameter mapped to this name.
     pub fn add_param(&mut self, name: Str, arg: Argument) {
-        let vars = Rc::make_mut(&mut self.vars);
-        vars.insert(name, Local::Param(arg));
+        todo!()
+//         let vars = Rc::make_mut(&mut self.vars);
+//         vars.insert(name, Local::Param(arg));
     }
 
     /// Add a **new** variable (a new memory location) into the environment.

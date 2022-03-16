@@ -310,7 +310,10 @@ impl LocalsGraph {
                 let mut vars = map
                     .iter()
                     .map(|(name, i)| {
-                        let ty = self.locals[i.local as usize].ty();
+                        let ty = match &self.locals[i.local as usize] {
+                            eng::Local::Var(v) => v.ty().to_string(),
+                            eng::Local::Param(_) => "?".into()
+                        };
                         format!("{}:{}", name, ty)
                     })
                     .collect::<Vec<_>>();

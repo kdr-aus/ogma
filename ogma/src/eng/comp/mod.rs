@@ -348,7 +348,8 @@ impl<'d> Compiler<'d> {
 
             let chg = match local {
                 Local::Var(v) => tygraph::Chg::KnownOutput(node, v.ty().clone()),
-                Local::Param(x) => tygraph::Chg::KnownOutput(node, x.out_ty().clone()),
+                Local::Param(x) => todo!(),
+//                 tygraph::Chg::KnownOutput(node, x.out_ty().clone()),
             };
 
             chgs.push(chg.into());
@@ -378,8 +379,6 @@ impl<'d> Compiler<'d> {
         for def in defs {
             let params = def.params(&self.ag);
 
-            // TODO should this be an error pathway?
-            // since the error pathway is not having enough params (or too many??)
             match map_def_params_into_variables(self, def, chgs)? {
                 LocalInjection::LgChange => (), // continue,
                 LocalInjection::Success { callsite_params } => {
@@ -1205,5 +1204,13 @@ mod tests {
 --> help: variables must be in scope and can be defined using the `let` command
 "
         );
+    }
+
+    #[test]
+    fn compilation_test_15() {
+        // testing Expr params
+        let x = compile("Table | last { get foo --Num }").unwrap();
+
+        let defs = &mut Definitions::default();
     }
 }
