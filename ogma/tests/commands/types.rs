@@ -167,6 +167,7 @@ fn tuple_err_testing() {
 --> shell:20
  | Tuple 1 'foo' | get t3
  |                     ^^ `t3` not found
+--> help: `U_Num-Str_` has the following fields: t0, t1
 "
     );
 }
@@ -189,7 +190,7 @@ fn tuple_eq_testing() {
         "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:19
  | Tuple 1 'foo' | eq Tuple 'foo' 1
- |                    ^^^^^ this node has type `U_Str-Num_`
+ |                    ^^^^^ this node returns a `U_Str-Num_`
 --> shell:19
  | Tuple 1 'foo' | eq Tuple 'foo' 1
  |                    ^^^^^^^^^^^^^ but this node is obliged to return `U_Num-Str_`
@@ -217,7 +218,7 @@ fn tuple_cmp_testing() {
         "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:20
  | Tuple 1 'foo' | cmp Tuple 'foo' 1
- |                     ^^^^^ this node has type `U_Str-Num_`
+ |                     ^^^^^ this node returns a `U_Str-Num_`
 --> shell:20
  | Tuple 1 'foo' | cmp Tuple 'foo' 1
  |                     ^^^^^^^^^^^^^ but this node is obliged to return `U_Num-Str_`
@@ -318,6 +319,7 @@ fn field_does_not_exist() {
 --> shell:16
  | Point 1 3 | get z
  |                 ^ `z` not found
+--> help: `Point` has the following fields: x, y
 "
     );
 }

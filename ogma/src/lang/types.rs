@@ -258,8 +258,7 @@ impl TryFrom<Value> for OgmaData {
                     "converting value into `OgmaData` failed, value has type `{}`",
                     x.ty()
                 ),
-                traces: Vec::new(),
-                help_msg: None,
+                ..Error::default()
             }),
         }
     }
@@ -348,13 +347,14 @@ impl Types {
             // c. The associated init impl needs to be redone to match the new typedef signature
             let name = ty.name();
             Err(Error {
-                cat: err::Category::Semantics,
+                cat: err::Category::Definitions,
                 desc: format!("can not redefine type `{}`", name),
                 traces: vec![err::Trace::from_tag(
                     name,
                     format!("`{}` already defined", name),
                 )],
                 help_msg: Some("try defining your type with a different name".into()),
+                hard: true,
             })
         } else {
             let ty = Arc::new(ty);
@@ -417,6 +417,8 @@ pub struct Variant {
 pub struct Field {
     name: Tag,
     // TODO this will probably be used with generics
+    // I also do not know what this is anymore....
+    // It looks like it is just the tag of the `ty`
     _typedef: Tag,
     ty: Type,
     // TODO this will probably be used with generics

@@ -267,7 +267,7 @@ fn table_both_flags_err() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: not expecting `intersect` flag
+        "Semantics Error: not expecting flags: `intersect`
 --> shell:11
  | + --cols --intersect --union { range 1 5 | append { get i | + 1 } }
  |            ^^^^^^^^^ flag not supported

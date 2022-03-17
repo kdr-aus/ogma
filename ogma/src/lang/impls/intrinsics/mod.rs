@@ -116,7 +116,7 @@ where
             }
         }
 
-        prev.ok_or_else(|| Error::insufficient_args(&err_tag, 0))
+        prev.ok_or_else(|| Error::insufficient_args(&err_tag, 0, None))
             .map(|x| (x, cx.env))
     })
 }
@@ -200,7 +200,7 @@ impl ColNameArgs {
     fn build(blk: &mut Block) -> Result<Self> {
         let len = blk.args_len();
         if len == 0 {
-            return Err(Error::insufficient_args(blk.blk_tag(), 0));
+            return Err(Error::insufficient_args(blk.blk_tag(), 0, None));
         }
 
         let mut x = Vec::with_capacity(blk.args_len());
@@ -331,6 +331,7 @@ impl<T> BinaryOp<T> {
                         "`{}` implementation expects T=>(rhs:T) -> {}",
                         cmd, out_ty
                     )),
+                    ..Error::default()
                 }
             })?;
 
@@ -343,17 +344,21 @@ impl<T> BinaryOp<T> {
             return Err(err);
         }
 
-        Ok(Self {
-            env: eng::Environment::new(locals),
-            rhs,
-            evaluator,
-            transformation: value_trns,
-        })
-        .map(Box::new)
+        todo!("this'll need some thought...");
+        // probably just use the code injector?
+
+        //         Ok(Self {
+        //             env: eng::Environment::new(locals),
+        //             rhs,
+        //             evaluator,
+        //             transformation: value_trns,
+        //         })
+        //         .map(Box::new)
     }
 
     /// Creates the expression: `<cmd> $rhs`. Returns the variable tag.
     fn create_expr_and_var(cmd: &str) -> (ast::Expression, Tag) {
+        // probably can just use the code injector
         use ast::*;
         let line: Arc<str> = Arc::from(format!("{} $rhs", cmd));
         let end = line.len();

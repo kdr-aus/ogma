@@ -14,14 +14,17 @@ mod var;
 
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
+type LocalsMap = IndexMap<Locals>;
 
 pub(crate) use self::{
     eval::{CodeInjector, DefImplEvaluator, Evaluator},
     hir::Context,
-    var::{Environment, Local, Locals, Variable},
+    var::{Environment, Local, Locals},
 };
 
 pub use self::comp::{compile, FullCompilation};
+
+type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
 // ###### ARGUMENT #############################################################
 /// Compiled argument.
@@ -80,17 +83,12 @@ pub struct Block<'a> {
     /// Only 255 arguments are supported.
     args_count: u8,
 
-    /// Mutable local variables.
-    ///
-    /// This is similar to tg_chgs, where it is stored as a mutable reference since block is passed
-    /// by value.
-    /// Any changees made to the locals are not actually stored unless compilation succeeds.
-    locals: Option<&'a mut Locals>,
-
     /// The compiler's ast graph.
     ag: &'a graphs::astgraph::AstGraph,
     /// The compiler's type graph.
     tg: &'a graphs::tygraph::TypeGraph, // notice the immutability!
+    /// The compiler's local's graph.
+    lg: &'a graphs::locals_graph::LocalsGraph,
     /// The compiler's compiled expressions.
     compiled_exprs: &'a IndexMap<eval::Stack>,
 
@@ -101,7 +99,7 @@ pub struct Block<'a> {
     /// Any items here are actioned by the compiler to update the type graph, providing more
     /// information to conduct the type inferencing.
     /// This allows for block compilation to fail but the updates still be applied.
-    tg_chgs: &'a mut Vec<graphs::tygraph::Chg>,
+    chgs: &'a mut Vec<graphs::Chg>,
 
     /// Flag that this block's output should be inferred if getting to output inferencing phase.
     infer_output: &'a mut bool,
@@ -120,10 +118,12 @@ pub struct Block<'a> {
 impl<'a> Block<'a> {
     /// Carry out checks of the block's state.
     fn finalise(&self, _out_ty: &Type) -> Result<()> {
-        if let Some(flag) = self.flags.last() {
-            Err(Error::unused_flag(flag))
-        } else if let Some(arg) = self.args.get(0) {
-            Err(Error::unused_arg(self.ag[arg.idx()].tag()))
+        if !self.flags.is_empty() {
+            Err(Error::unused_flags(self.flags.iter()))
+        } else if !self.args.is_empty() {
+            Err(Error::unused_args(
+                self.args.iter().map(|a| self.ag[a.idx()].tag()),
+            ))
         } else {
             #[cfg(debug_assertions)]
             match &self.output_ty {
@@ -160,7 +160,13 @@ pub struct Step {
 
 type StepR = Result<(Value, Environment)>;
 
-// ###### FUNCTIONS ############################################################
+// ###### VARIABLE #############################################################
+#[derive(Debug, Clone)]
+pub struct Variable {
+    pub tag: Tag,
+    ty: Type,
+    env_idx: usize,
+}
 
 // ###### testing ##############################################################
 #[cfg(test)]
@@ -177,5 +183,7 @@ mod tests {
 
         // Evaluator is quite large
         assert_eq!(size_of::<Evaluator>(), 128);
+        assert_eq!(size_of::<Block>(), 144);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 96);
     }
 }

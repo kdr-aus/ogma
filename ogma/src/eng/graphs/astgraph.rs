@@ -27,7 +27,10 @@ pub enum AstNode {
         op: Tag,
         intrinsic: lang::impls::IntrinsicFn,
     },
-    Def(Vec<Parameter>),
+    Def {
+        expr: Tag,
+        params: Vec<Parameter>,
+    },
     Flag(Tag),
     Ident(Tag),
     Num {
@@ -90,11 +93,7 @@ pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<AstGraph> {
     let recursion_detector = &mut RecursionDetection::default();
 
     let mut count = 0;
-    dbg!(graph.node_count(), graph.edge_count());
     while graph.expand_defs(defs, recursion_detector)? {
-        dbg!(graph.node_count(), graph.edge_count());
-        dbg!(&graph);
-
         count += 1;
         if count > LOOPLIM {
             return Err(Error::ag_init_endless_loop(count, &expr_tag));
@@ -246,7 +245,10 @@ impl AstGraph {
                         .map(|p| Parameter::from_ast(p, tys))
                         .collect::<Result<Vec<Parameter>>>()?;
 
-                    let cmd = self.0.add_node(AstNode::Def(params));
+                    let cmd = self.0.add_node(AstNode::Def {
+                        expr: def.expr.tag.clone(),
+                        params,
+                    });
                     let expr = self.flatten_expr(def.expr.clone())?;
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
@@ -304,10 +306,6 @@ impl AstGraph {
     fn op_expanded(&self, opnode: OpNode) -> bool {
         self.edges(opnode.into())
             .any(|e| matches!(e.weight(), Relation::Keyed(_)))
-    }
-
-    fn detect_recusion(defnode: DefNode) -> bool {
-        todo!()
     }
 }
 
@@ -421,11 +419,9 @@ impl AstGraph {
     /// Uses type specificity to rank the matches.
     /// If `opnode` does not point to an Op variant, returns `None`.
     pub fn get_impl(&self, opnode: OpNode, in_ty: &Type) -> Option<CmdNode> {
-        let opnode = NodeIndex::from(opnode);
+        opnode.debug_assert_is_op_node(self);
 
-        if self[opnode].op().is_none() {
-            return None;
-        }
+        let opnode = NodeIndex::from(opnode);
 
         let mut fallback = None;
 
@@ -488,14 +484,22 @@ impl AstGraph {
 
     /// This node is an argument node, that is, matches the node type of an argument and has a
     /// single edge coming into it (from the op node).
-    fn is_arg_node(&self, node: NodeIndex) -> bool {
+    pub fn is_arg_node(&self, node: NodeIndex) -> bool {
         use AstNode::*;
 
         match self[node] {
-            Ident(_) | Num { .. } | Pound { .. } | Var(_) | Expr(_) => {
-                self.edges_directed(node, Incoming).count() == 1
-            }
-            Op { .. } | Def(_) | Intrinsic { .. } | Flag(_) => false,
+            // these are always in argument positions
+            Ident(_) | Num { .. } | Pound { .. } | Var(_) => true,
+            // expr might be a root or under a Def
+            Expr(_) => self
+                // get incoming node
+                .edges_directed(node, Incoming)
+                .next()
+                // check it is an op
+                .map(|e| self[e.source()].op().is_some())
+                // if no edge, would be a root
+                .unwrap_or(false),
+            Op { .. } | Def { .. } | Intrinsic { .. } | Flag(_) => false,
         }
     }
 
@@ -519,6 +523,26 @@ impl AstGraph {
         v.reverse();
 
         v.into_iter()
+    }
+
+    pub fn op_nodes(&self) -> impl Iterator<Item = OpNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self[n].op().map(|_| OpNode(n)))
+    }
+
+    pub fn expr_nodes(&self) -> impl Iterator<Item = ExprNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self[n].expr().map(|_| ExprNode(n)))
+    }
+
+    pub fn arg_nodes(&self) -> impl Iterator<Item = ArgNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self.is_arg_node(n).then(|| ArgNode(n)))
+    }
+
+    pub fn def_nodes(&self) -> impl Iterator<Item = DefNode> + '_ {
+        self.node_indices()
+            .filter_map(move |n| self[n].def().map(|_| DefNode(n)))
     }
 }
 
@@ -576,7 +600,7 @@ impl AstNode {
     /// If this is a def node, returns the params as `Some`.
     pub fn def(&self) -> Option<&[Parameter]> {
         match self {
-            AstNode::Def(x) => Some(x.as_slice()),
+            AstNode::Def { expr: _, params } => Some(params.as_slice()),
             _ => None,
         }
     }
@@ -611,7 +635,7 @@ impl AstNode {
         match self {
             Op { op, blk: _ } => op,
             Intrinsic { op, intrinsic: _ } => op,
-            Def(_) => panic!("should not call tag on a CmdNode"),
+            Def { expr, params: _ } => expr,
             Flag(f) => f,
             Ident(s) => s,
             Num { val: _, tag } => tag,
@@ -629,7 +653,7 @@ impl fmt::Display for AstNode {
         match self {
             Op { op, blk } => write!(f, "Op({})", op.str()),
             Intrinsic { op, intrinsic: _ } => write!(f, "Intrinsic"),
-            Def(_) => write!(f, "Def"),
+            Def { expr, params } => write!(f, "Def"),
             Flag(t) => write!(f, "Flag(--{})", t.str()),
             Ident(x) => write!(f, "Ident({})", x.str()),
             Num { val, tag } => write!(f, "Num({})", val),
@@ -730,6 +754,12 @@ impl Parameter {
     }
 }
 
+impl ParameterTy {
+    pub fn is_expr(&self) -> bool {
+        matches!(self, ParameterTy::Expr)
+    }
+}
+
 impl OpNode {
     fn debug_assert_is_op_node(self, g: &AstGraph) {
         debug_assert!(g[self.idx()].op().is_some(), "expecting an op node");
@@ -775,9 +805,24 @@ impl OpNode {
     pub fn blk_tag(self, g: &AstGraph) -> &Tag {
         g[self.idx()].op().expect("will be an op").1
     }
+
+    /// Iterates the associated command nodes with this op.
+    pub fn cmds(self, g: &AstGraph) -> impl Iterator<Item = CmdNode> + '_ {
+        self.debug_assert_is_op_node(g);
+
+        // op connects to cmd nodes via a 'keyed' edge
+        g.edges(self.idx())
+            .filter(|e| e.weight().is_key())
+            .map(|e| e.target())
+            .map(CmdNode)
+    }
 }
 
 impl ArgNode {
+    pub fn tag(self, g: &AstGraph) -> &Tag {
+        g[self.idx()].tag()
+    }
+
     /// Fetches the block's OpNode that this argument comprises.
     pub fn op(self, g: &AstGraph) -> OpNode {
         debug_assert!(g.is_arg_node(self.idx()), "expecting an argument node");
@@ -786,6 +831,12 @@ impl ArgNode {
             .find_map(|e| e.weight().is_normal().then(|| e.source()))
             .map(OpNode)
             .expect("argument nodes should have a parent op node")
+    }
+
+    /// Try fetching a direct child op of this arg node.
+    /// This only occurs if the argument variant is an expression.
+    pub fn child_op(self, g: &AstGraph) -> Option<OpNode> {
+        g[self.idx()].expr().map(|_| ExprNode(self.0).first_op(g))
     }
 }
 
@@ -798,6 +849,11 @@ impl CmdNode {
             .find_map(|e| e.weight().is_key().then(|| e.source()))
             .map(OpNode)
             .expect("command nodes should have a parent op node")
+    }
+
+    /// Returns if this command node is a def node.
+    pub fn def(self, g: &AstGraph) -> Option<DefNode> {
+        g[self.idx()].def().map(|_| DefNode(self.idx()))
     }
 }
 
@@ -813,9 +869,10 @@ impl IntrinsicNode {
 }
 
 impl DefNode {
+    #[inline(always)]
     fn debug_assert_is_def_node(self, g: &AstGraph) {
         debug_assert!(
-            matches!(g[self.idx()], AstNode::Def(_)),
+            matches!(g[self.idx()], AstNode::Def { .. }),
             "expecting a def node"
         );
     }
@@ -835,9 +892,18 @@ impl DefNode {
             .map(ExprNode)
             .expect("definition node should have a sub expression")
     }
+
+    pub fn params(self, g: &AstGraph) -> &[Parameter] {
+        self.debug_assert_is_def_node(g);
+        g[self.idx()].def().expect("filtered to def node")
+    }
 }
 
 impl ExprNode {
+    pub fn tag(self, g: &AstGraph) -> &Tag {
+        g[self.idx()].tag()
+    }
+
     /// Fetches the first block's op for this expression.
     pub fn first_op(self, g: &AstGraph) -> OpNode {
         debug_assert!(

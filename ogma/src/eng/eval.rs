@@ -38,22 +38,15 @@ impl Stack {
             "expecting input value into Stack to match Stack's input type"
         );
 
-        dbg!(self.steps.len());
-        dbg!(&self.in_ty);
-
         let Context { mut env, root, wd } = cx;
 
         let mut input = value;
         for step in &self.steps {
-            dbg!(input.ty());
             let cx = Context { env, root, wd };
             let (output, new_env) = step.invoke(input, cx)?;
             input = output;
             env = new_env;
         }
-
-        dbg!(input.ty());
-        dbg!(&self.out_ty);
 
         debug_assert_eq!(
             input.ty(),
@@ -354,7 +347,7 @@ pub struct CodeInjector<T> {
 
 pub struct Build {
     expr: ast::Expression,
-    locals: Locals,
+    locals: var::SeedVars,
 }
 pub struct Eval {
     stack: Stack,
@@ -389,10 +382,7 @@ impl CodeInjector<Build> {
             .concrete()?;
         let ty = arg.out_ty().clone();
         // TODO is there a way to not use a default tag?
-        let var = self
-            .data
-            .locals
-            .add_new_var(name.into(), ty, Tag::default());
+        let var = self.data.locals.add(name.into(), ty, Tag::default());
         self.args.push((arg, var, input));
         Ok(())
     }
@@ -405,15 +395,12 @@ impl CodeInjector<Build> {
 
         let FullCompilation {
             eval_stack: stack,
-            vars,
-        } = compile(expr, defs, in_ty, locals)?;
+            env,
+        } = comp::compile_with_seed_vars(expr, defs, in_ty, locals)?;
 
         Ok(CodeInjector {
             args,
-            data: Eval {
-                stack,
-                env: Environment::new(vars),
-            },
+            data: Eval { stack, env },
         })
     }
 }

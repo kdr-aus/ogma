@@ -7,7 +7,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     //         ("append-row", append_row, Morphism)
     //         (dedup, Morphism)
     (filter, Morphism)
-    //         (fold, Morphism)
+    (fold, Morphism)
     //         ("fold-while", fold_while, Morphism)
     //         (grp, Morphism)
     //         ("grp-by", grpby, Morphism)
@@ -52,7 +52,7 @@ fn append_intrinsic(mut blk: Block) -> Result<Step> {
 
     let len = blk.args_len();
     if len == 0 {
-        return Err(Error::insufficient_args(blk.blk_tag(), 0));
+        return Err(Error::insufficient_args(blk.blk_tag(), 0, None));
     }
 
     let mut cols = Vec::with_capacity(len);
@@ -457,56 +457,61 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
     })
 }
 
-// // ------ Fold -----------------------------------------------------------------
-// fn fold_help() -> HelpMessage {
-//     HelpMessage {
-//         desc: "fold (reduce) table into single value
-// fold takes a seed value and an accumulator expression
-// the variable $row is available to query the table row"
-//             .into(),
-//         params: vec![
-//             HelpParameter::Required("seed".into()),
-//             HelpParameter::Required("accumulator".into()),
-//         ],
-//         examples: vec![
-//             HelpExample {
-//                 desc: "sum numbers (0,10)",
-//                 code: "range 0 11 | fold 0 { + $row.i }",
-//             },
-//             HelpExample {
-//                 desc: "count number of files in directory",
-//                 code: "ls | filter { get type --Str | = file } | fold 0 + 1",
-//             },
-//         ],
-//         ..HelpMessage::new("fold")
-//     }
-// }
-//
-// fn fold_intrinsic(mut blk: Block) -> Result<Step> {
-//     match blk.in_ty() {
-//         Ty::Tab => {
-//             let seed = blk.next_arg(Type::Nil)?;
-//             let out_ty = seed.out_ty().clone();
-//             let row_var = blk.create_var_manually("row", Ty::TabRow, blk.op_tag.clone());
-//             let acc_expr = blk.next_arg(out_ty.clone())?;
-//
-//             blk.eval(out_ty, move |table, mut cx| {
-//                 let table: Table = table.try_into()?;
-//                 let colmap = types::TableRowColMap::default();
-//                 let mut x = seed.resolve(|| Value::Nil, &cx)?;
-//                 for idx in 1..table.rows_len() {
-//                     let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-//                     row_var.set_data(&mut cx.env, trow.into());
-//                     x = acc_expr.resolve(|| x, &cx)?;
-//                 }
-//
-//                 cx.done(x)
-//             })
-//         }
-//         x => Err(Error::wrong_input_type(x, &blk.op_tag)),
-//     }
-// }
-//
+// ------ Fold -----------------------------------------------------------------
+fn fold_help() -> HelpMessage {
+    HelpMessage {
+        desc: "fold (reduce) table into single value
+fold takes a seed value and an accumulator expression
+the variable $row is available to query the table row"
+            .into(),
+        params: vec![
+            HelpParameter::Required("seed".into()),
+            HelpParameter::Required("accumulator".into()),
+        ],
+        examples: vec![
+            HelpExample {
+                desc: "sum numbers (0,10)",
+                code: "range 0 11 | fold 0 { + $row.i }",
+            },
+            HelpExample {
+                desc: "count number of files in directory",
+                code: "ls | filter { get type --Str | = file } | fold 0 + 1",
+            },
+        ],
+        ..HelpMessage::new("fold")
+    }
+}
+
+fn fold_intrinsic(mut blk: Block) -> Result<Step> {
+    match blk.in_ty() {
+        Ty::Tab => {
+            let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
+            let out_ty = seed.out_ty().clone();
+            let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+            dbg!(&row_var);
+            let acc_expr = blk
+                .next_arg()?
+                .supplied(out_ty.clone())? // accumulator supplies seed type
+                .returns(out_ty.clone())? // and must return seed type!
+                .concrete()?;
+
+            blk.eval(out_ty, move |table, mut cx| {
+                let table: Table = table.try_into()?;
+                let colmap = types::TableRowColMap::default();
+                let mut x = seed.resolve(|| Value::Nil, &cx)?;
+                for idx in 1..table.rows_len() {
+                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+                    row_var.set_data(&mut cx.env, trow.into());
+                    x = acc_expr.resolve(|| x, &cx)?;
+                }
+
+                cx.done(x)
+            })
+        }
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+    }
+}
+
 // // ------ Fold-While -----------------------------------------------------------
 // fn fold_while_help() -> HelpMessage {
 //     HelpMessage {
@@ -813,9 +818,10 @@ impl MapTable {
             .then(|| type_flag(&mut blk))
             .transpose()?
             .flatten();
-        let row_var = blk.create_var_manually("row", Ty::TabRow, blk.op_tag().clone())?;
-        let transformation = blk.next_arg()?;
 
+        let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+
+        let transformation = blk.next_arg()?;
         let transformation = match (force_flag, ty_flag) {
             (true, _) => transformation.supplied(Ty::Nil)?,
             (false, Some(tyflag)) => transformation.supplied(tyflag)?,

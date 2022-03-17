@@ -51,6 +51,9 @@ pub enum Chg {
 pub enum Conflict {
     /// The source is `Unknown`.
     UnknownSrc,
+    /// There is a direct conflict where a _known_ source is trying to overwrite a _known_
+    /// destination and the types do not match.
+    ConflictingKnown { src: Type, dst: Type },
     /// There is an obligation to meet but concrete types do not match.
     UnmatchedObligation {
         src: Type,
@@ -62,13 +65,14 @@ pub enum Conflict {
 pub struct ResolutionError {
     pub from: NodeIndex,
     pub to: NodeIndex,
+    pub flow: Flow,
     pub conflict: Conflict,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct TypeGraph(TypeGraphInner);
 
-// Note that we do not expose a mutable deref, keep mutation contained in this module.
+// NOTE that we do not expose a mutable deref, keep mutation contained in this module.
 impl Deref for TypeGraph {
     type Target = TypeGraphInner;
     fn deref(&self) -> &TypeGraphInner {
@@ -219,22 +223,27 @@ impl TypeGraph {
         self.0.add_edge(def, expr, Flow::II);
         // flow the output of the expression into the Def
         self.0.add_edge(expr, def, Flow::OO);
-        // flow the output of the Def into the Op
-        self.0.add_edge(def, op, Flow::OO); // i believe this is okay with multiple OO?
 
         let is_keyed_none = ag[ag.find_edge(op, def).expect("edge from op to def")].keyed_none();
-
-        // can only link op input to def input if there is no type key
-        if is_keyed_none {
-            // flow the input of the op into the input of this Def
-            self.0.add_edge(op, def, Flow::II);
-        }
-
         let all_defs = ag
             .edges(op)
             .filter(|e| e.weight().is_key())
             .map(|e| e.target())
             .collect::<Vec<_>>();
+        let is_only_def = all_defs.len() == 1;
+
+        // can only link op to def if there is no type key
+        if is_keyed_none {
+            // flow the input of the op into the input of this Def
+            self.0.add_edge(op, def, Flow::II);
+        }
+
+        // can only link def to op if there is no type key or if only def
+        if is_keyed_none || is_only_def {
+            // flow the output of the Def into the Op
+            self.0.add_edge(def, op, Flow::OO);
+        }
+
         if all_defs.iter().all(|n| ag[*n].def().is_some()) {
             self.link_def_arg_terms_with_ii_inner(ag, &all_defs);
         }
@@ -320,6 +329,7 @@ impl TypeGraph {
             let reserr = |conflict| ResolutionError {
                 from: from_idx,
                 to: to_idx,
+                flow: *flow,
                 conflict,
             };
 
@@ -530,6 +540,11 @@ impl Knowledge {
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
             // An any source can flow into an Any or Unknown dest
             (Any, Any | Unknown) => Ok(()),
+            // Cannot flow if two known unmatching types
+            (Known(t1), Known(t2)) if t1 != t2 => Err(Conflict::ConflictingKnown {
+                src: t1.clone(),
+                dst: t2.clone(),
+            }),
             // Cannot flow if obliged types does not match
             (Known(t1), Obliged(t2)) if t1 != t2 => Err(Conflict::UnmatchedObligation {
                 src: t1.clone(),

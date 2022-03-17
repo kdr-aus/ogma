@@ -205,7 +205,7 @@ fn convert_parse_error<'a>(
             start,
             len,
         }],
-        help_msg: None,
+        ..Error::default()
     };
 
     (err, expecting)
@@ -806,7 +806,7 @@ mod tests {
                     start,
                     len,
                 }],
-                help_msg: None,
+                ..Default::default()
             },
             exp,
         ))

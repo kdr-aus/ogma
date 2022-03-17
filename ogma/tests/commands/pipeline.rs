@@ -85,17 +85,13 @@ fn dotop_identifier_tests() {
     println!("{}", err);
     assert_eq!(
         err,
-        "Semantics Error: expecting argument with type `Number`, found `String`
+        "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:27
  | fold 0 + $row.Testing-weird\\string
- |                            ^^^^^^^ this argument returns type `String`
+ |                            ^ this node returns a `String`
 --> shell:27
  | fold 0 + $row.Testing-weird\\string
- |                            ^^^^^^^ invoked here
---> shell:0
- | fold 0 + $row.Testing-weird\\string
- | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invoked here
---> help: commands may require specific argument types, use `--help` to view requirements
+ |                            ^^^^^^^ but this node is obliged to return `Number`
 "
     );
 }
@@ -130,9 +126,7 @@ fn dotop_err_test() {
 --> shell:24
  | Bar 1 3 | let $x | \ $x.z
  |                         ^ `z` not found
---> shell:19
- | Bar 1 3 | let $x | \ $x.z
- |                    ^^^^^^ invoked here
+--> help: `Bar` has the following fields: x, y
 "#
     );
 
@@ -146,9 +140,7 @@ fn dotop_err_test() {
 --> shell:30
  | Foo 5 Bar 1 3 | let $x | \ $x.z
  |                               ^ `z` not found
---> shell:25
- | Foo 5 Bar 1 3 | let $x | \ $x.z
- |                          ^^^^^^ invoked here
+--> help: `Foo` has the following fields: x, bar
 "#
     );
 
@@ -162,9 +154,7 @@ fn dotop_err_test() {
 --> shell:34
  | Foo 5 Bar 1 3 | let $x | \ $x.bar.z
  |                                   ^ `z` not found
---> shell:25
- | Foo 5 Bar 1 3 | let $x | \ $x.bar.z
- |                          ^^^^^^^^^^ invoked here
+--> help: `Bar` has the following fields: x, y
 "#
     );
 
@@ -178,12 +168,7 @@ fn dotop_err_test() {
 --> shell:34
  | Foo 5 Bar 1 3 | let $x | \ $x.bar.z.y
  |                                   ^ `z` not found
---> shell:27
- | Foo 5 Bar 1 3 | let $x | \ $x.bar.z.y
- |                            ^^^^^^^^^^ invoked here
---> shell:25
- | Foo 5 Bar 1 3 | let $x | \ $x.bar.z.y
- |                          ^^^^^^^^^^^^ invoked here
+--> help: `Bar` has the following fields: x, y
 "#
     );
 
@@ -197,9 +182,7 @@ fn dotop_err_test() {
 --> shell:18
  | \ {Foo 5 Bar 1 3}.z
  |                   ^ `z` not found
---> shell:0
- | \ {Foo 5 Bar 1 3}.z
- | ^^^^^^^^^^^^^^^^^^^ invoked here
+--> help: `Foo` has the following fields: x, bar
 "#
     );
 }
@@ -266,9 +249,6 @@ expected `String`, found `Number`
 --> shell:27
  | fold 0 { \$row | get snd --foo | \ 3 }
  |                            ^^^ `foo` not defined
---> shell:0
- | fold 0 { \$row | get snd --foo | \ 3 }
- | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invoked here
 --> help: view a list of types using `def-ty --list`
 "#
     );
@@ -279,13 +259,10 @@ expected `String`, found `Number`
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: not expecting `foo` flag
+        r#"Semantics Error: not expecting flags: `foo`
 --> shell:33
  | fold 0 { \$row | get snd --Str --foo | \ 3 }
  |                                  ^^^ flag not supported
---> shell:0
- | fold 0 { \$row | get snd --Str --foo | \ 3 }
- | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invoked here
 --> help: try using the `--help` flag to view requirements
 "#
     );
@@ -357,7 +334,7 @@ fn using_pound_i() {
 fn using_pound_i_table_row() {
     let d = &Definitions::new();
 
-    let x = process_w_table("append + #i.snd 1", d);
+    let x = process_w_table("append { \\ #i.snd | + 1 }", d);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3"), o("_append1")],
         vec![n(0), n(3), o("a"), n(4)],
@@ -525,7 +502,7 @@ fn wrong_variable_type() {
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: expecting argument with type `Number`, found `Table`
+        r#"Semantics Error: expecting argument with output type `Number`, found `Table`
 --> <ogma>:19
  | def > (rhs) { cmp $rhs | = Ord::Gt }
  |                    ^^^ this argument returns type `Table`
@@ -543,6 +520,7 @@ fn variable_not_existing() {
     let x = process_w_table("\\ 5 | > $x", defs)
         .unwrap_err()
         .to_string();
+    println!("{}", x);
     assert_eq!(
         &x,
         r#"Semantics Error: variable `x` does not exist
