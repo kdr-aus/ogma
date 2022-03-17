@@ -551,12 +551,6 @@ impl Knowledge {
                 dst: t2.clone(),
             }),
 
-            // TODO what to do here
-            // A known type can flow and OVERWRITE an inferred type, since inference is weak
-            (Known(_), Inferred(_)) => Err(Conflict::UnknownSrc),
-            // An inferred type can flow and OVERWRITE an inferred type, since inference is weak
-            (Inferred(_), Inferred(_)) => Err(Conflict::UnknownSrc),
-
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }
     }
