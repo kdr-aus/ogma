@@ -254,22 +254,31 @@ impl<'d> Compiler<'d> {
     }
 
     /// Iterates over def nodes that are deduced to be the compilation path.
-    /// 
+    ///
     /// It deducts the path by looking at the input type into the parent op, since this keys the
     /// impl to take. If the input type is not known yet it, it sees if there is only a singular
     /// path to take (and it is a def path).
     fn def_nodes_with_known_path(&self) -> impl Iterator<Item = DefNode> + '_ {
-        self.ag.op_nodes()
-            .filter_map(move |op| {
-                match self.tg[op.idx()].input.ty() {
-                    Some(ty) => self.ag.get_impl(op, ty).and_then(|cmd| cmd.def(&self.ag)),
-                    None => {
-                        let mut cmds = op.cmds(&self.ag);
-                        let def = cmds.next().and_then(|cmd| cmd.def(&self.ag));
-                        def.filter(|_| cmds.next().is_none())
-                    }
-                }
-            })
+        self.ag
+            .op_nodes()
+            .filter_map(move |op| self.predict_path(op))
+    }
+
+    fn predict_path(&self, op: OpNode) -> Option<DefNode> {
+        let predict_ty_known = move |ty| self.ag.get_impl(op, ty).and_then(|cmd| cmd.def(&self.ag));
+        let singular_def = move || {
+            let mut cmds = op.cmds(&self.ag);
+            cmds.next()
+                .and_then(|cmd| cmd.def(&self.ag))
+                // we filter that this def is singular
+                .filter(|_| cmds.next().is_none())
+        };
+
+        self.tg[op.idx()]
+            .input
+            .ty()
+            .map(predict_ty_known)
+            .unwrap_or_else(singular_def)
     }
 }
 
@@ -370,9 +379,14 @@ impl<'d> Compiler<'d> {
         // filter to ops where the input type is known
         // get the cmd node, if a def, then this is known as the path to take
 
-        let defnodes = self.def_nodes_with_known_path()
+        let defnodes = self
+            .def_nodes_with_known_path()
             // without compiled steps
-            .filter(|def| !self.compiled_ops.contains_key(&def.parent(&self.ag).index()))
+            .filter(|def| {
+                !self
+                    .compiled_ops
+                    .contains_key(&def.parent(&self.ag).index())
+            })
             .collect::<Vec<_>>();
 
         let mut chgd = false;

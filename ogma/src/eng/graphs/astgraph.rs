@@ -811,7 +811,10 @@ impl OpNode {
         self.debug_assert_is_op_node(g);
 
         // op connects to cmd nodes via a 'keyed' edge
-        g.edges(self.idx()).filter(|e| e.weight().is_key()).map(|e| e.target()).map(CmdNode)
+        g.edges(self.idx())
+            .filter(|e| e.weight().is_key())
+            .map(|e| e.target())
+            .map(CmdNode)
     }
 }
 
