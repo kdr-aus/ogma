@@ -252,6 +252,25 @@ impl<'d> Compiler<'d> {
         //             self.insert_locals(locals, op);
         //         }
     }
+
+    /// Iterates over def nodes that are deduced to be the compilation path.
+    /// 
+    /// It deducts the path by looking at the input type into the parent op, since this keys the
+    /// impl to take. If the input type is not known yet it, it sees if there is only a singular
+    /// path to take (and it is a def path).
+    fn def_nodes_with_known_path(&self) -> impl Iterator<Item = DefNode> + '_ {
+        self.ag.op_nodes()
+            .filter_map(move |op| {
+                match self.tg[op.idx()].input.ty() {
+                    Some(ty) => self.ag.get_impl(op, ty).and_then(|cmd| cmd.def(&self.ag)),
+                    None => {
+                        let mut cmds = op.cmds(&self.ag);
+                        let def = cmds.next().and_then(|cmd| cmd.def(&self.ag));
+                        def.filter(|_| cmds.next().is_none())
+                    }
+                }
+            })
+    }
 }
 
 /// Populating compiled expressions.
@@ -351,17 +370,9 @@ impl<'d> Compiler<'d> {
         // filter to ops where the input type is known
         // get the cmd node, if a def, then this is known as the path to take
 
-        let defnodes = self
-            .ag
-            .op_nodes()
+        let defnodes = self.def_nodes_with_known_path()
             // without compiled steps
-            .filter(|n| !self.compiled_ops.contains_key(&n.index()))
-            // where input type is known
-            .filter_map(|n| self.tg[n.idx()].input.ty().map(|t| (n, t)))
-            // map to the def node path
-            .filter_map(|(n, ty)| self.ag.get_impl(n, ty))
-            // only if a Def
-            .filter_map(|n| n.def(&self.ag))
+            .filter(|def| !self.compiled_ops.contains_key(&def.parent(&self.ag).index()))
             .collect::<Vec<_>>();
 
         let mut chgd = false;

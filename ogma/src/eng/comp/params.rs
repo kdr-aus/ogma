@@ -25,14 +25,7 @@ impl<'d> Compiler<'d> {
         // 1. errors can be hard returned which assists in debugging,
         // 2. it avoids unnecessary variable slots which would not be used
         let defs = self
-            .ag
-            .op_nodes()
-            // where input type is known
-            .filter_map(|n| self.tg[n.idx()].input.ty().map(|t| (n, t)))
-            // map to the def node path
-            .filter_map(|(n, ty)| self.ag.get_impl(n, ty))
-            // only if a Def
-            .filter_map(|n| n.def(&self.ag))
+            .def_nodes_with_known_path()
             // defs without constructed callsite params
             .filter(|d| !self.callsite_params.contains_key(&d.index()))
             .collect::<Vec<_>>();

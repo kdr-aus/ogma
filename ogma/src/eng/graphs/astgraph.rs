@@ -805,6 +805,14 @@ impl OpNode {
     pub fn blk_tag(self, g: &AstGraph) -> &Tag {
         g[self.idx()].op().expect("will be an op").1
     }
+
+    /// Iterates the associated command nodes with this op.
+    pub fn cmds(self, g: &AstGraph) -> impl Iterator<Item = CmdNode> + '_ {
+        self.debug_assert_is_op_node(g);
+
+        // op connects to cmd nodes via a 'keyed' edge
+        g.edges(self.idx()).filter(|e| e.weight().is_key()).map(|e| e.target()).map(CmdNode)
+    }
 }
 
 impl ArgNode {
