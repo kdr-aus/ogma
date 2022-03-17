@@ -262,11 +262,7 @@ fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, Compi
 
         // set the OUTPUT of the block to 'ty'
         let mut compiler = compiler.clone();
-        let chgd = compiler.apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()));
-
-        if !chgd {
-            continue; // no point in trying to compile if nothing changed
-        }
+        compiler.apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()));
 
         // recurse into compile call -- breaking when the parent expr gets compiled
         match compiler.compile(parent) {
