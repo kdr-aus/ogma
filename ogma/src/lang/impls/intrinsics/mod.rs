@@ -116,7 +116,7 @@ where
             }
         }
 
-        prev.ok_or_else(|| Error::insufficient_args(&err_tag, 0))
+        prev.ok_or_else(|| Error::insufficient_args(&err_tag, 0, None))
             .map(|x| (x, cx.env))
     })
 }
@@ -200,7 +200,7 @@ impl ColNameArgs {
     fn build(blk: &mut Block) -> Result<Self> {
         let len = blk.args_len();
         if len == 0 {
-            return Err(Error::insufficient_args(blk.blk_tag(), 0));
+            return Err(Error::insufficient_args(blk.blk_tag(), 0, None));
         }
 
         let mut x = Vec::with_capacity(blk.args_len());

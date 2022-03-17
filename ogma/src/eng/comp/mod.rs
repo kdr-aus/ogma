@@ -6,6 +6,7 @@ use graphs::*;
 use locals_graph::LocalsGraph;
 use tygraph::TypeGraph;
 
+mod infer;
 mod params;
 mod resolve_tg;
 
@@ -50,6 +51,7 @@ pub fn compile_with_seed_vars(
         compiled_exprs: Default::default(),
         output_infer_opnode: None,
         callsite_params: Default::default(),
+        inferrence_depth: 0,
     };
 
     compiler.init_tg(input_ty); // initialise TG
@@ -94,6 +96,22 @@ pub struct Compiler<'d> {
     output_infer_opnode: Option<OpNode>,
     /// A map of **Def** nodes which have had their call site parameters prepared as variables.
     callsite_params: IndexMap<Vec<CallsiteParam>>,
+    /// Depth limit of inference to loop down to.
+    inferrence_depth: u32,
+}
+
+trait BreakOn {
+    fn idx(self) -> usize;
+}
+impl BreakOn for ExprNode {
+    fn idx(self) -> usize {
+        self.index()
+    }
+}
+impl BreakOn for OpNode {
+    fn idx(self) -> usize {
+        self.index()
+    }
 }
 
 /// Common.
@@ -111,11 +129,13 @@ impl<'d> Compiler<'d> {
     }
 
     // TODO box here
-    pub fn compile(mut self, break_on: ExprNode) -> Result<Self> {
+    fn compile<B: BreakOn>(mut self, break_on: B) -> Result<Self> {
         let mut err = None;
 
-        let brk_key = &break_on.index();
-        while !self.compiled_exprs.contains_key(brk_key) {
+        let brk_key = &break_on.idx();
+        while !(self.compiled_exprs.contains_key(brk_key)
+            || self.compiled_ops.contains_key(brk_key))
+        {
             self.write_debug_report("debug-compiler.md");
 
             eprintln!("Resolving TG");
@@ -324,53 +344,6 @@ impl<'d> Compiler<'d> {
     }
 }
 
-/// Inserting available def locals.
-impl<'d> Compiler<'d> {
-    /// Looks at the `Def` command nodes and builds a locals flowing into the expression if:
-    /// 1. The parent op has an available locals to scaffold off, and
-    /// 2. _All_ parameters have a known type.
-    fn insert_available_def_locals(&mut self) -> Result<bool> {
-        let defs = self
-            .ag
-            .def_nodes()
-            // defs without constructed callsite params
-            .filter(|d| !self.callsite_params.contains_key(&d.index()))
-            .collect::<Vec<_>>();
-
-        let chgs = &mut Vec::new();
-        let mut chgd = false;
-
-        for def in defs {
-            let params = def.params(&self.ag);
-
-            match map_def_params_into_variables(self, def, chgs)? {
-                LocalInjection::LgChange => (), // continue,
-                LocalInjection::Success { callsite_params } => {
-                    chgd = true;
-                    let _is_empty = self
-                        .callsite_params
-                        .insert(def.index(), callsite_params)
-                        .is_none();
-                    debug_assert!(
-                        _is_empty,
-                        "just replaced a callsite_params entry which should not happen"
-                    );
-
-                    // seal off the def's expr node
-                    // no more changes should occur since we have had succcess building.
-                    self.lg.seal_node(def.expr(&self.ag).idx(), &self.ag);
-                }
-                LocalInjection::UnknownReturnTy(argnode) => {
-                    // TODO what to do about unknown return arguments!?
-                }
-            }
-        }
-
-        let chgd2 = self.apply_graph_chgs(chgs.drain(..));
-        Ok(chgd || chgd2)
-    }
-}
-
 /// Linking def's args for known paths.
 impl<'d> Compiler<'d> {
     fn link_known_def_path_args(&mut self) -> bool {
@@ -380,9 +353,7 @@ impl<'d> Compiler<'d> {
 
         let defnodes = self
             .ag
-            .node_indices()
-            // just OpNodes
-            .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
+            .op_nodes()
             // without compiled steps
             .filter(|n| !self.compiled_ops.contains_key(&n.index()))
             // where input type is known
@@ -390,7 +361,7 @@ impl<'d> Compiler<'d> {
             // map to the def node path
             .filter_map(|(n, ty)| self.ag.get_impl(n, ty))
             // only if a Def
-            .filter_map(|n| self.ag[n.idx()].def().map(|_| DefNode(n.idx())))
+            .filter_map(|n| n.def(&self.ag))
             .collect::<Vec<_>>();
 
         let mut chgd = false;
@@ -527,6 +498,10 @@ impl<'d> Compiler<'d> {
                 match self.compiled_exprs.get(&expr.index()) {
                     Some(stack) => {
                         // map the callsite params into the **op** node's arguments (for eval)
+                        // if there are no callsite params, but the stack exists, the def has been
+                        // able to compile without param reference.
+                        // This is okay! we just pass an empty params vector to be resolved, and it
+                        // saves some processing and memory.
                         let params =
                             self.map_callsite_params_for_def_step(defnode, &in_ty, chgs)?;
                         let out_ty = self.tg[expr.idx()]
@@ -568,6 +543,7 @@ impl<'d> Compiler<'d> {
     ///
     /// - `Compiler.locals` expects to have an entry for the def's parent op
     /// - `Compiler.callsite_params` expects to have an entry for the def
+    ///   - **If one does not exist, it returns an empty vector**.
     /// - `CallsiteParam.arg_idx` should index into the def's argument list
     /// - the argument builder expects both input and output types of the argument to be known
     fn map_callsite_params_for_def_step(
@@ -586,13 +562,15 @@ impl<'d> Compiler<'d> {
             compiled_exprs,
             output_infer_opnode,
             callsite_params,
+            inferrence_depth,
         } = self;
 
         let args = ag.get_args(def);
 
         callsite_params
             .get(&def.index())
-            .expect("if the sub-expression exists, there should be an associated callsite params")
+            .map(|x| x.as_slice())
+            .unwrap_or(&[])
             .iter()
             .map(
                 |CallsiteParam {
@@ -663,79 +641,6 @@ impl<'d> Compiler<'d> {
         //         }
         //
         //         chgd
-    }
-}
-
-/// Infer inputs.
-impl<'d> Compiler<'d> {
-    fn infer_inputs(&mut self) -> Result<bool> {
-        // we get _lowest_ nodes that are:
-        // 1. Op variants,
-        // 2. are not compiled,
-        // 3. have unknown inputs
-
-        let infer_nodes = self.ag.sinks(|n| {
-            // 1. op variants
-            self.ag[n].op().is_some()
-            // 2. not compiled
-            && !self.compiled_ops.contains_key(&n.index())
-            // 3. unknown input
-            && self.tg[n].input.is_unknown()
-        });
-
-        let x = infer_nodes
-            .into_iter()
-            .map(OpNode) // we've filtered to just Ops
-            .fold((Vec::new(), None), |(mut chgs, mut err), op| {
-                match ty::infer::input(op, self) {
-                    Ok(ty) => chgs.push(tygraph::Chg::InferInput(op.idx(), ty).into()),
-                    Err(e) if chgs.is_empty() => {
-                        err = Some(e.crate_err(self.ag[op.idx()].op().unwrap().1))
-                    }
-                    _ => (),
-                }
-
-                (chgs, err)
-            });
-
-        match x {
-            (chgs, Some(err)) if chgs.is_empty() => Err(err),
-            (chgs, _) => Ok(self.apply_graph_chgs(chgs.into_iter())),
-        }
-    }
-}
-
-/// Infer outputs.
-impl<'d> Compiler<'d> {
-    fn infer_outputs(&mut self) -> bool {
-        if let Some(opnode) = self.output_infer_opnode.take() {
-            let defs = self.defs;
-            // replace a dummy compiler value
-            let this = std::mem::replace(
-                self,
-                Compiler {
-                    ag: Default::default(),
-                    tg: Default::default(),
-                    lg: Default::default(),
-                    compiled_ops: Default::default(),
-                    compiled_exprs: Default::default(),
-                    output_infer_opnode: Default::default(),
-                    flowed_edges: Default::default(),
-                    callsite_params: Default::default(),
-                    defs,
-                },
-            );
-            // infer output
-            let x = ty::infer::output(opnode, this);
-            // store if we were successful
-            let success = x.is_ok();
-            // bring back the compiler to self, throw out the dummy
-            *self = x.unwrap_or_else(|c| c);
-            // return the inferring result
-            success
-        } else {
-            false
-        }
     }
 }
 
@@ -820,6 +725,7 @@ impl<'a> Block<'a> {
             output_infer_opnode,
             callsite_params,
             compiled_exprs,
+            inferrence_depth,
         } = compiler;
 
         Block {
@@ -1075,7 +981,6 @@ mod tests {
     #[test]
     fn compilation_test_16() {
         // testing that defs do not resolve their OO if other defs are available
-
         let defs = &mut Definitions::default();
 
         lang::process_definition("def foo Num () { \\ 3 }", Default::default(), None, defs)
@@ -1090,5 +995,64 @@ mod tests {
 
         compile_w_defs("\\ 3 | foo", defs).unwrap();
         compile_w_defs("\\ 'foo' | foo", defs).unwrap();
+
+        // test that arity is robust
+        lang::process_definition(
+            "def foo Str (x:Num) { \\ 'foo' }",
+            Default::default(),
+            None,
+            defs,
+        )
+        .unwrap();
+
+        compile_w_defs("\\ 3 | foo", defs).unwrap();
+        compile_w_defs("\\ 'foo' | foo 2", defs).unwrap();
+
+        let x = compile_w_defs("\\ 3 | foo 2", defs)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            &x,
+            r#"Semantics Error: too many arguments supplied
+--> shell:10
+ | \ 3 | foo 2
+ |           ^ this argument is unnecessary
+"#
+        );
+        let x = compile_w_defs("\\ 3 | foo 2 3", defs)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            &x,
+            r#"Semantics Error: too many arguments supplied
+--> shell:10
+ | \ 3 | foo 2 3
+ |           ^^^ these arguments are unnecessary
+"#
+        );
+        let x = compile_w_defs("\\ 'foo' | foo", defs)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            &x,
+            r#"Semantics Error: expecting more than 0 arguments
+--> shell:10
+ | \ 'foo' | foo
+ |           ^^^ expecting additional argument(s)
+--> help: try using the `--help` flag to view requirements.
+          `foo` is defined to accept parameters `(x:Num)`
+"#
+        );
+        let x = compile_w_defs("\\ 'foo' | foo 2 3", defs)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            &x,
+            r#"Semantics Error: too many arguments supplied
+--> shell:16
+ | \ 'foo' | foo 2 3
+ |                 ^ this argument is unnecessary
+"#
+        );
     }
 }

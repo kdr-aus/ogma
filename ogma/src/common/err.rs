@@ -220,32 +220,95 @@ impl Error {
         }
     }
 
-    pub(crate) fn insufficient_args(block_tag: &Tag, args_count: u8) -> Self {
+    pub(crate) fn insufficient_args(
+        block_tag: &Tag,
+        args_count: u8,
+        signature: Option<&DefinitionImpl>,
+    ) -> Self {
+        use std::fmt::Write;
+
+        let mut help_msg = String::from("try using the `--help` flag to view requirements");
+
+        if let Some(impl_) = signature {
+            let mut params = impl_.params.iter().fold(String::new(), |mut s, param| {
+                write!(&mut s, "{}", param.ident).ok();
+                if let Some(ty) = &param.ty {
+                    write!(&mut s, ":{}", ty).ok();
+                }
+
+                s += " ";
+
+                s
+            });
+            params.pop(); // remove trailing space
+
+            writeln!(&mut help_msg, ".").ok();
+            write!(
+                &mut help_msg,
+                "          `{}` is defined to accept parameters `({})`",
+                impl_.name, params
+            )
+            .ok();
+        }
+
         Error {
             cat: Category::Semantics,
             desc: format!("expecting more than {} arguments", args_count),
             traces: trace(block_tag, "expecting additional argument(s)".to_string()),
-            help_msg: Some("try using the `--help` flag to view requirements".into()),
+            help_msg: Some(help_msg),
             ..Self::default()
         }
     }
 
-    pub(crate) fn unused_flag(flag: &Tag) -> Self {
+    pub(crate) fn unused_flags<'a, T>(flags: T) -> Self
+    where
+        T: Iterator<Item = &'a Tag>,
+    {
+        let delim = ", ";
+
+        let (desc, traces) = flags.fold(
+            (String::from("not expecting flags: "), Vec::new()),
+            |(desc, mut traces), flag| {
+                traces.push(Trace::from_tag(flag, "flag not supported".to_string()));
+                (desc + "`" + flag.str() + "`" + delim, traces)
+            },
+        );
+
+        let desc = desc.trim_end_matches(delim).to_string();
+
         Error {
             cat: Category::Semantics,
-            desc: format!("not expecting `{}` flag", flag),
-            traces: trace(flag, "flag not supported".to_string()),
+            desc,
+            traces,
             help_msg: Some("try using the `--help` flag to view requirements".into()),
             hard: true, // unrecoverable
             ..Self::default()
         }
     }
 
-    pub(crate) fn unused_arg(tag: &Tag) -> Self {
+    pub(crate) fn unused_args<'a, T>(args: T) -> Self
+    where
+        T: ExactSizeIterator<Item = &'a Tag>,
+    {
+        let len = args.len();
+        let tag = args
+            .cloned()
+            .reduce(|mut a, b| {
+                a.start = a.start.min(b.start);
+                a.end = a.end.max(b.end);
+                a
+            })
+            .unwrap_or_default();
+        let msg = if len == 1 {
+            "this argument is unnecessary"
+        } else {
+            "these arguments are unnecessary"
+        };
+
         Error {
             cat: Category::Semantics,
             desc: "too many arguments supplied".into(),
-            traces: trace(tag, Some("this argument is unnecessary".into())),
+            traces: trace(&tag, Some(msg.into())),
             ..Self::default()
         }
     }

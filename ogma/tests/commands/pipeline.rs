@@ -259,7 +259,7 @@ expected `String`, found `Number`
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: not expecting `foo` flag
+        r#"Semantics Error: not expecting flags: `foo`
 --> shell:33
  | fold 0 { \$row | get snd --Str --foo | \ 3 }
  |                                  ^^^ flag not supported

@@ -118,10 +118,12 @@ pub struct Block<'a> {
 impl<'a> Block<'a> {
     /// Carry out checks of the block's state.
     fn finalise(&self, _out_ty: &Type) -> Result<()> {
-        if let Some(flag) = self.flags.last() {
-            Err(Error::unused_flag(flag))
-        } else if let Some(arg) = self.args.get(0) {
-            Err(Error::unused_arg(self.ag[arg.idx()].tag()))
+        if !self.flags.is_empty() {
+            Err(Error::unused_flags(self.flags.iter()))
+        } else if !self.args.is_empty() {
+            Err(Error::unused_args(
+                self.args.iter().map(|a| self.ag[a.idx()].tag()),
+            ))
         } else {
             #[cfg(debug_assertions)]
             match &self.output_ty {

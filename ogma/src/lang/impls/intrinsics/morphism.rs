@@ -52,7 +52,7 @@ fn append_intrinsic(mut blk: Block) -> Result<Step> {
 
     let len = blk.args_len();
     if len == 0 {
-        return Err(Error::insufficient_args(blk.blk_tag(), 0));
+        return Err(Error::insufficient_args(blk.blk_tag(), 0, None));
     }
 
     let mut cols = Vec::with_capacity(len);

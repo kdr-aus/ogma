@@ -18,6 +18,59 @@
 use super::*;
 use astgraph::Parameter;
 
+impl<'d> Compiler<'d> {
+    pub fn insert_available_def_locals(&mut self) -> Result<bool> {
+        // only map defs where we know it will take that path.
+        // the reason is two fold;
+        // 1. errors can be hard returned which assists in debugging,
+        // 2. it avoids unnecessary variable slots which would not be used
+        let defs = self
+            .ag
+            .op_nodes()
+            // where input type is known
+            .filter_map(|n| self.tg[n.idx()].input.ty().map(|t| (n, t)))
+            // map to the def node path
+            .filter_map(|(n, ty)| self.ag.get_impl(n, ty))
+            // only if a Def
+            .filter_map(|n| n.def(&self.ag))
+            // defs without constructed callsite params
+            .filter(|d| !self.callsite_params.contains_key(&d.index()))
+            .collect::<Vec<_>>();
+
+        let chgs = &mut Vec::new();
+        let mut chgd = false;
+
+        for def in defs {
+            let params = def.params(&self.ag);
+
+            match map_def_params_into_variables(self, def, chgs)? {
+                LocalInjection::LgChange => (), // continue,
+                LocalInjection::Success { callsite_params } => {
+                    chgd = true;
+                    let _is_empty = self
+                        .callsite_params
+                        .insert(def.index(), callsite_params)
+                        .is_none();
+                    debug_assert!(
+                        _is_empty,
+                        "just replaced a callsite_params entry which should not happen"
+                    );
+
+                    // seal off the def's expr node
+                    // no more changes should occur since we have had succcess building.
+                    self.lg.seal_node(def.expr(&self.ag).idx(), &self.ag);
+                }
+                LocalInjection::UnknownReturnTy(argnode) => {
+                    // TODO what to do about unknown return arguments!?
+                }
+            }
+        }
+
+        let chgd2 = self.apply_graph_chgs(chgs.drain(..));
+        Ok(chgd || chgd2)
+    }
+}
+
 pub enum LocalInjection {
     Success { callsite_params: Vec<CallsiteParam> },
     LgChange,
@@ -41,8 +94,15 @@ pub fn map_def_params_into_variables(
         tg,
         lg,
         compiled_exprs,
+        defs,
         ..
     } = compiler;
+
+    // flags are not supported:
+    let flags = ag.get_flags(defnode);
+    if !flags.is_empty() {
+        return Err(Error::unused_flags(flags.iter()));
+    }
 
     let mut args = ag.get_args(defnode);
     args.reverse();
@@ -58,7 +118,25 @@ pub fn map_def_params_into_variables(
     for (idx, param) in params.into_iter().enumerate() {
         let idx = idx as u8;
         // point of failure
-        let argnode = arg::pop(&mut args, idx, blk_tag)?;
+        let argnode = arg::pop(&mut args, idx, blk_tag).map_err(|_| {
+            let op = defnode.parent(ag);
+            let optag = op.op_tag(ag);
+            let impl_ = tg[op.idx()]
+                .input
+                .ty()
+                .and_then(|inty| defs.impls().get_impl(optag, inty).ok())
+                .or_else(|| {
+                    defs.impls()
+                        .iter()
+                        .find_map(|x| (x.0 == optag.str()).then(|| x.2))
+                })
+                .and_then(|i| match i {
+                    Implementation::Definition(x) => Some(x.as_ref()),
+                    _ => None,
+                });
+
+            Error::insufficient_args(blk_tag, idx, impl_)
+        })?;
 
         if param.ty.is_expr() {
             // the parameter is lazy
@@ -75,6 +153,8 @@ pub fn map_def_params_into_variables(
             }
         }
     }
+
+    finalise_args(&args, ag)?;
 
     if lg_chg {
         return Ok(LocalInjection::LgChange);
@@ -162,4 +242,12 @@ fn map_callsite_param(
         })
         .map_err(|chg| chgs.push(chg.into()))
         .ok()))
+}
+
+fn finalise_args(mut args: &[ArgNode], ag: &AstGraph) -> Result<()> {
+    if !args.is_empty() {
+        Err(Error::unused_args(args.iter().map(|a| ag[a.idx()].tag())))
+    } else {
+        Ok(())
+    }
 }

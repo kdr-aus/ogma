@@ -540,15 +540,22 @@ impl Knowledge {
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
             // An any source can flow into an Any or Unknown dest
             (Any, Any | Unknown) => Ok(()),
+            // Cannot flow if two known unmatching types
+            (Known(t1), Known(t2)) if t1 != t2 => Err(Conflict::ConflictingKnown {
+                src: t1.clone(),
+                dst: t2.clone(),
+            }),
             // Cannot flow if obliged types does not match
             (Known(t1), Obliged(t2)) if t1 != t2 => Err(Conflict::UnmatchedObligation {
                 src: t1.clone(),
                 dst: t2.clone(),
             }),
-            (Known(t1), Known(t2)) if t1 != t2 => Err(Conflict::ConflictingKnown {
-                src: t1.clone(),
-                dst: t2.clone(),
-            }),
+
+            // TODO what to do here
+            // A known type can flow and OVERWRITE an inferred type, since inference is weak
+            (Known(_), Inferred(_)) => Err(Conflict::UnknownSrc),
+            // An inferred type can flow and OVERWRITE an inferred type, since inference is weak
+            (Inferred(_), Inferred(_)) => Err(Conflict::UnknownSrc),
 
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }

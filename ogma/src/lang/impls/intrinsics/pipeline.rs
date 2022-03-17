@@ -725,7 +725,7 @@ access of the fields is using `get t#` with the field number",
 fn tuple_intrinsic(mut blk: Block) -> Result<Step> {
     let len = blk.args_len();
     if len < 2 {
-        return Err(Error::insufficient_args(blk.blk_tag(), len as u8));
+        return Err(Error::insufficient_args(blk.blk_tag(), len as u8, None));
     }
     let mut v = Vec::with_capacity(len);
     for _ in 0..len {

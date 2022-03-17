@@ -121,7 +121,7 @@ impl<'a> Block<'a> {
     {
         let n = self
             .peek_next_arg_node()
-            .ok_or_else(|| Error::insufficient_args(self.op_tag(), self.args_count))?;
+            .ok_or_else(|| Error::insufficient_args(self.op_tag(), self.args_count, None))?;
         self.inject_manual_var_into_arg_locals(n, name, ty)
     }
 

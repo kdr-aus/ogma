@@ -62,7 +62,7 @@ input is carried through to each of the expressions
 fn if_intrinsic(mut blk: Block) -> Result<Step> {
     let args = blk.args_len();
     if args % 2 == 0 {
-        let mut e = Error::insufficient_args(blk.blk_tag(), args as u8);
+        let mut e = Error::insufficient_args(blk.blk_tag(), args as u8, None);
         e.help_msg =
             Some("`if` requires odd number of arguments to match true/false expressions".into());
         return Err(e);

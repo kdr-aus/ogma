@@ -419,11 +419,9 @@ impl AstGraph {
     /// Uses type specificity to rank the matches.
     /// If `opnode` does not point to an Op variant, returns `None`.
     pub fn get_impl(&self, opnode: OpNode, in_ty: &Type) -> Option<CmdNode> {
-        let opnode = NodeIndex::from(opnode);
+        opnode.debug_assert_is_op_node(self);
 
-        if self[opnode].op().is_none() {
-            return None;
-        }
+        let opnode = NodeIndex::from(opnode);
 
         let mut fallback = None;
 
@@ -841,6 +839,11 @@ impl CmdNode {
             .map(OpNode)
             .expect("command nodes should have a parent op node")
     }
+
+    /// Returns if this command node is a def node.
+    pub fn def(self, g: &AstGraph) -> Option<DefNode> {
+        g[self.idx()].def().map(|_| DefNode(self.idx()))
+    }
 }
 
 impl IntrinsicNode {
@@ -886,6 +889,10 @@ impl DefNode {
 }
 
 impl ExprNode {
+    pub fn tag(self, g: &AstGraph) -> &Tag {
+        g[self.idx()].tag()
+    }
+
     /// Fetches the first block's op for this expression.
     pub fn first_op(self, g: &AstGraph) -> OpNode {
         debug_assert!(
