@@ -56,6 +56,9 @@ fn typify_help_msg() {
  | Usage:
  |  => typify argument
  | 
+ | Flags:
+ |  --verbose: annotate cmd output and literals
+ | 
  | Examples:
  |  output the types of the ls command
  |  => typify ls
@@ -73,15 +76,15 @@ fn typify_test_raw() {
     let s = |s: &str| Ok(Value::Str(Str::new(s)));
 
     // Ident
-    let x = process_w_nil("typify foo-bar", defs);
+    let x = process_w_nil("typify foo-bar --verbose", defs);
     assert_eq!(x, s("foo-bar:Str"));
-    let x = process_w_nil("typify 'foo-bar'", defs);
+    let x = process_w_nil("typify 'foo-bar' --verbose", defs);
     assert_eq!(x, s("foo-bar:Str"));
-    let x = process_w_nil("typify ''", defs);
+    let x = process_w_nil("typify '' --verbose", defs);
     assert_eq!(x, s("'':Str"));
 
     // Number
-    let x = process_w_nil("typify 3.14e3", defs);
+    let x = process_w_nil("typify 3.14e3 --verbose", defs);
     assert_eq!(x, s("3.14e3:Num"));
 
     // Literals
@@ -116,9 +119,13 @@ fn typify_test_expressions() {
     let s = |s: &str| Ok(Value::Str(Str::new(s)));
 
     let x = process_w_nil("typify ls", defs);
+    assert_eq!(x, s("{:Nil ls }:Table"));
+    let x = process_w_nil("typify --verbose ls", defs);
     assert_eq!(x, s("{:Nil ls:Table }:Table"));
 
     let x = process_w_nil("typify { ls | filter foo < 3 }", defs);
+    assert_eq!(x, s("{:Nil ls |:Table filter foo {:Num < 3 }:Bool }:Table"));
+    let x = process_w_nil("typify --verbose { ls | filter foo < 3 }", defs);
     assert_eq!(
         x,
         s("{:Nil ls:Table |:Table filter:Table foo:Str {:Num <:Bool 3:Num }:Bool }:Table")
@@ -126,6 +133,11 @@ fn typify_test_expressions() {
 
     let x = process_w_nil(
         "typify { ls | fold '' + { \\$row | get foo --Str } | = bar }",
+        defs,
+    );
+    assert_eq!(x, s("{:Nil ls |:Table fold '' {:Str + {:Str \\ $row:TableRow |:TableRow get foo }:Str }:Str |:Str = bar }:Bool"));
+    let x = process_w_nil(
+        "typify --verbose { ls | fold '' + { \\$row | get foo --Str } | = bar }",
         defs,
     );
     assert_eq!(x, s("{:Nil ls:Table |:Table fold:Str '':Str {:Str +:Str {:Str \\:TableRow $row:TableRow |:TableRow get:Str foo:Str }:Str }:Str |:Str =:Bool bar:Str }:Bool"));

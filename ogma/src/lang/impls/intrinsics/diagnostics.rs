@@ -57,6 +57,7 @@ fn typify_help() -> HelpMessage {
     HelpMessage {
         desc: "output an expanded, type annotated, string of the argument".into(),
         params: vec![HelpParameter::Required("argument".into())],
+        flags: vec![("verbose", "annotate cmd output and literals")],
         examples: vec![
             HelpExample {
                 desc: "output the types of the ls command",
@@ -74,13 +75,13 @@ fn typify_help() -> HelpMessage {
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
     let arg = blk.next_arg()?; // get the next argument
     let argnode = arg.node(); // store the node index
-    let arg = arg.supplied(None)?.concrete()?; // ensure the argument compiles
+    let _ = arg.supplied(None)?.concrete()?; // ensure the argument compiles
+
+    let verbose = blk.get_flag("verbose").is_some();
 
     // if it compiles, we should have the maximal amount of type info
-    let s = eng::annotate_types(&blk, argnode); // build the type string
+    let s = eng::annotate_types(&blk, argnode, verbose); // build the type string
     let s = Str::from(s);
 
-    blk.eval_o(move |_, cx| {
-        cx.done_o(s.clone())
-    })
+    blk.eval_o(move |_, cx| cx.done_o(s.clone()))
 }

@@ -1,104 +1,104 @@
 //! Module handling type _annotations_, human readable type information.
 use super::*;
-use std::{borrow::Cow, fmt::{self, Write}};
-use graphs::{*, astgraph::*};
+use graphs::{astgraph::*, *};
+use std::{
+    borrow::Cow,
+    fmt::{self, Write},
+};
 
-pub fn types(blk: &Block, arg: graphs::ArgNode) -> String {
+pub fn types(blk: &Block, arg: graphs::ArgNode, verbose: bool) -> String {
     let mut s = String::new();
-    fmt(&mut s, blk, arg.idx());
+    fmt(&mut s, blk, arg.idx(), verbose);
     s
 }
 
-    fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex) {
-        use AstNode::*;
+fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool) {
+    use AstNode::*;
 
-        let Block { ag, tg, lg, .. } = blk;
+    let Block { ag, tg, lg, .. } = blk;
 
-        let out_ty = tg[node].output.ty();
-        let in_ty = tg[node].input.ty();
+    let out_ty = tg[node].output.ty();
+    let in_ty = tg[node].input.ty();
 
-        match &ag[node] {
-            Ident(t) => {
-                if t.str().is_empty() {
-        write!(s, "'':")
+    match &ag[node] {
+        Ident(t) => {
+            if t.str().is_empty() {
+                write!(s, "''")
             } else {
-        write!(s, "{}:", t)
-            }.unwrap();
+                write!(s, "{}", t)
+            }
+            .unwrap();
+            if v {
                 fmt_ty(s, out_ty)
             }
-            Num { val: _, tag } => {
-                write!(s, "{}:", tag).unwrap();
-                fmt_ty(s, out_ty)
-            }
-            Pound { ch, tag:_ } => {
-                write!(s, "#{}:", ch).unwrap();
-                fmt_ty(s, out_ty)
-            }
-            Var(t) => {
-                write!(s, "${}:", t).unwrap();
-                fmt_ty(s, out_ty)
-            }
-            Expr(_) => {
-                write!(s, "{{").unwrap();
-
-                let op = ExprNode(node).first_op(ag); // get the first op
-                fmt_op(s, blk, op); // recurse into the formatter with first op
-
-                write!(s, " }}:").unwrap();
-                fmt_ty(s, out_ty)
-            },
-            Op { op: _, blk: _ } => fmt_op(s, blk, OpNode(node)),
-            Def { .. } | Intrinsic { .. } | Flag { .. } => unreachable!(),
         }
-    }
+        Num { val: _, tag } => {
+            write!(s, "{}", tag).unwrap();
+            if v {
+                fmt_ty(s, out_ty)
+            }
+        }
+        Pound { ch, tag: _ } => {
+            write!(s, "#{}", ch).unwrap();
+            fmt_ty(s, out_ty)
+        }
+        Var(t) => {
+            write!(s, "${}", t).unwrap();
+            fmt_ty(s, out_ty)
+        }
+        Expr(_) => {
+            write!(s, "{{").unwrap();
 
-fn fmt_op(s: &mut String, blk: &Block, op: OpNode) {
+            let op = ExprNode(node).first_op(ag); // get the first op
+            fmt_op(s, blk, op, v); // recurse into the formatter with first op
+
+            write!(s, " }}").unwrap();
+            fmt_ty(s, out_ty)
+        }
+        Op { op: _, blk: _ } => fmt_op(s, blk, OpNode(node), v),
+        Def { .. } | Intrinsic { .. } | Flag { .. } => unreachable!(),
+    }
+}
+
+fn fmt_op(s: &mut String, blk: &Block, op: OpNode, v: bool) {
     let Block { ag, tg, .. } = blk;
 
-        let out_ty = tg[op.idx()].output.ty();
-        let in_ty = tg[op.idx()].input.ty();
+    let out_ty = tg[op.idx()].output.ty();
+    let in_ty = tg[op.idx()].input.ty();
 
-                // fmt as - ':IN op:OUT'
-                write!(s, ":").unwrap();
-                fmt_ty(s, in_ty);
-                write!(s, " {}:", op.op_tag(ag)).unwrap();
-                fmt_ty(s, out_ty);
+    // fmt as - ':IN op:OUT'
+    // if not verbose, leave the trailing out
+    fmt_ty(s, in_ty);
+    write!(s, " {}", op.op_tag(ag)).unwrap();
+    if v {
+        fmt_ty(s, out_ty);
+    }
 
-                // obtain the path taken
-                let args = in_ty.and_then(|t| ag.get_impl(op, t))
-                    .map(|cmd| ag.get_args(cmd))
-                    .unwrap_or_default();
+    // obtain the path taken
+    let args = in_ty
+        .and_then(|t| ag.get_impl(op, t))
+        .map(|cmd| ag.get_args(cmd))
+        .unwrap_or_default();
 
-                for arg in args {
-                    s.push(' '); // leading space
-                    fmt(s, blk, arg.idx()); // recurse to format arg
-                }
+    for arg in args {
+        s.push(' '); // leading space
+        fmt(s, blk, arg.idx(), v); // recurse to format arg
+    }
 
-                if let Some(next) = op.next(ag) {
-                    // there's a next block
-                    write!(s, " |").unwrap();
-                    fmt_op(s, blk, next); // recurse into next op
-                }
+    if let Some(next) = op.next(ag) {
+        // there's a next block
+        write!(s, " |").unwrap();
+        fmt_op(s, blk, next, v); // recurse into next op
+    }
 }
 
 fn fmt_ty(s: &mut String, t: Option<&Type>) {
     match t {
-        Some(t) => write!(s, "{}", t.fmt_annotation()),
-        None => write!(s, "?")
-    }.unwrap()
+        Some(t) => write!(s, ":{}", t.fmt_annotation()),
+        None => write!(s, ":?"),
+    }
+    .unwrap()
 }
-
-        //         match &self.hold {
-        //             Hold::Expr(evaluator) => return evaluator.type_annotation().into(),
-        //             Hold::Lit(_) => if self.tag.str().is_empty() {
-        //                 format!("'':{}", self.out_ty.fmt_annotation())
-        //             } else {
-        //                 format!("{}:{}", self.tag, self.out_ty.fmt_annotation())
-        //             }
-        //             .into(),
-        //             Hold::Var(_) => format!("${}:{}", self.tag, self.out_ty.fmt_annotation()).into(),
-        //         }
-
 
 impl Type {
     /// Display this type for type annotation.

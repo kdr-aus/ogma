@@ -194,12 +194,13 @@ impl<'a> ArgBuilder<'a> {
                 let hold = self.map_astnode_into_hold()?;
 
                 if hold.ty().as_ref() == &out_ty {
-                Ok(Argument {
-                    tag,
-                    in_ty,
-                    out_ty,
-                    hold,
-                }) } else {
+                    Ok(Argument {
+                        tag,
+                        in_ty,
+                        out_ty,
+                        hold,
+                    })
+                } else {
                     Err(Error::unexp_arg_output_ty(&out_ty, &hold.ty(), &tag))
                 }
             }

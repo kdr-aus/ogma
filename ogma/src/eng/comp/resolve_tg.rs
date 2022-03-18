@@ -102,9 +102,10 @@ impl<'d> Compiler<'d> {
                         to,
                         format!("but this node is inferred to use input `{}`", dst),
                     ),
-                    OI | OO => {
-                        Trace::from_tag(to, format!("but this node is inferred to return `{}`", dst))
-                    }
+                    OI | OO => Trace::from_tag(
+                        to,
+                        format!("but this node is inferred to return `{}`", dst),
+                    ),
                 };
 
                 err.desc.push_str(". Conflicting inferred type");

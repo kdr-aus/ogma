@@ -528,8 +528,8 @@ impl Knowledge {
         // For now we basically disallow many of the flow types
         // This is to test the TG flow and to ensure that the TG's flow is something that makes
         // sense but is also not overly constrained.
-        use Knowledge::*;
         use Conflict::*;
+        use Knowledge::*;
 
         match (self, into) {
             // Unknown source cannot flow into anything!
