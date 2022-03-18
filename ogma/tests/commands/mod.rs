@@ -16,7 +16,7 @@ mod cmp;
 // mod diagnostics;
 mod io;
 mod logic;
-// mod morphism;
+mod morphism;
 mod pipeline;
 mod types;
 
