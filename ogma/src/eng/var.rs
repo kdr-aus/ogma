@@ -97,6 +97,17 @@ impl Variable {
     }
 }
 
+impl Hold {
+    pub fn ty(&self) -> std::borrow::Cow<Type> {
+        use std::borrow::Cow::*;
+        match self {
+            Hold::Lit(v) => Owned(v.ty()),
+            Hold::Var(v) => Borrowed(v.ty()),
+            Hold::Expr(s) => Borrowed(s.out_ty()),
+        }
+    }
+}
+
 // ###### LOCALS ###############################################################
 #[derive(Debug)]
 struct LocalEntry {

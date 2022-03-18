@@ -60,6 +60,11 @@ pub enum Conflict {
         /// Obligation.
         dst: Type,
     },
+    UnmatchedInferred {
+        src: Type,
+        /// Inferred.
+        dst: Type,
+    },
 }
 
 pub struct ResolutionError {
@@ -524,10 +529,11 @@ impl Knowledge {
         // This is to test the TG flow and to ensure that the TG's flow is something that makes
         // sense but is also not overly constrained.
         use Knowledge::*;
+        use Conflict::*;
 
         match (self, into) {
             // Unknown source cannot flow into anything!
-            (Unknown, _) => Err(Conflict::UnknownSrc),
+            (Unknown, _) => Err(UnknownSrc),
 
             // A known source can flow into an unknown or any dest
             (Known(_), Unknown | Any) => Ok(()),
@@ -541,12 +547,25 @@ impl Knowledge {
             // An any source can flow into an Any or Unknown dest
             (Any, Any | Unknown) => Ok(()),
             // Cannot flow if two known unmatching types
-            (Known(t1), Known(t2)) if t1 != t2 => Err(Conflict::ConflictingKnown {
+            (Known(t1), Known(t2)) if t1 != t2 => Err(ConflictingKnown {
                 src: t1.clone(),
                 dst: t2.clone(),
             }),
             // Cannot flow if obliged types does not match
-            (Known(t1), Obliged(t2)) if t1 != t2 => Err(Conflict::UnmatchedObligation {
+            (Known(t1), Obliged(t2)) if t1 != t2 => Err(UnmatchedObligation {
+                src: t1.clone(),
+                dst: t2.clone(),
+            }),
+            // Cannot flow if already inferred and does not match
+            // NOTE: This might not be correct, the error might be right, but the handling might
+            // need to be changed. For instance, if an inferrence does not match a known flow, then
+            // we could _reset_ the compiler's compiled stack/steps and locals, but **keep the type
+            // graph**. This way the information of the type graph remains, and it can 'reset' it's
+            // flow.
+            // NOTE: this would need to clear _all_ Inferred type graph entries.
+            // NOTE: probably do this later if it is found that unreasonable errors are being
+            // returned.
+            (Known(t1), Inferred(t2)) if t1 != t2 => Err(UnmatchedInferred {
                 src: t1.clone(),
                 dst: t2.clone(),
             }),

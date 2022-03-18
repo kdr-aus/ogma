@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, ogma::Error>;
 
 mod arithmetic;
 mod cmp;
-// mod definitions;
+mod definitions;
 // mod diagnostics;
 mod io;
 mod logic;
