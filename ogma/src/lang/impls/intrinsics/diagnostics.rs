@@ -28,7 +28,7 @@ fn benchmark_help() -> HelpMessage {
 }
 
 fn benchmark_intrinsic(mut blk: Block) -> Result<Step> {
-    let expr = blk.next_arg(None)?;
+    let expr = blk.next_arg()?.supplied(None)?.concrete()?;
     blk.eval_o(move |val, cx| {
         let start = Instant::now();
         expr.resolve(|| val, &cx)?;
@@ -72,7 +72,7 @@ fn typify_help() -> HelpMessage {
 }
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
-    let arg = blk.next_arg(None)?;
+    let arg = blk.next_arg()?.supplied(None)?.concrete()?;
 
     blk.eval_o(move |_, cx| {
         let annotation = Str::from(arg.type_annotation().into_owned());

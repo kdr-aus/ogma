@@ -38,7 +38,7 @@ macro_rules! add {
 
 mod arithmetic;
 mod cmp;
-// mod diagnostics;
+mod diagnostics;
 mod io;
 mod logic;
 mod morphism;
@@ -47,7 +47,7 @@ mod pipeline;
 pub fn add_intrinsics(impls: &mut Implementations) {
     arithmetic::add_intrinsics(impls);
     cmp::add_intrinsics(impls);
-    //     diagnostics::add_intrinsics(impls);
+    diagnostics::add_intrinsics(impls);
     io::add_intrinsics(impls);
     logic::add_intrinsics(impls);
     morphism::add_intrinsics(impls);
