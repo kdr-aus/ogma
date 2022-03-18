@@ -17,7 +17,7 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 type LocalsMap = IndexMap<Locals>;
 
 pub(crate) use self::{
-    eval::{CodeInjector, DefImplEvaluator, Evaluator},
+    eval::{CodeInjector, DefImplEvaluator, Eval, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals},
 };

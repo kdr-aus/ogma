@@ -482,7 +482,7 @@ impl<'d> Compiler<'d> {
                         .map(|op| op.blk_tag(&self.ag));
 
                     for parent in parents {
-                        e = e.add_trace(parent);
+                        e = e.add_trace(parent, None);
                     }
 
                     err = Some(e);

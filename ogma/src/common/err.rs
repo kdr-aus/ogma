@@ -138,9 +138,12 @@ pub fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
 }
 
 impl Error {
-    pub(crate) fn add_trace(mut self, tag: &Tag) -> Self {
-        self.traces
-            .push(Trace::from_tag(tag, "invoked here".to_string()));
+    pub(crate) fn add_trace<M>(mut self, tag: &Tag, msg: M) -> Self
+    where
+        M: Into<Option<String>>,
+    {
+        let msg = msg.into().unwrap_or_else(|| "invoked here".to_string());
+        self.traces.push(Trace::from_tag(tag, msg));
         self
     }
 
