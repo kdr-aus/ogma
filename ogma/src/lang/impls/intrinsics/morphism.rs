@@ -699,15 +699,8 @@ fn grpby_intrinsic(mut blk: Block) -> Result<Step> {
     // the expression which will be grouped on
     let key = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
     let ordty = Ty::Def(types::ORD.get());
-    let cmpr = BinaryOp::new(
-        "cmp",
-        key.out_ty(),
-        &ordty,
-        "grp-by",
-        &key.tag,
-        blk.defs,
-        cnv_value_to_ord,
-    )?;
+
+    let cmpr = BinaryOp::cmp_cmd(key.out_ty(), "grp-by", &blk, &key)?;
 
     blk.eval_o::<_, Table>(move |table, cx| {
         let table = Table::try_from(table)?;
@@ -1399,15 +1392,7 @@ fn sortby_intrinsic(mut blk: Block) -> Result<Step> {
     let key = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
 
     let ordty = Ty::Def(types::ORD.get());
-    let cmpr = BinaryOp::new(
-        "cmp",
-        key.out_ty(),
-        &ordty,
-        "sort-by",
-        &key.tag,
-        blk.defs,
-        cnv_value_to_ord,
-    )?;
+    let cmpr = BinaryOp::cmp_cmd(key.out_ty(), "sort-by", &blk, &key)?;
 
     blk.eval_o::<_, Table>(move |table, cx| {
         let table = Table::try_from(table)?;

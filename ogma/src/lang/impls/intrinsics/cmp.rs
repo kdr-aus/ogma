@@ -115,7 +115,10 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
                     blk.blk_tag(),
                 ))
             } else {
-                blk.eval(exp_ty, move |input, cx| injector.eval(input, cx))
+                blk.eval(exp_ty, move |input, cx| {
+                    let v = injector.eval(input, &cx)?;
+                    cx.done(v)
+                })
             }
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
@@ -277,7 +280,10 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
                     blk.blk_tag(),
                 ))
             } else {
-                blk.eval(exp_ty, move |input, cx| injector.eval(input, cx))
+                blk.eval(exp_ty, move |input, cx| {
+                    let v = injector.eval(input, &cx)?;
+                    cx.done(v)
+                })
             }
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),

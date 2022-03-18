@@ -368,6 +368,10 @@ impl CodeInjector<Build> {
         })
     }
 
+    /// Map the **next** block argument to the specified variable `name`.
+    /// Optionally specify a concrete input (think `Value::Nil`), or leave `None` to use the
+    /// block's input.
+    /// `returns` is the variable type.
     pub fn map_arg_to_var<N: Into<Str>>(
         &mut self,
         blk: &mut Block,
@@ -385,6 +389,14 @@ impl CodeInjector<Build> {
         let var = self.data.locals.add(name.into(), ty, Tag::default());
         self.args.push((arg, var, input));
         Ok(())
+    }
+
+    /// Create a new variable _scoped to the injected code_.
+    /// **Be sure to `set_data` before an eval.**
+    /// This is useful for creating variables that will be manually set, such as in `grp-by` and
+    /// `sort-by`.
+    pub fn new_var<N: Into<Str>>(&mut self, name: N, ty: Type) -> Variable {
+        self.data.locals.add(name.into(), ty, Tag::default())
     }
 
     pub fn compile(self, in_ty: Type, defs: &Definitions) -> Result<CodeInjector<Eval>> {
@@ -410,26 +422,50 @@ impl CodeInjector<Eval> {
         self.data.stack.out_ty()
     }
 
-    pub fn eval(&self, input: Value, outer_cx: Context) -> StepR {
+    /// The injected code's local environment.
+    ///
+    /// **This is the environment that should be passed through to the eval calls**.
+    pub fn env(&self) -> &Environment {
+        &self.data.env
+    }
+
+    /// Evaluate the injected code.
+    /// **Note that the `cx`'s env is not used, instead the local environment is used.
+    ///
+    /// > If variables are needing to be set, they should be set in a clone of the local
+    /// environment and passed to `eval_with_env`. This is generally more performant when
+    /// _multiple_ variables are being set in an eval, such as in `grp-by` or `sort-by`.
+    pub fn eval(&self, input: Value, cx: &Context) -> Result<Value> {
+        // build a local environment on each invocation
+        let mut env = self.env().clone();
+
+        self.eval_with_env(input, cx, env)
+    }
+
+    /// Use the supplied environment.
+    pub fn eval_with_env(&self, input: Value, cx: &Context, mut env: Environment) -> Result<Value> {
         let CodeInjector {
             args,
-            data: Eval { stack, env },
+            data: Eval { stack, env: _ },
         } = self;
-
-        // build a local environment on each invocation
-        let mut env = env.clone();
 
         // evalulate any mapped args and set the variable
         // NOTE: this uses the outer_cx since it needs the caller's env
         for (arg, var, input2) in args {
-            let v = arg.resolve(|| input2.as_ref().unwrap_or(&input).clone(), &outer_cx)?;
+            let v = arg.resolve(|| input2.as_ref().unwrap_or(&input).clone(), &cx)?;
             var.set_data(&mut env, v);
         }
 
         // evalulate the injected code
-        let (val, _) = stack.eval(input, Context { env, ..outer_cx })?;
-
-        // return the caller's environment
-        outer_cx.done(val)
+        stack
+            .eval(
+                input,
+                Context {
+                    env,
+                    root: cx.root,
+                    wd: cx.wd,
+                },
+            )
+            .map(|x| x.0)
     }
 }

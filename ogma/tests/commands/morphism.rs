@@ -33,7 +33,7 @@ fn append_help_msg() {
 fn append_testing() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("append { + { get first } get snd }", defs);
+    let x = process_w_table("append { let {get first} $f | get snd | + $f }", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3"), o("_append1")],
         vec![n(0), n(3), o("a"), n(3)],
@@ -42,7 +42,7 @@ fn append_testing() {
     ];
     check_is_table(x, exp);
     let x = process_w_table(
-        "let $x | append { + { get first } get snd } --foo { get 'Heading 3' --Str }",
+        "let $x | append { let { get first } $f | get snd | + $f } --foo { get 'Heading 3' --Str }",
         defs,
     );
     let exp = vec![
@@ -366,10 +366,8 @@ fn row_filtering_using_def() {
 --> shell:7
  | filter gt10
  |        ^^^^ expecting additional argument(s)
---> shell:0
- | filter gt10
- | ^^^^^^^^^^^ invoked here
---> help: try using the `--help` flag to view requirements
+--> help: try using the `--help` flag to view requirements.
+          `gt10` is defined to accept parameters `(n)`
 "
     );
     let x = process_w_table("filter gt10 snd", defs);
@@ -463,7 +461,7 @@ fn fold_while_test() {
     assert_eq!(x, Ok(Value::Num(36.into())));
     let x = process_w_num("range 1 20 | fold-while 1 {< 1e6} * $row.i", defs);
     assert_eq!(x, Ok(Value::Num((3628800).into())));
-    let x = process_w_num("range 1 20 | fold-while {Tuple 0 0} {get t0 | < 20} { Tuple {+ #i.t0 #i.t1} $row.i } | get t0", defs);
+    let x = process_w_num("range 1 20 | fold-while {Tuple 0 0} {get t0 | < 20} { let {get t0} $t0 | get t1 | + $t0 | Tuple #i $row.i } | get t0", defs);
     assert_eq!(x, Ok(Value::Num((21).into())));
 }
 
@@ -648,7 +646,10 @@ fn map_testing() {
     check_is_table(x, exp);
 
     // check parallelsiation doesn't wreak havoc
-    let x = process_w_nil("range 1 100 | map i { \\$row | + {get i} {get i} }", defs);
+    let x = process_w_nil(
+        "range 1 100 | map i --Num { \\$row | let {get i} $i | get i | + $i }",
+        defs,
+    );
     let mut exp = vec![vec![o("i")]];
     exp.extend((1..100).map(|i| vec![n(i * 2)]).collect::<Vec<_>>());
     check_is_table(x, exp);
@@ -865,8 +866,7 @@ fn ren_err_testing() {
         "Semantics Error: too many arguments supplied
 --> shell:4
  | ren first
- |     ^^^^^ identifier argument is unnecessary
---> help: the command does not require or support additional arguments
+ |     ^^^^^ this argument is unnecessary
 "
     );
 }
@@ -907,7 +907,10 @@ fn ren_with_help_msg() {
 fn ren_with_testing() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("map first to-str | map snd to-str | ren-with 1 #i", defs);
+    let x = process_w_table(
+        "map --Num first to-str | map --Num snd to-str | ren-with --Str 1 { \\ #i }",
+        defs,
+    );
     let exp = vec![
         vec![o("0"), o("3.0"), o("a")],
         vec![o("0"), o("3.0"), o("a")],
@@ -917,7 +920,10 @@ fn ren_with_testing() {
     check_is_table(x, exp);
 
     // test the derived impl skip-hdrs
-    let x = process_w_table("map first to-str | map snd to-str | skip-hdrs 2", defs);
+    let x = process_w_table(
+        "map --Num first to-str | map --Num snd to-str | skip-hdrs 2",
+        defs,
+    );
     let exp = vec![
         vec![o("1.0"), o("20.0"), o("b")],
         vec![o("-30.0"), o("100.0"), o("z")],
@@ -929,7 +935,7 @@ fn ren_with_testing() {
 fn ren_with_err_testing() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("ren-with 1 hello", defs)
+    let x = process_w_table("ren-with --Str 1 hello", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
@@ -937,28 +943,28 @@ fn ren_with_err_testing() {
         &x,
         "Evaluation Error: table entry for [row:1,col:'0'] did not have expected type
 expected `String`, found `Number`
---> shell:9
- | ren-with 1 hello
- |          ^
+--> shell:15
+ | ren-with --Str 1 hello
+ |                ^
 --> help: column entries must have a matching type
 "
     );
 
-    let x = process_w_table("ren-with 100 foo", defs)
+    let x = process_w_table("ren-with --Str 100 foo", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
     assert_eq!(
         &x,
         "Evaluation Error: row index `100` is outside table bounds
---> shell:9
- | ren-with 100 foo
- |          ^^^ `100` resolves to 100
+--> shell:15
+ | ren-with --Str 100 foo
+ |                ^^^ `100` resolves to 100
 --> help: use `len` command to check the size of the table
 "
     );
 
-    let x = process_w_table("\\Table | ren-with 100 foo", defs)
+    let x = process_w_table("\\Table | ren-with --Str 100 foo", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
@@ -966,8 +972,8 @@ expected `String`, found `Number`
         &x,
         "Evaluation Error: empty table
 --> shell:9
- | \\Table | ren-with 100 foo
- |          ^^^^^^^^^^^^^^^^
+ | \\Table | ren-with --Str 100 foo
+ |          ^^^^^^^^^^^^^^^^^^^^^^
 "
     );
 }
@@ -1247,11 +1253,17 @@ fn sortby_errors() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: `cmp` implementation not suitable for `sort-by` with `Point`
+        "Semantics Error: `cmp` does not support `Point` input data
+--> <ogma>:0
+ | cmp $rhs
+ | ^^^
+--> shell:0
+ | sort-by Point 1 0
+ | ^^^^^^^ sort-by requires expression output to implement `cmp` with a single argument
 --> shell:8
  | sort-by Point 1 0
- |         ^^^^^^^^^ this returns `Point`
---> help: `cmp` implementation expects T=>(rhs:T) -> Ord
+ |         ^^^^^^^^^ expression returns `Point`
+--> help: use `cmp --help` to view requirements. consider implementing `def cmp`
 "
     );
 
@@ -1269,11 +1281,18 @@ fn sortby_errors() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: `cmp` implementation not suitable for `sort-by` with `Point`
+        "Semantics Error: expecting more than 1 arguments
+--> <ogma>:0
+ | cmp $rhs
+ | ^^^^^^^^ expecting additional argument(s)
+--> shell:0
+ | sort-by Point 1 0
+ | ^^^^^^^ sort-by requires expression output to implement `cmp` with a single argument
 --> shell:8
  | sort-by Point 1 0
- |         ^^^^^^^^^ this returns `Point`
---> help: `cmp` implementation expects T=>(rhs:T) -> Ord
+ |         ^^^^^^^^^ expression returns `Point`
+--> help: try using the `--help` flag to view requirements.
+          `cmp` is defined to accept parameters `(rhs x)`
 "
     );
 
@@ -1291,14 +1310,13 @@ fn sortby_errors() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `Ord`, found `Point`
---> <ogma>:0
- | cmp $rhs
- | ^^^^^^^^ this argument returns type `Point`
+        "Semantics Error: `Point`'s `cmp` impl returns `Point`, expecting `Ord`
+--> shell:0
+ | sort-by Point 1 0
+ | ^^^^^^^ sort-by requires expression output to implement `cmp` with a single argument
 --> shell:8
  | sort-by Point 1 0
- |         ^^^^^^^^^ `Point`'s cmp impl returns `Point`
---> help: commands may require specific argument types, use `--help` to view requirements
+ |         ^^^^^^^^^ expression returns `Point`
 "
     );
 }

@@ -66,7 +66,7 @@ impl<'a> Block<'a> {
             A::Expr(expr) => {
                 let tag = expr.tag.clone();
                 let eval = Evaluator::construct(in_ty.clone(), expr, self.defs, locals.clone())
-                    .map_err(|e| e.add_trace(self.blk_tag()))?;
+                    .map_err(|e| e.add_trace(self.blk_tag(), None))?;
                 let out_ty = eval.ty().clone();
                 todo!()
                 //                 (Hold::Expr(eval), tag, out_ty)

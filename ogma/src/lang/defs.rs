@@ -169,7 +169,7 @@ impl Definitions {
         );
         add_derived_impl(
             defs,
-            "def skip-hdrs Table (num:Num) { ren-with $num #i | skip $num }",
+            "def skip-hdrs Table (num:Num) { ren-with --Str $num {\\#i} | skip $num }",
             OperationCategory::Morphism,
             "skip the number of headers, setting the table headers to the top most row
 the row is assumed to be populated with strings, if not an error occurs",

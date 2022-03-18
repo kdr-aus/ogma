@@ -277,9 +277,8 @@ fn resolve_trow_expr_par(table: &Table, expr: &eng::Argument, cx: &Context) -> R
 /// grp-by, so this provides a common structure around setting the env, doing the resolve, and
 /// handling the variables and error checking. `<cmd>` can be any ogma command.
 struct BinaryOp<T> {
-    env: eng::Environment,
     rhs: eng::Variable,
-    evaluator: eng::Evaluator,
+    injector: eng::CodeInjector<eng::Eval>,
     transformation: T,
 }
 
@@ -288,73 +287,54 @@ struct BinaryOpRef<'a, T> {
     binop: &'a BinaryOp<T>,
 }
 
+type CmpReturnHlpr<O> = Box<BinaryOp<Box<dyn Fn(Value) -> O + Send + Sync>>>;
+
 impl<T> BinaryOp<T> {
     /// Construct a new binary operation `cmd`.
     ///
-    /// `ty` is the type of the `lhs` and `rhs`.
-    /// `out_ty` is the expected type returning from `cmd` (eg `Ord` for `cmp`).
-    /// `caller` is the caller command, used for error reporting.
-    /// `errtag` is the some tag which defines any error location.
+    /// - `ty` is the type of the `lhs` and `rhs`.
+    /// - `out_ty` is the expected type returning from `cmd` (eg `Ord` for `cmp`).
+    /// - `errtag` is the some tag which defines any error location.
     pub fn new<O>(
         cmd: &str,
         ty: &Type,
         out_ty: &Type,
-        caller: &str,
-        errtag: &Tag,
         defs: &Definitions,
         value_trns: T,
     ) -> Result<Box<Self>>
     where
         T: Fn(Value) -> O,
     {
-        // create the binary expression and the variables tag
-        let (expr, var) = Self::create_expr_and_var(cmd);
-        let mut locals = eng::Locals::default();
-        // create the $rhs to be set in the new env
-        let rhs = locals.add_new_var("rhs".into(), ty.clone(), var);
-        // construct the expr evaluator
-        // this uses the pseudo-env and the expr we construct, with an input of the type.
-        // if the impl of <cmd> on type does not conform to expectations an error will occur
-        let evaluator =
-            eng::Evaluator::construct(ty.clone(), expr, defs, locals.clone()).map_err(|_| {
-                Error {
-                    cat: err::Category::Semantics,
-                    desc: format!(
-                        "`{}` implementation not suitable for `{}` with `{}`",
-                        cmd, caller, ty
-                    ),
-                    traces: vec![err::Trace::from_tag(
-                        errtag,
-                        format!("this returns `{}`", ty),
-                    )],
-                    help_msg: Some(format!(
-                        "`{}` implementation expects T=>(rhs:T) -> {}",
-                        cmd, out_ty
-                    )),
-                    ..Error::default()
-                }
-            })?;
+        let code = format!("{} $rhs", cmd);
 
-        if evaluator.ty() != out_ty {
-            let mut err = Error::unexp_arg_output_ty(out_ty, evaluator.ty(), evaluator.tag());
-            err.traces.push(err::Trace::from_tag(
-                errtag,
-                format!("`{}`'s {} impl returns `{}`", ty, cmd, evaluator.ty()),
-            ));
-            return Err(err);
+        let mut injector = eng::CodeInjector::new(code, defs)
+            .map_err(|e| eprintln!("{}", e))
+            .expect("this should parse fine");
+
+        let rhs = injector.new_var("rhs", ty.clone());
+
+        let injector = injector.compile(ty.clone(), defs)?;
+
+        if injector.out_ty() != out_ty {
+            let oty = injector.out_ty();
+            return Err(Error {
+                cat: err::Category::Semantics,
+                desc: format!(
+                    "`{}`'s `{}` impl returns `{}`, expecting `{}`",
+                    ty, cmd, oty, out_ty
+                ),
+                ..Default::default()
+            });
         }
 
-        todo!("this'll need some thought...");
-        // probably just use the code injector?
-
-        //         Ok(Self {
-        //             env: eng::Environment::new(locals),
-        //             rhs,
-        //             evaluator,
-        //             transformation: value_trns,
-        //         })
-        //         .map(Box::new)
+        Ok(Self {
+            rhs,
+            injector,
+            transformation: value_trns,
+        })
+        .map(Box::new)
     }
+
 
     /// Creates the expression: `<cmd> $rhs`. Returns the variable tag.
     fn create_expr_and_var(cmd: &str) -> (ast::Expression, Tag) {
@@ -390,9 +370,33 @@ impl<T> BinaryOp<T> {
 
     pub fn pin_env(&self) -> BinaryOpRef<T> {
         BinaryOpRef {
-            env: self.env.clone(),
+            env: self.injector.env().clone(),
             binop: self,
         }
+    }
+}
+
+impl BinaryOp<()> {
+
+    /// Helper for creating the `cmp` binary operation.
+    ///
+    /// - `ty` is type of the `lhs` _and_ `rhs`.
+    /// - `caller` is the caller command, used for error reporting.
+    /// - `arg` is generally the expression argument being used.
+    pub fn cmp_cmd(
+        ty: &Type,
+        caller: &str,
+        blk: &Block,
+        arg: &eng::Argument,
+    ) -> Result<CmpReturnHlpr<std::cmp::Ordering>> {
+        let ordty = Ty::Def(types::ORD.get());
+        BinaryOp::new("cmp", ty, &ordty, blk.defs, Box::new(cnv_value_to_ord) as Box<_>).map_err(|e| {
+            e.add_trace(
+                blk.op_tag(),
+                format!("{} requires expression output to implement `cmp` with a single argument", caller)
+            )
+            .add_trace(&arg.tag, format!("expression returns `{}`", arg.out_ty()))
+        })
     }
 }
 
@@ -405,14 +409,10 @@ impl<'a, T> BinaryOpRef<'a, T> {
         T: Fn(Value) -> O,
     {
         self.binop.rhs.set_data(&mut self.env, rhs);
-        let (v, _) = self.binop.evaluator.eval(
-            lhs,
-            Context {
-                env: self.env.clone(),
-                root: cx.root,
-                wd: cx.wd,
-            },
-        )?;
+        let v = self
+            .binop
+            .injector
+            .eval_with_env(lhs, cx, self.env.clone())?;
         Ok((self.binop.transformation)(v))
     }
 }
