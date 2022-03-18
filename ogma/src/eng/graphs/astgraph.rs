@@ -417,7 +417,9 @@ impl AstGraph {
     /// Matches a specific implementation of a command (op) with the given input type.
     ///
     /// Uses type specificity to rank the matches.
-    /// If `opnode` does not point to an Op variant, returns `None`.
+    ///
+    /// Returns `None` if no matches found which can occur if there are definitions keyed on
+    /// specific types, but the input type does not match.
     pub fn get_impl(&self, opnode: OpNode, in_ty: &Type) -> Option<CmdNode> {
         opnode.debug_assert_is_op_node(self);
 

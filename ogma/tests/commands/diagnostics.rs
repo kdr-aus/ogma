@@ -116,17 +116,17 @@ fn typify_test_expressions() {
     let s = |s: &str| Ok(Value::Str(Str::new(s)));
 
     let x = process_w_nil("typify ls", defs);
-    assert_eq!(x, s("{:Nil ls }:Table"));
+    assert_eq!(x, s("{:Nil ls:Table }:Table"));
 
     let x = process_w_nil("typify { ls | filter foo < 3 }", defs);
     assert_eq!(
         x,
-        s("{:Nil ls |:Table filter foo:Str {:Num < 3:Num }:Bool }:Table")
+        s("{:Nil ls:Table |:Table filter:Table foo:Str {:Num <:Bool 3:Num }:Bool }:Table")
     );
 
     let x = process_w_nil(
         "typify { ls | fold '' + { \\$row | get foo --Str } | = bar }",
         defs,
     );
-    assert_eq!(x, s("{:Nil ls |:Table fold '':Str {:Str + {:Str \\ $row:TableRow |:TableRow get foo:Str }:Str }:Str |:Str = bar:Str }:Bool"));
+    assert_eq!(x, s("{:Nil ls:Table |:Table fold:Str '':Str {:Str +:Str {:Str \\:TableRow $row:TableRow |:TableRow get:Str foo:Str }:Str }:Str |:Str =:Bool bar:Str }:Bool"));
 }

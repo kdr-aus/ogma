@@ -72,10 +72,15 @@ fn typify_help() -> HelpMessage {
 }
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
-    let arg = blk.next_arg()?.supplied(None)?.concrete()?;
+    let arg = blk.next_arg()?; // get the next argument
+    let argnode = arg.node(); // store the node index
+    let arg = arg.supplied(None)?.concrete()?; // ensure the argument compiles
+
+    // if it compiles, we should have the maximal amount of type info
+    let s = eng::annotate_types(&blk, argnode); // build the type string
+    let s = Str::from(s);
 
     blk.eval_o(move |_, cx| {
-        let annotation = Str::from(arg.type_annotation().into_owned());
-        cx.done_o(annotation)
+        cx.done_o(s.clone())
     })
 }
