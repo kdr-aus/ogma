@@ -128,8 +128,6 @@ impl<'d> Compiler<'d> {
 
     // TODO box here
     fn compile<B: BreakOn>(mut self, break_on: B) -> Result<Self> {
-        let mut err = None;
-
         let brk_key = &break_on.idx();
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))
@@ -152,16 +150,17 @@ impl<'d> Compiler<'d> {
                 continue;
             }
 
-            match self.compile_blocks() {
+            // first time an error can occur
+            let mut err = match self.compile_blocks() {
                 Ok(()) => continue,
                 // Break early if a hard error.
                 Err(e) if e.hard => return Err(e),
-                Err(e) => err = Some(e),
-            }
+                Err(e) => e,
+            };
 
             match self.infer_inputs() {
                 Ok(true) => continue,
-                Err(e) => err = Some(e),
+                Err(e) => err = e, // TODO; maybe the error should not be updated here? instead use compiler error?
                 _ => (),
             }
 
@@ -169,14 +168,8 @@ impl<'d> Compiler<'d> {
                 continue;
             }
 
-            return Err(err.unwrap_or_else(||
-                Error {
-                    cat: err::Category::Internal,
-                    desc: "compilation failed with no other errors".into(),
-                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
-                        ..Error::default()
-        }
-        ));
+            // if we have gotten here, unable to compile
+            return Err(err);
         }
 
         Ok(self)
@@ -453,12 +446,11 @@ impl<'d> Compiler<'d> {
             .ok_or_else(|| Error::op_not_found(self.ag[opnode.idx()].tag(), false))?;
 
         match &self.ag[cmd_node.idx()] {
-            AstNode::Intrinsic { op, intrinsic } => {
+            AstNode::Intrinsic { op: _, intrinsic } => {
                 let block = Block::construct(self, cmd_node, in_ty, chgs, infer_output);
-
                 intrinsic(block)
             }
-            AstNode::Def { expr, params } => {
+            AstNode::Def { expr: _, params: _ } => {
                 // check if there exists an entry for the sub-expression,
                 // if so, wrap that in a Step and call it done!
                 let defnode = DefNode(cmd_node.idx());
@@ -521,16 +513,12 @@ impl<'d> Compiler<'d> {
         chgs: Chgs,
     ) -> Result<Vec<(Variable, Argument)>> {
         let Compiler {
-            defs,
             ag,
             tg,
             lg,
-            flowed_edges,
-            compiled_ops,
             compiled_exprs,
-            output_infer_opnode,
             callsite_params,
-            inferrence_depth,
+            ..
         } = self;
 
         let args = ag.get_args(def);
@@ -631,26 +619,21 @@ impl<'a> Block<'a> {
         chgs: Chgs<'a>,
         output_infer: &'a mut bool,
     ) -> Self {
-        let opnode = node.parent(&compiler.ag);
-        let mut flags = compiler.ag.get_flags(node);
-        let mut args = compiler.ag.get_args(node);
-        let defs = &compiler.defs;
-
-        flags.reverse();
-        args.reverse();
-
         let Compiler {
             defs,
             ag,
             tg,
             lg,
-            flowed_edges,
-            compiled_ops,
-            output_infer_opnode,
-            callsite_params,
             compiled_exprs,
-            inferrence_depth,
+            ..
         } = compiler;
+
+        let opnode = node.parent(ag);
+        let mut flags = ag.get_flags(node);
+        let mut args = ag.get_args(node);
+
+        flags.reverse();
+        args.reverse();
 
         Block {
             node: opnode,

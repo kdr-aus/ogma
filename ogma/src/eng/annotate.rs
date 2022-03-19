@@ -1,10 +1,7 @@
 //! Module handling type _annotations_, human readable type information.
 use super::*;
 use graphs::{astgraph::*, *};
-use std::{
-    borrow::Cow,
-    fmt::{self, Write},
-};
+use std::fmt::{self, Write};
 
 pub fn types(blk: &Block, arg: graphs::ArgNode, verbose: bool) -> String {
     let mut s = String::new();
@@ -15,10 +12,9 @@ pub fn types(blk: &Block, arg: graphs::ArgNode, verbose: bool) -> String {
 fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool) {
     use AstNode::*;
 
-    let Block { ag, tg, lg, .. } = blk;
+    let Block { ag, tg, .. } = blk;
 
     let out_ty = tg[node].output.ty();
-    let in_ty = tg[node].input.ty();
 
     match &ag[node] {
         Ident(t) => {

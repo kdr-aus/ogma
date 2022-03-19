@@ -81,14 +81,7 @@ pub fn map_def_params_into_variables(
     defnode: DefNode,
     chgs: Chgs,
 ) -> Result<LocalInjection> {
-    let Compiler {
-        ag,
-        tg,
-        lg,
-        compiled_exprs,
-        defs,
-        ..
-    } = compiler;
+    let Compiler { ag, tg, defs, .. } = compiler;
 
     // flags are not supported:
     let flags = ag.get_flags(defnode);

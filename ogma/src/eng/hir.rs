@@ -50,32 +50,6 @@ impl<'a> Block<'a> {
         }
     }
 
-    /// Create a variable reference not off a specific argument, but by manually specifying the
-    /// variable name.
-    ///
-    /// This is useful for expressions that need to supply more than just the input. For instance
-    /// the `fold` command will supply the `$row` variable which is a track of the TableRow
-    ///
-    /// The tag is usually `blk.op_tag`.
-    ///
-    /// The `arg` node is the node for which the variable should be created in.
-    pub fn create_var_manually<N: Into<Str>>(
-        &mut self,
-        name: N,
-        ty: Type,
-        tag: Tag,
-    ) -> Result<Variable> {
-        todo!("remove, in favour of Block::inject_manual_var_into_arg_locals");
-        // TODO: I believe this is an incorrect implementation, since it may expose the variables
-        // where they should not be exposed.
-        // A implementation will have to be thought up that can add a variable to a sub expression
-        // (so for map, the `$row` variable).
-        //         self.locals
-        //             .as_mut()
-        //             .map(|locals| locals.add_new_var(name.into(), ty, tag))
-        //             .ok_or_else(|| Error::locals_unavailable(self.blk_tag()))
-    }
-
     /// Most flexible evaluation option, but also most brittle.
     ///
     /// **BE EXTRA CAREFUL WITH THE `out_ty` THAT IT MATCHES THE EVAL VALUE.

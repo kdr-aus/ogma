@@ -262,12 +262,14 @@ impl Error {
                 ..Default::default()
             },
             // TODO make this error better,
-            // name the attempeted types
             // give a code example of type annotation
             Self::Ambiguous { ty1, ty2 } => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one input type can compile op".into(),
-                traces: trace(blk, None),
+                traces: trace(
+                    blk,
+                    format!("this can be compiled with `{}` and `{}`", ty1, ty2),
+                ),
                 help_msg: Some("try specifying input type to the block".into()),
                 ..Default::default()
             },

@@ -304,7 +304,6 @@ impl<'a> Block<'a> {
         self.args_count += 1;
 
         let Block {
-            node: opnode,
             ag,
             tg,
             lg,
@@ -441,15 +440,13 @@ impl Argument {
         use std::borrow::Cow;
         enum R<'r> {
             V(Cow<'r, Value>),
-            E(&'r eval::Stack), //             E(&'r Evaluator),
+            E(&'r eval::Stack),
         }
         let r = match &self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
             Hold::Var(x) => R::V(Cow::Owned(x.fetch(&cx.env).clone())),
             Hold::Expr(e) => R::E(e),
         };
-
-        let inty = self.in_ty.clone();
 
         move |input| {
             let r = match &r {
