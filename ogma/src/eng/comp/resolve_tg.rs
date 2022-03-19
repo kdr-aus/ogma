@@ -92,6 +92,26 @@ impl<'d> Compiler<'d> {
                 err.traces.push(from_trace);
                 err.traces.push(to_trace);
             }
+            (flow, UnmatchedInferred { src, dst }) => {
+                let from_trace = match flow {
+                    II | IO => Trace::from_tag(from, format!("this node has input type `{}`", src)),
+                    OI | OO => Trace::from_tag(from, format!("this node returns a `{}`", src)),
+                };
+                let to_trace = match flow {
+                    II | IO => Trace::from_tag(
+                        to,
+                        format!("but this node is inferred to use input `{}`", dst),
+                    ),
+                    OI | OO => Trace::from_tag(
+                        to,
+                        format!("but this node is inferred to return `{}`", dst),
+                    ),
+                };
+
+                err.desc.push_str(". Conflicting inferred type");
+                err.traces.push(from_trace);
+                err.traces.push(to_trace);
+            }
         }
 
         err

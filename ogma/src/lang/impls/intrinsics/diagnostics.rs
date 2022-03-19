@@ -28,7 +28,7 @@ fn benchmark_help() -> HelpMessage {
 }
 
 fn benchmark_intrinsic(mut blk: Block) -> Result<Step> {
-    let expr = blk.next_arg(None)?;
+    let expr = blk.next_arg()?.supplied(None)?.concrete()?;
     blk.eval_o(move |val, cx| {
         let start = Instant::now();
         expr.resolve(|| val, &cx)?;
@@ -57,6 +57,7 @@ fn typify_help() -> HelpMessage {
     HelpMessage {
         desc: "output an expanded, type annotated, string of the argument".into(),
         params: vec![HelpParameter::Required("argument".into())],
+        flags: vec![("verbose", "annotate cmd output and literals")],
         examples: vec![
             HelpExample {
                 desc: "output the types of the ls command",
@@ -72,10 +73,15 @@ fn typify_help() -> HelpMessage {
 }
 
 fn typify_intrinsic(mut blk: Block) -> Result<Step> {
-    let arg = blk.next_arg(None)?;
+    let arg = blk.next_arg()?; // get the next argument
+    let argnode = arg.node(); // store the node index
+    let _ = arg.supplied(None)?.concrete()?; // ensure the argument compiles
 
-    blk.eval_o(move |_, cx| {
-        let annotation = Str::from(arg.type_annotation().into_owned());
-        cx.done_o(annotation)
-    })
+    let verbose = blk.get_flag("verbose").is_some();
+
+    // if it compiles, we should have the maximal amount of type info
+    let s = eng::annotate_types(&blk, argnode, verbose); // build the type string
+    let s = Str::from(s);
+
+    blk.eval_o(move |_, cx| cx.done_o(s.clone()))
 }

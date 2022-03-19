@@ -232,7 +232,7 @@ impl From<$type> for Value {
 
 prim_type_impls!(bool=>Bool, Number=>Num, Str=>Str, Table=>Tab, TableRow=>TabRow);
 
-// additionals that don't fit pattern
+// ----- additionals that don't fit pattern -----
 impl AsType for () {
     fn as_type() -> Type {
         Type::Nil
@@ -273,6 +273,7 @@ impl From<OgmaData> for Value {
         Value::Ogma(x)
     }
 }
+// ----- end -----
 
 // ###### USER TYPES ###########################################################
 #[derive(Clone)]

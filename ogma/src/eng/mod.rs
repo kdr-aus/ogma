@@ -2,6 +2,7 @@
 
 use crate::prelude::*;
 
+mod annotate;
 mod arg;
 mod blk;
 mod comp;
@@ -9,7 +10,6 @@ mod eval;
 mod graphs;
 mod hir;
 mod step;
-mod ty;
 mod var;
 
 type IndexSet = crate::HashSet<usize>;
@@ -17,6 +17,7 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 type LocalsMap = IndexMap<Locals>;
 
 pub(crate) use self::{
+    annotate::types as annotate_types,
     eval::{CodeInjector, DefImplEvaluator, Eval, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals},
@@ -185,5 +186,6 @@ mod tests {
         assert_eq!(size_of::<Evaluator>(), 128);
         assert_eq!(size_of::<Block>(), 144);
         assert_eq!(size_of::<arg::ArgBuilder>(), 96);
+        assert_eq!(size_of::<Tag>(), 64);
     }
 }

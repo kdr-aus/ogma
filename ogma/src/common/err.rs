@@ -195,34 +195,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn unexp_arg_input_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!(
-                "expecting argument to take input type `{}`, accepts `{}`",
-                exp, found
-            ),
-            traces: trace(arg, format!("this argument accepts type `{}`", found)),
-            ..Self::default()
-        }
-    }
-
-    pub(crate) fn unexp_arg_output_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!(
-                "expecting argument with output type `{}`, found `{}`",
-                exp, found
-            ),
-            traces: trace(arg, format!("this argument returns type `{}`", found)),
-            help_msg: Some(
-                "commands may require specific argument types, use `--help` to view requirements"
-                    .into(),
-            ),
-            ..Self::default()
-        }
-    }
-
     pub(crate) fn insufficient_args(
         block_tag: &Tag,
         args_count: u8,
@@ -621,6 +593,34 @@ impl Error {
             cat: Category::Semantics,
             desc: "unable to infer argument's output type".into(),
             traces: trace(arg, None),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn unexp_arg_input_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!(
+                "expecting argument to take input type `{}`, accepts `{}`",
+                exp, found
+            ),
+            traces: trace(arg, format!("this argument accepts type `{}`", found)),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn unexp_arg_output_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!(
+                "expecting argument with output type `{}`, found `{}`",
+                exp, found
+            ),
+            traces: trace(arg, format!("this argument returns type `{}`", found)),
+            help_msg: Some(
+                "commands may require specific argument types, use `--help` to view requirements"
+                    .into(),
+            ),
             ..Self::default()
         }
     }

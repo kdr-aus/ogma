@@ -38,7 +38,7 @@ macro_rules! add {
 
 mod arithmetic;
 mod cmp;
-// mod diagnostics;
+mod diagnostics;
 mod io;
 mod logic;
 mod morphism;
@@ -47,7 +47,7 @@ mod pipeline;
 pub fn add_intrinsics(impls: &mut Implementations) {
     arithmetic::add_intrinsics(impls);
     cmp::add_intrinsics(impls);
-    //     diagnostics::add_intrinsics(impls);
+    diagnostics::add_intrinsics(impls);
     io::add_intrinsics(impls);
     logic::add_intrinsics(impls);
     morphism::add_intrinsics(impls);
@@ -335,7 +335,6 @@ impl<T> BinaryOp<T> {
         .map(Box::new)
     }
 
-
     /// Creates the expression: `<cmd> $rhs`. Returns the variable tag.
     fn create_expr_and_var(cmd: &str) -> (ast::Expression, Tag) {
         // probably can just use the code injector
@@ -377,7 +376,6 @@ impl<T> BinaryOp<T> {
 }
 
 impl BinaryOp<()> {
-
     /// Helper for creating the `cmp` binary operation.
     ///
     /// - `ty` is type of the `lhs` _and_ `rhs`.
@@ -390,10 +388,20 @@ impl BinaryOp<()> {
         arg: &eng::Argument,
     ) -> Result<CmpReturnHlpr<std::cmp::Ordering>> {
         let ordty = Ty::Def(types::ORD.get());
-        BinaryOp::new("cmp", ty, &ordty, blk.defs, Box::new(cnv_value_to_ord) as Box<_>).map_err(|e| {
+        BinaryOp::new(
+            "cmp",
+            ty,
+            &ordty,
+            blk.defs,
+            Box::new(cnv_value_to_ord) as Box<_>,
+        )
+        .map_err(|e| {
             e.add_trace(
                 blk.op_tag(),
-                format!("{} requires expression output to implement `cmp` with a single argument", caller)
+                format!(
+                    "{} requires expression output to implement `cmp` with a single argument",
+                    caller
+                ),
             )
             .add_trace(&arg.tag, format!("expression returns `{}`", arg.out_ty()))
         })
