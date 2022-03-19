@@ -8,9 +8,6 @@ fn paths() -> (&'static Path, &'static Path) {
 
 #[test]
 fn batch_success_testing() {
-    // TODO IMPLEMENT
-    return;
-
     use rt::bat::*;
     use Outcome::*;
 
@@ -39,9 +36,6 @@ def-ty Foo { x:Num }"#;
 
 #[test]
 fn batch_fail_testing() {
-    // TODO implement
-    return;
-
     use rt::bat::*;
     use Outcome::*;
 
@@ -84,7 +78,7 @@ def-ty Foo { x:Num y: }"#;
     assert!(matches!(x.next(), Some((Success, _))));
     assert_eq!(
         &x.next().map(print).unwrap(),
-        r#"Semantics Error: expecting argument with type `Number`, found `String`
+        r#"Semantics Error: expecting argument with output type `Number`, found `String`
 --> '' - line 4:19
  | foo-bar | + 5 | - 'foo'
  |                    ^^^ this argument returns type `String`
