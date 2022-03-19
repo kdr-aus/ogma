@@ -17,7 +17,7 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
     annotate::types as annotate_types,
-    eval::{CodeInjector, DefImplEvaluator, Eval, Evaluator},
+    eval::{CodeInjector, Eval, Evaluator},
     hir::Context,
     var::{Environment, Local, Locals},
 };
