@@ -219,7 +219,7 @@ impl AstGraph {
             // sub-root
             let cmd = match im {
                 // always include an intrinsic
-                Implementation::Intrinsic { loc, f } => self.0.add_node(AstNode::Intrinsic {
+                Implementation::Intrinsic { loc: _, f } => self.0.add_node(AstNode::Intrinsic {
                     op: op.clone(),
                     intrinsic: f.clone(),
                 }),
@@ -651,13 +651,16 @@ impl fmt::Display for AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk } => write!(f, "Op({})", op.str()),
-            Intrinsic { op, intrinsic: _ } => write!(f, "Intrinsic"),
-            Def { expr, params } => write!(f, "Def"),
+            Op { op, blk: _ } => write!(f, "Op({})", op.str()),
+            Intrinsic {
+                op: _,
+                intrinsic: _,
+            } => write!(f, "Intrinsic"),
+            Def { expr: _, params: _ } => write!(f, "Def"),
             Flag(t) => write!(f, "Flag(--{})", t.str()),
             Ident(x) => write!(f, "Ident({})", x.str()),
-            Num { val, tag } => write!(f, "Num({})", val),
-            Pound { ch, tag } => write!(f, "Pound(#{})", ch),
+            Num { val, tag: _ } => write!(f, "Num({})", val),
+            Pound { ch, tag: _ } => write!(f, "Pound(#{})", ch),
             Var(t) => write!(f, "Var(${})", t.str()),
             Expr(t) => write!(f, "Expr({})", t.str()),
         }

@@ -550,19 +550,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn unknown_blk_input_type(op: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("unable to infer input type for op `{}`", op),
-            traces: trace(op, None),
-            help_msg: Some(format!(
-                "use `{0} --help` to view requirements. consider implementing `def {0}`",
-                op
-            )),
-            ..Self::default()
-        }
-    }
-
     pub(crate) fn unknown_blk_output_type(blk: &Tag) -> Self {
         Error {
             cat: Category::Semantics,
@@ -673,17 +660,6 @@ impl Error {
                 "variables must be in scope and can be defined using the `let` command".into(),
             ),
             hard: true, // unrecoverable, variable not found in locals
-        }
-    }
-
-    // TODO obsolete with LG
-    pub(crate) fn locals_unavailable(var: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: "locals map is unavailable".into(),
-            traces: trace(var, Some("this variable needs access to the locals".into())),
-            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
-                ..Self::default()
         }
     }
 }

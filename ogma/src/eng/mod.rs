@@ -17,9 +17,9 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
     annotate::types as annotate_types,
-    eval::{CodeInjector, Eval, Evaluator},
+    eval::{CodeInjector, Eval},
     hir::Context,
-    var::{Environment, Local, Locals},
+    var::{Environment, Local},
 };
 
 pub use self::comp::{compile, FullCompilation};
@@ -184,8 +184,6 @@ mod tests {
         assert_eq!(size_of::<Argument>(), 192);
         assert_eq!(size_of::<Hold>(), 96);
 
-        // Evaluator is quite large
-        assert_eq!(size_of::<Evaluator>(), 128);
         assert_eq!(size_of::<Block>(), 144);
         assert_eq!(size_of::<arg::ArgBuilder>(), 96);
         assert_eq!(size_of::<Tag>(), 64);

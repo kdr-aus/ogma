@@ -123,32 +123,4 @@ impl<'a> Block<'a> {
             .ok_or_else(|| Error::insufficient_args(self.op_tag(), self.args_count, None))?;
         self.inject_manual_var_into_arg_locals(n, name, ty)
     }
-
-    fn get_var_def_or_add_change(
-        &mut self,
-        name: Str,
-        ty: Type,
-        tag: Tag,
-        op: OpNode,
-    ) -> Result<Variable> {
-        todo!("wire in");
-        //         let locals = self.lg.get(op).ok_or_else(|| Error::locals_unavailable(&tag))?;
-        //
-        //         match locals.get(&name) {
-        //             Some(Local::Var(v)) if v.defined_at() == op => Ok(v.clone()),
-        //             _ => {
-        //                 let e = Error::locals_unavailable(&tag);
-        //                 // flag to add
-        //                 todo!();
-        // //                 self.chgs.push(locals_graph::Chg::NewVar {
-        // //                     name,
-        // //                     ty,
-        // //                     tag,
-        // //                     defined_at: op
-        // //                 }.into());
-        //
-        //                 Err(e)
-        //             }
-        //         }
-    }
 }

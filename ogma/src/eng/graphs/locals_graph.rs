@@ -1,7 +1,6 @@
 use super::*;
 use astgraph::AstGraph;
 use petgraph::prelude::*;
-use std::{cell::Cell, ops::Deref, rc::Rc};
 
 #[derive(Debug, Copy, Clone)]
 struct Local {
@@ -99,7 +98,7 @@ impl LocalsGraph {
             locals,
         } = self;
 
-        let Vars { map, sealed } = graph.node_weight_mut(0.into()).expect("exists");
+        let Vars { map, sealed: _ } = graph.node_weight_mut(0.into()).expect("exists");
 
         for (name, var) in vars.drain() {
             let idx = locals.len();

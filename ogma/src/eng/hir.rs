@@ -1,5 +1,5 @@
 use super::*;
-use ast::{Tag, Term};
+use ast::Tag;
 use std::fmt;
 
 // ###### CONTEXT ##############################################################

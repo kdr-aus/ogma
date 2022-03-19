@@ -196,31 +196,6 @@ impl<'d> Compiler<'d> {
         .fold(false, std::ops::BitOr::bitor)
     }
 
-    /// Inserts a locals _input_ entry into the locals map.
-    /// This function is recursive, it walks through child expression arguments and also inserts
-    /// the locals entry into the _first_ op node.
-    fn insert_locals(&mut self, locals: &Locals, op: OpNode) {
-        todo!("remove");
-        //         let _is_empty = self.locals.insert(op.index(), locals.clone()).is_none();
-        //
-        //         debug_assert!(
-        //             _is_empty,
-        //             "just replaced an already populated locals, which should not happen"
-        //         );
-        //
-        //         // repeat this process for each expr argument
-        //         let ops = self
-        //             .ag
-        //             .neighbors(op.idx())
-        //             .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
-        //             .map(|e| e.first_op(&self.ag))
-        //             .collect::<Vec<_>>();
-        //
-        //         for op in ops {
-        //             self.insert_locals(locals, op);
-        //         }
-    }
-
     /// Iterates over def nodes that are deduced to be the compilation path.
     ///
     /// It deducts the path by looking at the input type into the parent op, since this keys the
@@ -593,53 +568,9 @@ impl<'d> Compiler<'d> {
     }
 }
 
-/// Flow compiled op's locals.
-impl<'d> Compiler<'d> {
-    /// Flows locals about according to the following:
-    ///
-    /// 1. Op is compiled but next op has no locals.
-    ///   - This may occur if the op can be compiled with `None` locals
-    fn flow_compiled_ops_locals(&mut self) -> bool {
-        todo!("remove this");
-
-        //         let ops = self
-        //             .ag
-        //             .node_indices()
-        //             // get just ops
-        //             .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
-        //             .collect::<Vec<_>>();
-        //
-        //         let mut chgd = false;
-        //
-        //         for op in ops {
-        //             let opidx = &op.index();
-        //
-        //             let compiled = self.compiled_ops.contains_key(opidx);
-        //
-        //             // 1. op is compiled, but next op has no locals
-        //             if compiled {
-        //                 if let Some(next) = op.next(&self.ag) {
-        //                     match (
-        //                         self.locals.get(opidx).cloned(),
-        //                         self.locals.contains_key(&next.index()),
-        //                     ) {
-        //                         (Some(locals), false) => {
-        //                             chgd = true;
-        //                             self.insert_locals(&locals, next);
-        //                         }
-        //                         _ => (),
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //
-        //         chgd
-    }
-}
-
 #[cfg(debug_assertions)]
 impl<'a> Compiler<'a> {
-    pub fn write_debug_report<F: AsRef<std::path::Path>>(&self, file: F) {
+    pub fn _write_debug_report<F: AsRef<std::path::Path>>(&self, file: F) {
         use std::fmt::Write;
         let mut report = String::new();
 
@@ -663,7 +594,7 @@ impl<'a> Compiler<'a> {
 
         writeln!(&mut report, "## Current Compiled Ops").unwrap();
         writeln!(&mut report, "---").unwrap();
-        self.debug_index_map(&self.compiled_ops, &mut report)
+        self._debug_index_map(&self.compiled_ops, &mut report)
             .unwrap();
 
         let path = file.as_ref();
@@ -671,7 +602,7 @@ impl<'a> Compiler<'a> {
         std::fs::write(path, report).unwrap();
     }
 
-    fn debug_index_map<T>(&self, map: &IndexMap<T>, buf: &mut String) -> std::fmt::Result {
+    fn _debug_index_map<T>(&self, map: &IndexMap<T>, buf: &mut String) -> std::fmt::Result {
         use std::fmt::Write;
 
         let mut keys = map.keys().copied().collect::<Vec<_>>();

@@ -1,7 +1,7 @@
 use super::*;
 use ::libs::divvy::Str;
 use graphs::ArgNode;
-use std::{cell::*, rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 // ###### VARIABLE #############################################################
 #[derive(Debug, Clone)]
@@ -101,31 +101,6 @@ impl Hold {
             Hold::Expr(s) => Borrowed(s.out_ty()),
         }
     }
-}
-
-// ###### LOCALS ###############################################################
-#[derive(Debug)]
-struct LocalEntry {
-    // TODO remove this???
-    _defined_depth: u32,
-    // TODO remove this???
-    _local: Local,
-}
-
-/// A map of available variables based on an string name.
-///
-/// Locals is easily shareable and Cow for the variables maps. It also stores a **shared** counter
-/// which increments _everytime_ an entry is made into the variable map.
-/// This counter, along with the variable storing an index into the environment, makes this system
-/// fairly robust.
-///
-/// Scoping is done by _not_ passing along an altered map. For instance, a block will pass on its
-/// locals to the next block, so any changes to the map are available. For an expression, the map
-/// is not passed along, instead the changes are local to the expression.
-#[derive(Debug, Default)]
-pub struct Locals {
-    vars: Rc<HashMap<Str, Local>>,
-    count: Rc<Cell<usize>>,
 }
 
 // ###### SEED VARS ############################################################

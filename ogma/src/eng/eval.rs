@@ -90,85 +90,6 @@ impl From<Stack> for Step {
     }
 }
 
-/// Evaluator of an expression.
-#[derive(Debug)]
-pub struct Evaluator {
-    tag: Tag,
-    /// This is the type that is the output of the previous block, and is the _input_ for the next
-    /// block.
-    out_ty: Type,
-    /// Each block converted into a function.
-    steps: Vec<Step>,
-
-    /// A tracked type annotation code representation.
-    ///
-    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
-    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
-    /// moved into that system.
-    type_annotation: String,
-}
-
-impl Evaluator {
-    fn new(in_ty: Type, tag: Tag, stepslen: usize) -> Evaluator {
-        Evaluator {
-            tag,
-            out_ty: in_ty,
-            steps: Vec::with_capacity(stepslen),
-            type_annotation: String::default(),
-        }
-    }
-
-    pub fn construct(
-        in_ty: Type,
-        expr: ast::Expression,
-        defs: &Definitions,
-        mut variables: Locals,
-    ) -> Result<Evaluator> {
-        todo!("remove")
-    }
-
-    /// The output type of this expression.
-    ///
-    /// This updates when `push_step` is used to add another step. The output will become the
-    /// output of [`Step`].
-    pub fn ty(&self) -> &Type {
-        &self.out_ty
-    }
-
-    pub fn tag(&self) -> &Tag {
-        &self.tag
-    }
-
-    pub fn type_annotation(&self) -> &str {
-        &*self.type_annotation
-    }
-
-    /// Asserts that the expressions returns the type `ty` once resolved.
-    pub fn returns(self, ty: &Type) -> Result<Self> {
-        if &self.out_ty == ty {
-            Ok(self)
-        } else {
-            Err(Error::unexp_arg_output_ty(ty, &self.out_ty, &self.tag))
-        }
-    }
-
-    pub fn push_step(&mut self, step: Step) {
-        self.out_ty = step.out_ty.clone();
-        self.steps.push(step);
-    }
-
-    pub fn eval(&self, input: Value, cx: Context) -> StepR {
-        let mut input = input;
-        let Context { root, wd, mut env } = cx;
-        for step in &self.steps {
-            let (new_input, new_env) = step.invoke(input, Context { env, root, wd })?;
-            input = new_input;
-            env = new_env;
-        }
-        Ok((input, env))
-    }
-}
-
 pub struct CodeInjector<T> {
     /// Map of block argument to an _injector's_ local variable.
     args: Vec<(Argument, Variable, Option<Value>)>,
@@ -267,8 +188,7 @@ impl CodeInjector<Eval> {
     /// _multiple_ variables are being set in an eval, such as in `grp-by` or `sort-by`.
     pub fn eval(&self, input: Value, cx: &Context) -> Result<Value> {
         // build a local environment on each invocation
-        let mut env = self.env().clone();
-
+        let env = self.env().clone();
         self.eval_with_env(input, cx, env)
     }
 

@@ -477,23 +477,6 @@ impl Argument {
     }
 }
 
-fn resolve_expr(expr: &Evaluator, inty: &Type, input: Value, cx: Context) -> StepR {
-    if cfg!(debug_assertions) {
-        // runtime check the input type matches this type.
-        // only do check in debug mode.
-        let ity = input.ty();
-        assert!(
-            inty == &ity,
-            "arguments expected input type does not match supplied input type.
-expected input type: {}
-supplied input type: {}",
-            inty,
-            ity
-        );
-    }
-    expr.eval(input, cx)
-}
-
 pub fn pop(args: &mut Vec<ArgNode>, arg_count: u8, err_tag: &Tag) -> Result<ArgNode> {
     args.pop()
         .ok_or_else(|| Error::insufficient_args(err_tag, arg_count, None))
