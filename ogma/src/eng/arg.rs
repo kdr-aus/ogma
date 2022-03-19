@@ -280,10 +280,8 @@ impl<'a> ArgBuilder<'a> {
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
-        dbg!("assert_var_exists");
         match &self.ag[self.node.idx()] {
             astgraph::AstNode::Var(tag) => {
-                dbg!("arg is a var", tag);
                 self.lg
                     .get(self.node.idx(), tag.str())
                     // Ok(Some(true)) if variable exists

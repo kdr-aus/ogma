@@ -929,7 +929,6 @@ fn pick_table_columns(mut blk: Block) -> Result<Step> {
     //
     let colnames = ColNameArgs::build(&mut blk)?;
     blk.eval_o::<_, Table>(move |input, cx| {
-        dbg!(input.ty());
         let table = Table::try_from(input)?;
         let mut colidxs = if addflag {
             colnames.resolve_indices_forgiven(&table, &cx)?

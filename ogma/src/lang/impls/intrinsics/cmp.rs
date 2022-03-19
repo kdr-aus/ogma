@@ -81,8 +81,6 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         Ty::Def(x) if x.is_tuple() => {
-            dbg!("here");
-
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),
                 _ => 0,
@@ -96,10 +94,8 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
 
             let ty = blk.in_ty().clone();
 
-            dbg!("here");
             // map the RHS to a var. RHS returns the same type as block's input
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
-            dbg!("failed map");
 
             let injector = injector
                 .compile(ty, blk.defs)

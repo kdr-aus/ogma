@@ -34,9 +34,6 @@ pub fn compile_with_seed_vars(
     input_ty: Type,
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
-    eprintln!("COMPILING: '{}'", expr.tag);
-    dbg!(&seed_vars);
-
     let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
     let lg = LocalsGraph::build(&ag);
@@ -57,8 +54,6 @@ pub fn compile_with_seed_vars(
     compiler.init_tg(input_ty); // initialise TG
 
     compiler.lg.seed(seed_vars);
-
-    dbg!(&compiler.lg);
 
     let mut compiler = compiler.compile(ExprNode(0.into()))?;
 
@@ -139,41 +134,36 @@ impl<'d> Compiler<'d> {
             self.resolve_tg()?;
 
             if self.populate_compiled_expressions() {
-                continue
+                continue;
             }
 
             if self.assign_variable_types() {
-                continue
+                continue;
             }
 
             if self.insert_available_def_locals()? {
-                continue
+                continue;
             }
 
             if self.link_known_def_path_args() {
-                continue
+                continue;
             }
 
             match self.compile_blocks() {
-                Ok(()) => {
-                    continue
-                }
+                Ok(()) => continue,
                 // Break early if a hard error.
                 Err(e) if e.hard => return Err(e),
                 Err(e) => err = Some(e),
             }
 
-
             match self.infer_inputs() {
-                Ok(true) => {
-                    continue
-                }
+                Ok(true) => continue,
                 Err(e) => err = Some(e),
                 _ => (),
             }
 
             if self.infer_outputs() {
-                continue
+                continue;
             }
 
             return Err(err.unwrap_or_else(||

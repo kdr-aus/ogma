@@ -64,7 +64,6 @@ impl<'a> Block<'a> {
                     .new_var(next.idx(), Str::new(var.str()), ty, var.clone())
                     .map_err(|chg| {
                         self.chgs.push(chg.into());
-                        dbg!("this one");
                         Error::update_locals_graph(var)
                     }),
                 None => Ok(Variable::noop(var.clone(), ty)),
@@ -108,7 +107,6 @@ impl<'a> Block<'a> {
             .new_var(arg.idx(), name, ty, tag.clone())
             .map_err(|chg| {
                 self.chgs.push(chg.into());
-                dbg!("this one");
                 Error::update_locals_graph(tag)
             })
     }

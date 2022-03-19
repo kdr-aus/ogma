@@ -74,8 +74,6 @@ impl<'d> Compiler<'d> {
                 .collect::<Vec<_>>()
         };
 
-        dbg!(&infer_nodes);
-
         let mut success = false;
         let mut err = None;
 

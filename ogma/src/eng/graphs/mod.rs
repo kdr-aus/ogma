@@ -134,8 +134,6 @@ mod tests {
 
         let (ag, tg) = init_graphs("filter foo eq 3 | len");
 
-        dbg!(&ag);
-
         assert!(matches!(ag.node_weight(0.into()), Some(Expr(_)))); // root
         assert!(matches!(ag.node_weight(1.into()), Some(Op { .. }))); // filter
         assert!(matches!(ag.node_weight(2.into()), Some(Ident(_)))); // foo
@@ -221,9 +219,6 @@ mod tests {
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
 
-        dbg!(&ag);
-        dbg!(&tg);
-
         assert_eq!(ag.node_count(), 12);
         assert_eq!(ag.edge_count(), 14);
 
@@ -292,11 +287,6 @@ mod tests {
             })
         ); // 0
 
-        dbg!(tg
-            .edge_indices()
-            .map(|i| tg.edge_endpoints(i))
-            .collect::<Vec<_>>());
-
         assert_eq!(tg.edge_count(), 6);
 
         // Type graph edges
@@ -316,8 +306,6 @@ mod tests {
         use Relation::*;
 
         let (ag, _) = init_graphs("range 0 --foo 'str' --bar");
-
-        dbg!(&ag);
 
         assert!(matches!(ag.node_weight(0.into()), Some(Expr(_)))); // root
         assert!(matches!(ag.node_weight(1.into()), Some(Op { .. }))); // range
@@ -371,8 +359,6 @@ mod tests {
 
         let (ag, _) = init_graphs("= 3");
 
-        dbg!(&ag);
-
         assert!(matches!(ag.node_weight(0.into()), Some(Expr(_)))); // root
         assert!(matches!(ag.node_weight(1.into()), Some(Op { .. }))); // =
         assert!(matches!(ag.node_weight(2.into()), Some(Num { .. }))); // 3
@@ -403,9 +389,6 @@ mod tests {
 
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
-
-        dbg!(&ag);
-        dbg!(&tg);
 
         // Assert some info about the AST nodes
         assert_eq!(ag.node_count(), 8);
@@ -475,9 +458,6 @@ mod tests {
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
 
-        dbg!(&ag);
-        dbg!(&tg);
-
         // Assert some info about the AST nodes
         assert_eq!(ag.node_count(), 10);
         assert_eq!(ag.edge_count(), 14);
@@ -541,9 +521,6 @@ mod tests {
 
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
-
-        dbg!(&ag);
-        dbg!(&tg);
 
         // Assert some info about the AST nodes
         assert_eq!(ag.node_count(), 20);
@@ -615,9 +592,6 @@ mod tests {
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
 
-        dbg!(&ag);
-        dbg!(&tg);
-
         let idx = 3.into();
 
         assert!(ag.node_weight(idx).unwrap().def().is_some());
@@ -666,8 +640,6 @@ mod tests {
     #[test]
     fn path_from_root_test() {
         let (ag, _) = init_graphs("let $a | + { > 3 }");
-
-        dbg!(&ag);
 
         let f = |n: u32| ag.path_from_root(n.into()).collect::<Vec<_>>();
         let e = |i: &[_]| i.iter().copied().map(Into::into).collect::<Vec<_>>();

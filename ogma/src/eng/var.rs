@@ -32,9 +32,6 @@ impl Variable {
     }
 
     pub fn fetch<'a>(&self, env: &'a Environment) -> &'a Value {
-        dbg!(&self);
-        dbg!(env);
-
         debug_assert!(
             !self.is_noop(),
             "tried fetching a value from a NOOP variable"
@@ -56,11 +53,6 @@ impl Variable {
     }
 
     pub fn set_data(&self, env: &mut Environment, val: Value) {
-        dbg!("in set_data");
-        dbg!(self.is_noop());
-        dbg!(&val);
-        dbg!(&self);
-
         debug_assert!(
             self.ty == val.ty(),
             "trying to set a variable with type `{}` but the variable is of type `{}`",
