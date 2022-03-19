@@ -80,7 +80,7 @@ impl Implementations {
 
     pub fn get_help(&self, op: &Tag) -> Result<&HelpMessage> {
         if !self.contains_op(op.str()) {
-            return Err(Error::op_not_found(op));
+            return Err(Error::op_not_found(op, false));
         }
 
         Ok(&self.names.get(op.str()).expect("checked was in").1)
@@ -92,7 +92,7 @@ impl Implementations {
 
     pub fn get_impl(&self, op: &Tag, ty: &Type) -> Result<&Implementation> {
         if !self.contains_op(op.str()) {
-            return Err(Error::op_not_found(op));
+            return Err(Error::op_not_found(op, false));
         }
 
         let mut key = (Str::new(op), Some(ty.clone()));

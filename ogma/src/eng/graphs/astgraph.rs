@@ -204,7 +204,7 @@ impl AstGraph {
         let impls = defs.impls();
 
         if !impls.contains_op(op.str()) {
-            return Err(Error::op_not_found(&op));
+            return Err(Error::op_not_found(&op, false));
         }
 
         let op_impls = impls

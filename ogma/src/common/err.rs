@@ -172,12 +172,19 @@ impl Error {
         }
     }
 
-    pub(crate) fn op_not_found(op: &Tag) -> Self {
+    pub(crate) fn op_not_found(op: &Tag, recursion_detected: bool) -> Self {
+        let hlp = if recursion_detected {
+            "recursion is not supported.
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>"
+        } else {
+            "view a list of definitions using `def --list`".into()
+        };
+
         Error {
             cat: Category::UnknownCommand,
             desc: format!("operation `{}` not defined", op),
             traces: trace(op, format!("`{}` not found", op)),
-            help_msg: Some("view a list of definitions using `def --list`".into()),
+            help_msg: Some(hlp.into()),
             ..Self::default()
         }
     }
@@ -237,11 +244,11 @@ impl Error {
 
     pub(crate) fn unused_flags<'a, T>(flags: T) -> Self
     where
-        T: Iterator<Item = &'a Tag>,
+        T: DoubleEndedIterator<Item = &'a Tag>,
     {
         let delim = ", ";
 
-        let (desc, traces) = flags.fold(
+        let (desc, traces) = flags.rev().fold(
             (String::from("not expecting flags: "), Vec::new()),
             |(desc, mut traces), flag| {
                 traces.push(Trace::from_tag(flag, "flag not supported".to_string()));
