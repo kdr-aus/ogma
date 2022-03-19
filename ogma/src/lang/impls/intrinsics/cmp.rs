@@ -244,8 +244,6 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         Ty::Def(x) if x.is_tuple() => {
-            // TODO
-            // Tuple inferring will not since they are not stored in the types
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),
                 _ => 0,

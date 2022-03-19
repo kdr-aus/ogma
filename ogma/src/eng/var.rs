@@ -22,6 +22,7 @@ impl Environment {
 }
 
 impl Variable {
+    /// The variables type.
     pub fn ty(&self) -> &Type {
         &self.ty
     }
@@ -31,6 +32,7 @@ impl Variable {
         self.env_idx
     }
 
+    /// Fetch the value found in the memory location, in the environment.
     pub fn fetch<'a>(&self, env: &'a Environment) -> &'a Value {
         debug_assert!(
             !self.is_noop(),
@@ -52,6 +54,7 @@ impl Variable {
         val
     }
 
+    /// Populate the location in memory (within the `env`ironment) with `val`ue.
     pub fn set_data(&self, env: &mut Environment, val: Value) {
         debug_assert!(
             self.ty == val.ty(),

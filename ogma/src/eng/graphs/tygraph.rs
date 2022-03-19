@@ -391,7 +391,6 @@ impl TypeGraph {
     /// Apply the `chg` to the graph. Returns if the graph is actually altered (if the `chg` has
     /// already been applied, nothing would change).
     pub fn apply_chg(&mut self, chg: Chg) -> bool {
-        // TODO test this code.
         fn set(k: &mut Knowledge, exp: Knowledge) -> bool {
             if k == &exp {
                 false

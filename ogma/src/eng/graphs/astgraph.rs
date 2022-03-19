@@ -380,7 +380,6 @@ impl AstGraph {
     where
         F: Fn(NodeIndex) -> bool,
     {
-        // TODO -- test this!
 
         fn find_last_match<'a, F>(
             g: &'a AstGraph,

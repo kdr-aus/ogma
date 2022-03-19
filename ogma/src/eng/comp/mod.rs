@@ -834,17 +834,6 @@ mod tests {
         compile("ls | filter foo eq #n | len").unwrap();
         compile("ls | filter foo eq #t | len").unwrap();
         compile("ls | filter foo eq #f | len").unwrap();
-
-        // now to test more complex expressions
-        // TODO these expressions SHOULD fail the inferer, since `\\` takes _any_ type, it can not
-        // infer what type `filter` is should be passing through.
-        // This is interesting, and it would be good to get decent error messages explaining why
-        // the inference failed and where to put a type
-        //         compile("ls | filter foo eq { \\ #n } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ #t } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ #f } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ 3 } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ 'bar' } | len").unwrap();
     }
 
     #[test]

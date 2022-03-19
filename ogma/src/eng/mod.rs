@@ -142,6 +142,7 @@ impl<'a> Block<'a> {
 
 // ###### STEP #################################################################
 
+/// Common function signature for evaluation, taking a `Value` and a `Context` and returning `O`.
 pub trait Func<O>: Fn(Value, Context) -> O + Send + Sync + 'static {}
 impl<T, O> Func<O> for T where T: Fn(Value, Context) -> O + Send + Sync + 'static {}
 
@@ -162,8 +163,10 @@ pub struct Step {
 type StepR = Result<(Value, Environment)>;
 
 // ###### VARIABLE #############################################################
+/// A location in memory.
 #[derive(Debug, Clone)]
 pub struct Variable {
+    /// The tag.
     pub tag: Tag,
     ty: Type,
     env_idx: usize,
