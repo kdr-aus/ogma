@@ -128,69 +128,6 @@ pub struct Locals {
     count: Rc<Cell<usize>>,
 }
 
-/// Equality is done by reference.
-impl PartialEq for Locals {
-    fn eq(&self, o: &Self) -> bool {
-        Rc::ptr_eq(&self.vars, &o.vars) && Rc::ptr_eq(&self.count, &o.count)
-    }
-}
-/// Equality is done by reference.
-impl Eq for Locals {}
-
-impl Locals {
-    /// Enter a new impl environment where it does not have access to the caller scope.
-    ///
-    /// This is used for impls where it _should not have access to caller scope_. Any _new_ locals
-    /// will be forgotten once scope ends.
-    pub fn enter_impl(&self) -> Self {
-        Self {
-            vars: Default::default(),
-            count: Rc::clone(&self.count),
-        }
-    }
-
-    /// Get a local by name.
-    pub fn get(&self, name: &str) -> Option<&Local> {
-        self.vars.get(name)
-    }
-
-    /// Add an already existent variable aliased under the given name in the local environment.
-    pub fn add_var(&mut self, name: Str, var: Variable) {
-        let vars = Rc::make_mut(&mut self.vars);
-        vars.insert(name, Local::Var(var));
-    }
-
-    /// Add a parameter mapped to this name.
-    pub fn add_param(&mut self, name: Str, arg: Argument) {
-        todo!()
-        //         let vars = Rc::make_mut(&mut self.vars);
-        //         vars.insert(name, Local::Param(arg));
-    }
-
-    /// Add a **new** variable (a new memory location) into the environment.
-    pub fn add_new_var(&mut self, name: Str, ty: Type, tag: Tag) -> Variable {
-        todo!();
-        //         // increment place location
-        //         let var = Variable {
-        //             tag,
-        //             ty,
-        //             env_idx: self.count.get(),
-        //         };
-        //         self.count.set(var.env_idx + 1);
-        //         self.add_var(name, var.clone());
-        //         var
-    }
-}
-
-impl Clone for Locals {
-    fn clone(&self) -> Self {
-        Self {
-            vars: Rc::clone(&self.vars),
-            count: Rc::clone(&self.count),
-        }
-    }
-}
-
 // ###### SEED VARS ############################################################
 #[derive(Default, Debug)]
 pub struct SeedVars(Vec<(Str, Variable)>);

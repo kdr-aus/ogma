@@ -24,63 +24,6 @@ impl<'a> Context<'a> {
 
 // ###### BLOCK ################################################################
 impl<'a> Block<'a> {
-    fn arg_recursive(&self, arg: ast::Argument, in_ty: Type, locals: &Locals) -> Result<Argument> {
-        use ast::Argument as A;
-        use eval::make_input_pound_expr;
-
-        let (hold, tag, out_ty) = match arg {
-            A::Ident(ident) => (Hold::Lit(Str::new(ident.str()).into()), ident, Type::Str),
-            A::Num(n, tag) => (Hold::Lit(n.into()), tag, Type::Num),
-            A::Pound('t', tag) => (Hold::Lit(true.into()), tag, Type::Bool),
-            A::Pound('f', tag) => (Hold::Lit(false.into()), tag, Type::Bool),
-            A::Pound('n', tag) => (Hold::Lit(Value::Nil), tag, Type::Nil),
-            A::Pound('i', tag) => todo!(),
-            //                 (
-            //                 Hold::Expr(make_input_pound_expr(in_ty.clone(), tag.clone())),
-            //                 tag,
-            //                 in_ty.clone(),
-            //             ),
-            A::Pound(ch, tag) => return Err(Error::unknown_spec_literal(ch, &tag)),
-            A::Var(var) => {
-                todo!()
-                //                 match locals
-                //                     .get(var.str())
-                //                     .ok_or_else(|| Error::var_not_found(&var))?
-                //                 {
-                //                     Local::Param(arg, locals) => {
-                //                         // update result with the outside var (similar to Local::Var)
-                //                         return self
-                //                             .arg_recursive(arg.clone(), in_ty, locals)
-                //                             .map_err(|e| e.add_trace(&var))
-                //                             .map(|mut x| (x.tag = var, x).1);
-                //                     }
-                //                     Local::Var(v) => {
-                //                         let mut v = v.clone();
-                //                         // update the location of this var to give correct error reporting
-                //                         v.tag = var.clone();
-                //                         let ty = v.ty().clone();
-                //                         (Hold::Var(v), var, ty)
-                //                     }
-                //                 }
-            }
-            A::Expr(expr) => {
-                let tag = expr.tag.clone();
-                let eval = Evaluator::construct(in_ty.clone(), expr, self.defs, locals.clone())
-                    .map_err(|e| e.add_trace(self.blk_tag(), None))?;
-                let out_ty = eval.ty().clone();
-                todo!()
-                //                 (Hold::Expr(eval), tag, out_ty)
-            }
-        };
-
-        Ok(Argument {
-            tag,
-            in_ty,
-            out_ty,
-            hold,
-        })
-    }
-
     /// The input [`Type`] of the block.
     pub fn in_ty(&self) -> &Type {
         &self.in_ty
