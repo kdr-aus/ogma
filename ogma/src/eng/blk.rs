@@ -42,6 +42,7 @@ impl<'a> Block<'a> {
             .push(graphs::tygraph::Chg::KnownOutput(self.node.idx(), ty).into());
     }
 
+    /// See if there is a next argument node, without popping off the stack.
     pub fn peek_next_arg_node(&self) -> Option<graphs::ArgNode> {
         self.args.last().copied()
     }

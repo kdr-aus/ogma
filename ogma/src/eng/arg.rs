@@ -246,7 +246,7 @@ impl<'a> ArgBuilder<'a> {
                     Local::Var(var) => Ok(Hold::Var(var.clone())),
                     Local::Ptr { .. } => {
                         unreachable!("a param argument should shadow the referencer arg node")
-                    } 
+                    }
                 }),
             Expr(tag) => self
                 .compiled_exprs

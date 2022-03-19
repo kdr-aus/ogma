@@ -69,8 +69,11 @@ pub fn compile_with_seed_vars(
     })
 }
 
+/// Successful compilation structure.
 pub struct FullCompilation {
+    /// Compiled evaluation stack, which can be evaluated.
     pub eval_stack: eval::Stack,
+    /// The seeding locals environment.
     pub env: Environment,
 }
 

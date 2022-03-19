@@ -14,7 +14,6 @@ mod var;
 
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
-type LocalsMap = IndexMap<Locals>;
 
 pub(crate) use self::{
     annotate::types as annotate_types,
