@@ -66,7 +66,7 @@ pub fn compile_with_seed_vars(
 
     // NOTE: this can be used to investigate compilation/evaluation issues by visualising the
     // compiler state. gated by a compilation flag, it must be turned off for release modes
-    compiler.write_debug_report("debug-compiler.md");
+    // compiler.write_debug_report("debug-compiler.md");
 
     Ok(FullCompilation {
         eval_stack: compiler.compiled_exprs.remove(&0).expect(err), // root expr stack
@@ -136,70 +136,45 @@ impl<'d> Compiler<'d> {
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))
         {
-            self.write_debug_report("debug-compiler.md");
-
-            eprintln!("Resolving TG");
             self.resolve_tg()?;
 
-            eprintln!("Populating compiled expressions");
             if self.populate_compiled_expressions() {
-                eprintln!("✅ SUCCESS");
-                continue;
+                continue
             }
 
-            eprintln!("Assigning variable types");
             if self.assign_variable_types() {
-                eprintln!("✅ SUCCESS");
-                continue;
+                continue
             }
 
-            eprintln!("Inserting available def locals");
             if self.insert_available_def_locals()? {
-                eprintln!("✅ SUCCESS");
-                continue;
+                continue
             }
 
-            eprintln!("Linking def's args for known paths");
             if self.link_known_def_path_args() {
-                eprintln!("✅ SUCCESS");
-                continue;
+                continue
             }
 
-            eprintln!("Compiling blocks");
             match self.compile_blocks() {
                 Ok(()) => {
-                    eprintln!("✅ SUCCESS");
-                    continue;
+                    continue
                 }
                 // Break early if a hard error.
                 Err(e) if e.hard => return Err(e),
                 Err(e) => err = Some(e),
             }
 
-            // TODO remove this
-            //             eprintln!("Flow compiled op's locals");
-            //             if self.flow_compiled_ops_locals() {
-            //                 eprintln!("✅ SUCCESS");
-            //                 continue;
-            //             }
 
-            eprintln!("Inferring inputs");
             match self.infer_inputs() {
                 Ok(true) => {
-                    eprintln!("✅ SUCCESS");
-                    continue;
+                    continue
                 }
                 Err(e) => err = Some(e),
                 _ => (),
             }
 
-            eprintln!("Inferring outputs");
             if self.infer_outputs() {
-                eprintln!("✅ SUCCESS");
-                continue;
+                continue
             }
-
-            self.write_debug_report("debug-compiler.md");
 
             return Err(err.unwrap_or_else(||
                 Error {
