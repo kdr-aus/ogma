@@ -61,6 +61,15 @@ impl From<locals_graph::Chg> for Chg {
     }
 }
 
+/// Collection of graphs used in compilation.
+///
+/// Collected since all are used in a `Block` and this reduces 3 pointers into one.
+pub struct Graphs {
+    pub ag: astgraph::AstGraph,
+    pub tg: tygraph::TypeGraph,
+    pub lg: locals_graph::LocalsGraph,
+}
+
 #[cfg(debug_assertions)]
 fn debug_write_flowchart<N, E, W, F0, F1, F2>(
     g: &petgraph::stable_graph::StableGraph<N, E>,

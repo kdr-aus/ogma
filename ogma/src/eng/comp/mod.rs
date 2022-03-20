@@ -10,7 +10,7 @@ mod infer;
 mod params;
 mod resolve_tg;
 
-use params::*;
+pub use params::CallsiteParam;
 
 /// Compile an expression.
 ///
@@ -75,27 +75,6 @@ pub struct FullCompilation {
     pub eval_stack: eval::Stack,
     /// The seeding locals environment.
     pub env: Environment,
-}
-
-// TODO: check sizing, maybe box this??
-#[derive(Clone)]
-pub struct Compiler<'d> {
-    pub defs: &'d Definitions,
-    ag: AstGraph,
-    tg: TypeGraph,
-    lg: LocalsGraph,
-    /// The edges in the `tg` that have been resolved and flowed.
-    flowed_edges: IndexSet,
-    /// A map of **Op** nodes which have succesfully compiled into a `Step`.
-    compiled_ops: IndexMap<Step>,
-    /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
-    compiled_exprs: IndexMap<eval::Stack>,
-    /// A op node which has been flag for output inferrence.
-    output_infer_opnode: Option<OpNode>,
-    /// A map of **Def** nodes which have had their call site parameters prepared as variables.
-    callsite_params: IndexMap<Vec<CallsiteParam>>,
-    /// Depth limit of inference to loop down to.
-    inferrence_depth: u32,
 }
 
 trait BreakOn {
@@ -619,35 +598,22 @@ impl<'a> Block<'a> {
         chgs: Chgs<'a>,
         output_infer: &'a mut bool,
     ) -> Self {
-        let Compiler {
-            defs,
-            ag,
-            tg,
-            lg,
-            compiled_exprs,
-            ..
-        } = compiler;
-
-        let opnode = node.parent(ag);
-        let mut flags = ag.get_flags(node);
-        let mut args = ag.get_args(node);
+        let opnode = node.parent(&compiler.ag);
+        let mut flags = compiler.ag.get_flags(node);
+        let mut args = compiler.ag.get_args(node);
 
         flags.reverse();
         args.reverse();
 
         Block {
             node: opnode,
+            compiler,
             in_ty,
             flags,
             args,
             args_count: 0,
-            ag,
-            tg,
-            lg,
-            compiled_exprs,
             chgs,
             infer_output: output_infer,
-            defs,
             #[cfg(debug_assertions)]
             output_ty: None,
         }

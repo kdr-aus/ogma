@@ -76,7 +76,7 @@ pub struct CallsiteParam {
     pub arg_idx: u8,
 }
 
-pub fn map_def_params_into_variables(
+pub(super) fn map_def_params_into_variables(
     compiler: &Compiler,
     defnode: DefNode,
     chgs: Chgs,

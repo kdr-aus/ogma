@@ -447,12 +447,16 @@ impl<'a> Block<'a> {
         self.args_count += 1;
 
         let Block {
-            ag,
-            tg,
-            lg,
+            compiler:
+                Compiler {
+                    ag,
+                    tg,
+                    lg,
+                    compiled_exprs,
+                    ..
+                },
             chgs,
             in_ty: blk_in_ty,
-            compiled_exprs,
             ..
         } = self;
 
@@ -478,7 +482,6 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        // TODO review this sizing, maybe it can be reduced by boxing
         assert_eq!(size_of::<Argument>(), 48);
         assert_eq!(size_of::<Hold>(), 64);
         assert_eq!(size_of::<arg::ArgBuilder>(), 96);

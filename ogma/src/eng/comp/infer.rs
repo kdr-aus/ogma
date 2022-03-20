@@ -284,29 +284,51 @@ impl<'a> Block<'a> {
     /// If `None` type is going to be returned, flag the block's node as one that might have to
     /// have its output inferred.
     pub fn output_ty(&mut self) -> Option<Type> {
-        let opnode = self.node;
+        let Block {
+            node: opnode,
+            compiler:
+                Compiler {
+                    defs,
+                    ag,
+                    tg,
+                    lg,
+                    flowed_edges,
+                    compiled_ops,
+                    compiled_exprs,
+                    output_infer_opnode,
+                    callsite_params,
+                    inferrence_depth,
+                },
+            in_ty,
+            flags,
+            args,
+            args_count,
+            chgs,
+            infer_output,
+            output_ty,
+        } = self;
 
-        let ret = self.tg[opnode.idx()]
+        let ret = tg[opnode.idx()]
             .output
             .ty()
             .or_else(|| {
                 opnode
-                    .next(&self.ag)
+                    .next(&ag)
                     .map(|next| {
                         // there is a next block
                         // return if there is a known input type
-                        self.tg[next.idx()].input.ty()
+                        tg[next.idx()].input.ty()
                     })
                     .unwrap_or_else(|| {
                         // there is no next block
                         // use the output of the parent expr
-                        self.tg[opnode.parent(&self.ag).idx()].output.ty()
+                        tg[opnode.parent(ag).idx()].output.ty()
                     })
             })
             .cloned();
 
         if ret.is_none() {
-            *self.infer_output = true;
+            **infer_output = true;
         }
 
         ret
