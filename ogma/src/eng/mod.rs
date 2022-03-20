@@ -16,15 +16,14 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
     annotate::types as annotate_types,
-    eval::{Context, CodeInjector, Eval},
-    var::{Variable, Environment, Local},
-    arg::{Argument},
+    arg::Argument,
+    eval::{CodeInjector, Context, Eval},
+    var::{Environment, Local, Variable},
 };
 
 pub use self::comp::{compile, FullCompilation};
 
 type Chgs<'a> = &'a mut Vec<graphs::Chg>;
-
 
 // ###### BLOCK ################################################################
 /// A compilation unit for a single [`ast::Block`].
@@ -88,30 +87,6 @@ pub struct Block<'a> {
     /// Only available and checked in debug builds.
     #[cfg(debug_assertions)]
     output_ty: Option<Type>,
-}
-
-impl<'a> Block<'a> {
-    /// Carry out checks of the block's state.
-    fn finalise(&self, _out_ty: &Type) -> Result<()> {
-        if !self.flags.is_empty() {
-            Err(Error::unused_flags(self.flags.iter()))
-        } else if !self.args.is_empty() {
-            Err(Error::unused_args(
-                self.args.iter().map(|a| self.ag[a.idx()].tag()),
-            ))
-        } else {
-            #[cfg(debug_assertions)]
-            match &self.output_ty {
-                Some(t) => debug_assert_eq!(
-                    t, _out_ty,
-                    "asserted output type should match finalisation type"
-                ),
-                None => (), // no assertion, no failure
-            };
-
-            Ok(())
-        }
-    }
 }
 
 // ###### STEP #################################################################

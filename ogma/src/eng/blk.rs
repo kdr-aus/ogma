@@ -68,7 +68,6 @@ impl<'a> Block<'a> {
         }
     }
 
-
     /// See if there is a next argument node, without popping off the stack.
     pub fn peek_next_arg_node(&self) -> Option<graphs::ArgNode> {
         self.args.last().copied()
@@ -190,5 +189,27 @@ impl<'a> Block<'a> {
         self.eval(O::as_type(), move |v, c| {
             f(v, c).map(|(x, e)| (Into::into(x), e))
         })
+    }
+
+    /// Carry out checks of the block's state.
+    fn finalise(&self, _out_ty: &Type) -> Result<()> {
+        if !self.flags.is_empty() {
+            Err(Error::unused_flags(self.flags.iter()))
+        } else if !self.args.is_empty() {
+            Err(Error::unused_args(
+                self.args.iter().map(|a| self.ag[a.idx()].tag()),
+            ))
+        } else {
+            #[cfg(debug_assertions)]
+            match &self.output_ty {
+                Some(t) => debug_assert_eq!(
+                    t, _out_ty,
+                    "asserted output type should match finalisation type"
+                ),
+                None => (), // no assertion, no failure
+            };
+
+            Ok(())
+        }
     }
 }

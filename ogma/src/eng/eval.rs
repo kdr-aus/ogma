@@ -102,10 +102,7 @@ impl From<Stack> for Step {
             .clone();
         let f = Arc::new(move |value: Value, cx: Context| stack.eval(value, cx));
 
-        Step {
-            out_ty,
-            f,
-        }
+        Step { out_ty, f }
     }
 }
 

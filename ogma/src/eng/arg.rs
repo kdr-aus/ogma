@@ -310,7 +310,6 @@ enum Hold {
     Expr(eval::Stack),
 }
 
-
 pub fn pop(args: &mut Vec<ArgNode>, arg_count: u8, err_tag: &Tag) -> Result<ArgNode> {
     args.pop()
         .ok_or_else(|| Error::insufficient_args(err_tag, arg_count, None))

@@ -289,11 +289,7 @@ impl LocalsGraph {
             "sense check that a new variable is not being created over an existing, matching one"
         );
 
-        let var = Variable::new( 
-            tag,
-            ty,
-            self.count,
-        );
+        let var = Variable::new(tag, ty, self.count);
 
         self.count += 1;
         let local = self.locals.len() as u32;

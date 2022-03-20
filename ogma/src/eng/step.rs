@@ -17,10 +17,7 @@ impl Step {
             subexpr.eval(input, cx)
         });
 
-        Self {
-            out_ty,
-            f,
-        }
+        Self { out_ty, f }
     }
 
     /// Evaluate this step, invoking the stored closure with the given value and context.

@@ -33,9 +33,7 @@ impl Environment {
 /// Module scoped constructor.
 impl Variable {
     pub(super) fn new(tag: Tag, ty: Type, env_idx: usize) -> Self {
-        Self {
-            tag, ty, env_idx
-        }
+        Self { tag, ty, env_idx }
     }
 }
 
