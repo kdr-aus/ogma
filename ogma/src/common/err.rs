@@ -276,8 +276,8 @@ impl Error {
         let tag = args
             .cloned()
             .reduce(|mut a, b| {
-                a.start = a.start.min(b.start);
-                a.end = a.end.max(b.end);
+                a.make_mut().start = a.start.min(b.start);
+                a.make_mut().end = a.end.max(b.end);
                 a
             })
             .unwrap_or_default();

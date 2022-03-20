@@ -114,6 +114,5 @@ mod tests {
 
         // TODO review this sizing, maybe it can be reduced by boxing
         assert_eq!(size_of::<Block>(), 144);
-        assert_eq!(size_of::<Tag>(), 64);
     }
 }
