@@ -815,7 +815,9 @@ impl Tuple {
     }
 
     pub fn ty(args: Vec<Type>) -> TypeDef {
+        use ast::Tag_;
         use std::fmt::Write;
+
         let name = Self::name(&args);
 
         let mut i = 0;
@@ -839,14 +841,14 @@ impl Tuple {
         };
 
         // build tags
-        let t = Tag {
+        let t = Tag_ {
             anchor: Location::Ogma,
             line: Arc::from(src.as_str()),
             start: 0,
             end: 0,
         };
 
-        let name = Tag {
+        let name = Tag_ {
             end: name.len(),
             ..t.clone()
         };
@@ -856,21 +858,21 @@ impl Tuple {
             .into_iter()
             .zip(fields.into_iter())
             .map(|(arg, (name, ty))| {
-                let name = Tag {
+                let name = Tag_ {
                     start: s,
                     end: s + name.len(),
                     ..t.clone()
                 };
                 s = name.end + 1;
-                let typedef = Tag {
+                let typedef = Tag_ {
                     start: s,
                     end: s + ty.len(),
                     ..t.clone()
                 };
                 s = typedef.end + 1;
                 Field {
-                    name,
-                    _typedef: typedef,
+                    name: name.into(),
+                    _typedef: typedef.into(),
                     ty: arg,
                     _params: Vec::new(),
                 }
@@ -881,7 +883,7 @@ impl Tuple {
             loc: Location::Ogma,
             src,
             help: None,
-            name,
+            name: name.into(),
             ty: TypeVariant::Product(fields),
         }
     }

@@ -10,7 +10,7 @@ mod infer;
 mod params;
 mod resolve_tg;
 
-use params::*;
+pub use params::CallsiteParam;
 
 /// Compile an expression.
 ///
@@ -38,7 +38,7 @@ pub fn compile_with_seed_vars(
     let tg = TypeGraph::build(&ag);
     let lg = LocalsGraph::build(&ag);
 
-    let mut compiler = Compiler {
+    let mut compiler = Box::new(Compiler {
         defs,
         ag,
         tg,
@@ -49,7 +49,7 @@ pub fn compile_with_seed_vars(
         output_infer_opnode: None,
         callsite_params: Default::default(),
         inferrence_depth: 0,
-    };
+    });
 
     compiler.init_tg(input_ty); // initialise TG
 
@@ -75,27 +75,6 @@ pub struct FullCompilation {
     pub eval_stack: eval::Stack,
     /// The seeding locals environment.
     pub env: Environment,
-}
-
-// TODO: check sizing, maybe box this??
-#[derive(Clone)]
-pub struct Compiler<'d> {
-    pub defs: &'d Definitions,
-    ag: AstGraph,
-    tg: TypeGraph,
-    lg: LocalsGraph,
-    /// The edges in the `tg` that have been resolved and flowed.
-    flowed_edges: IndexSet,
-    /// A map of **Op** nodes which have succesfully compiled into a `Step`.
-    compiled_ops: IndexMap<Step>,
-    /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
-    compiled_exprs: IndexMap<eval::Stack>,
-    /// A op node which has been flag for output inferrence.
-    output_infer_opnode: Option<OpNode>,
-    /// A map of **Def** nodes which have had their call site parameters prepared as variables.
-    callsite_params: IndexMap<Vec<CallsiteParam>>,
-    /// Depth limit of inference to loop down to.
-    inferrence_depth: u32,
 }
 
 trait BreakOn {
@@ -126,8 +105,7 @@ impl<'d> Compiler<'d> {
         self.tg.set_root_input_ty(root_ty); // set the root input
     }
 
-    // TODO box here
-    fn compile<B: BreakOn>(mut self, break_on: B) -> Result<Self> {
+    fn compile<B: BreakOn>(mut self: Box<Self>, break_on: B) -> Result<Box<Self>> {
         let brk_key = &break_on.idx();
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))
@@ -514,9 +492,6 @@ impl<'d> Compiler<'d> {
     ) -> Result<Vec<(Variable, Argument)>> {
         let Compiler {
             ag,
-            tg,
-            lg,
-            compiled_exprs,
             callsite_params,
             ..
         } = self;
@@ -535,16 +510,8 @@ impl<'d> Compiler<'d> {
                      arg_idx,
                  }| {
                     let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
-                    let arg = arg::ArgBuilder::new(
-                        arg,
-                        ag,
-                        tg,
-                        lg,
-                        chgs,
-                        Some(in_ty.clone()),
-                        compiled_exprs,
-                    )
-                    .supplied(in_ty.clone());
+                    let arg = arg::ArgBuilder::new(arg, self, chgs, Some(in_ty.clone()))
+                        .supplied(in_ty.clone());
                     let arg = match param.ty().cloned() {
                         Some(ty) => arg.and_then(|a| a.returns(ty)),
                         None => arg,
@@ -619,35 +586,22 @@ impl<'a> Block<'a> {
         chgs: Chgs<'a>,
         output_infer: &'a mut bool,
     ) -> Self {
-        let Compiler {
-            defs,
-            ag,
-            tg,
-            lg,
-            compiled_exprs,
-            ..
-        } = compiler;
-
-        let opnode = node.parent(ag);
-        let mut flags = ag.get_flags(node);
-        let mut args = ag.get_args(node);
+        let opnode = node.parent(&compiler.ag);
+        let mut flags = compiler.ag.get_flags(node);
+        let mut args = compiler.ag.get_args(node);
 
         flags.reverse();
         args.reverse();
 
         Block {
             node: opnode,
+            compiler,
             in_ty,
             flags,
             args,
             args_count: 0,
-            ag,
-            tg,
-            lg,
-            compiled_exprs,
             chgs,
             infer_output: output_infer,
-            defs,
             #[cfg(debug_assertions)]
             output_ty: None,
         }

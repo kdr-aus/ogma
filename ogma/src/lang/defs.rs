@@ -196,7 +196,7 @@ the row is assumed to be populated with strings, if not an error occurs",
             let help = item.comment.take();
             process_definition(
                 item.code(),
-                Location::File(Arc::clone(&file), item.line as usize),
+                Location::File(Arc::clone(&file), item.line),
                 help,
                 self,
             )?;

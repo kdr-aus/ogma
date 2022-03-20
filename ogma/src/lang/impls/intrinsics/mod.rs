@@ -147,13 +147,13 @@ fn type_flag(blk: &mut Block) -> Result<Option<Type>> {
     blk.get_flag(None)
         .map(|ty| {
             let x = if ty.str().starts_with("U_") {
-                Tuple::parse_name(ty.str(), blk.defs.types())
+                Tuple::parse_name(ty.str(), blk.defs().types())
             } else {
                 None
             };
             match x {
                 Some(x) => Ok(x),
-                None => blk.defs.types().get_using_tag(&ty).map(|x| x.clone()),
+                None => blk.defs().types().get_using_tag(&ty).map(|x| x.clone()),
             }
         })
         .transpose()
@@ -360,7 +360,7 @@ impl BinaryOp<()> {
             "cmp",
             ty,
             &ordty,
-            blk.defs,
+            blk.defs(),
             Box::new(cnv_value_to_ord) as Box<_>,
         )
         .map_err(|e| {

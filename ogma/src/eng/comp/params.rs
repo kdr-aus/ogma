@@ -76,7 +76,7 @@ pub struct CallsiteParam {
     pub arg_idx: u8,
 }
 
-pub fn map_def_params_into_variables(
+pub(super) fn map_def_params_into_variables(
     compiler: &Compiler,
     defnode: DefNode,
     chgs: Chgs,
@@ -176,15 +176,9 @@ fn map_callsite_param(
     param: &Parameter,
     chgs: Chgs,
 ) -> Result<std::result::Result<Option<CallsiteParam>, LocalInjection>> {
-    let Compiler {
-        ag,
-        tg,
-        lg,
-        compiled_exprs,
-        ..
-    } = compiler;
+    let Compiler { ag, lg, .. } = compiler;
 
-    let arg = arg::ArgBuilder::new(argnode, ag, tg, lg, chgs, None, compiled_exprs);
+    let arg = arg::ArgBuilder::new(argnode, compiler, chgs, None);
 
     let arg = match param.ty() {
         // point of failure

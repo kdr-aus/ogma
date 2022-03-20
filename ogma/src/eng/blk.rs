@@ -4,7 +4,7 @@ use graphs::*;
 impl<'a> Block<'a> {
     /// The operation (command) tag.
     pub fn op_tag(&self) -> &Tag {
-        self.ag[self.node.idx()]
+        self.compiler.ag[self.node.idx()]
             .op()
             .expect("blocks node is an OP")
             .0
@@ -12,7 +12,7 @@ impl<'a> Block<'a> {
 
     /// The entire block tag.
     pub fn blk_tag(&self) -> &Tag {
-        self.ag[self.node.idx()]
+        self.compiler.ag[self.node.idx()]
             .op()
             .expect("blocks node is an OP")
             .1
@@ -26,6 +26,11 @@ impl<'a> Block<'a> {
     /// Returns the _number of arguments remaining_.
     pub fn args_len(&self) -> usize {
         self.args.len()
+    }
+
+    /// The current definitions being compiled with.
+    pub fn defs(&self) -> &'a Definitions {
+        self.compiler.defs
     }
 
     /// Assert that this block will return the given type.
@@ -84,13 +89,18 @@ impl<'a> Block<'a> {
     /// The variable will be created expecting the type `ty`. `set_data` only validates types in
     /// debug builds, be sure that testing occurs of code path to avoid UB in release.
     pub fn create_var_ref(&mut self, arg: ArgNode, ty: Type) -> Result<Variable> {
-        match &self.ag[arg.idx()] {
-            astgraph::AstNode::Var(var) => match arg.op(&self.ag).next(&self.ag) {
-                Some(next) => self
-                    .lg
+        let Block {
+            compiler: Compiler { ag, lg, .. },
+            chgs,
+            ..
+        } = self;
+
+        match &ag[arg.idx()] {
+            astgraph::AstNode::Var(var) => match arg.op(ag).next(ag) {
+                Some(next) => lg
                     .new_var(next.idx(), Str::new(var.str()), ty, var.clone())
                     .map_err(|chg| {
-                        self.chgs.push(chg.into());
+                        chgs.push(chg.into());
                         Error::update_locals_graph(var)
                     }),
                 None => Ok(Variable::noop(var.clone(), ty)),
@@ -129,8 +139,9 @@ impl<'a> Block<'a> {
         N: Into<Str>,
     {
         // we define it into the arg node
-        let tag = arg.tag(&self.ag);
-        self.lg
+        let tag = arg.tag(&self.compiler.ag);
+        self.compiler
+            .lg
             .new_var(arg.idx(), name, ty, tag.clone())
             .map_err(|chg| {
                 self.chgs.push(chg.into());
@@ -197,7 +208,7 @@ impl<'a> Block<'a> {
             Err(Error::unused_flags(self.flags.iter()))
         } else if !self.args.is_empty() {
             Err(Error::unused_args(
-                self.args.iter().map(|a| self.ag[a.idx()].tag()),
+                self.args.iter().map(|a| a.tag(&self.compiler.ag)),
             ))
         } else {
             #[cfg(debug_assertions)]

@@ -1,5 +1,5 @@
 use super::*;
-use graphs::{astgraph::AstGraph, locals_graph::LocalsGraph, tygraph::Knowledge, *};
+use graphs::{tygraph::Knowledge, *};
 use std::convert::TryInto;
 
 // ###### ARG BUILDER ##########################################################
@@ -8,50 +8,38 @@ pub struct ArgBuilder<'a> {
     in_ty: Kn,
     out_ty: Kn,
 
-    // compiler references
-    ag: &'a AstGraph,
-    lg: &'a LocalsGraph,
+    compiler: &'a Compiler<'a>,
     blk_in_ty: Option<Type>,
     chgs: Chgs<'a>,
-    compiled_exprs: &'a IndexMap<eval::Stack>,
-
-    #[cfg(debug_assertions)]
-    tg: &'a tygraph::TypeGraph,
 }
 
 impl<'a> ArgBuilder<'a> {
-    pub fn new(
+    pub(super) fn new(
         node: ArgNode,
-        ag: &'a AstGraph,
-        tg: &'a tygraph::TypeGraph,
-        lg: &'a LocalsGraph,
+        compiler: &'a Compiler<'a>,
         chgs: Chgs<'a>,
         blk_in_ty: Option<Type>,
-        compiled_exprs: &'a IndexMap<eval::Stack>,
-    ) -> Self {
+    ) -> Box<Self> {
         // see if the input and/or output types are known
-        let tys = &tg[node.idx()]; // node should exist
+        let tys = &compiler.tg[node.idx()]; // node should exist
         let in_ty = Kn::from(&tys.input);
         let out_ty = Kn::from(&tys.output);
 
-        ArgBuilder {
+        Box::new(ArgBuilder {
             node,
             in_ty,
             out_ty,
-            ag,
-            lg,
+            compiler,
             chgs,
             blk_in_ty,
-            compiled_exprs,
-            tg,
-        }
+        })
         .follow_local_arg_ptr()
     }
 
-    fn follow_local_arg_ptr(mut self) -> Self {
-        let new_node = self.ag[self.node.idx()]
+    fn follow_local_arg_ptr(mut self: Box<Self>) -> Box<Self> {
+        let new_node = self.compiler.ag[self.node.idx()]
             .var()
-            .and_then(|t| self.lg.get(self.node.idx(), t.str()))
+            .and_then(|t| self.compiler.lg.get(self.node.idx(), t.str()))
             .and_then(|l| match l {
                 Local::Ptr { to, tag: _ } => Some(to),
                 _ => None,
@@ -68,7 +56,7 @@ impl<'a> ArgBuilder<'a> {
 
     /// The arguments tag.
     pub fn tag(&self) -> &Tag {
-        self.ag[self.node.idx()].tag()
+        self.compiler.ag[self.node.idx()].tag()
     }
 
     pub fn node(&self) -> ArgNode {
@@ -80,7 +68,7 @@ impl<'a> ArgBuilder<'a> {
     /// > Since the **blocks's** input type is used often, and trying to pass this through is
     /// > difficult with mutable aliasing, the type argument is an `Option`, where the `None`
     /// > variant represents _using the block's input type_.
-    pub fn supplied<T: Into<Option<Type>>>(mut self, ty: T) -> Result<Self> {
+    pub fn supplied<T: Into<Option<Type>>>(mut self: Box<Self>, ty: T) -> Result<Box<Self>> {
         let ty = match ty.into().or_else(|| self.blk_in_ty.clone()) {
             Some(ty) => ty,
             None => return Ok(self),
@@ -113,7 +101,7 @@ impl<'a> ArgBuilder<'a> {
     }
 
     /// Assert that this argument returns a value of type `ty`.
-    pub fn returns(self, ty: Type) -> Result<Self> {
+    pub fn returns(self: Box<Self>, ty: Type) -> Result<Box<Self>> {
         debug_assert!(
             !matches!(self.out_ty, Kn::Any),
             "logic error if output is Any type"
@@ -150,7 +138,7 @@ impl<'a> ArgBuilder<'a> {
 
     /// Asserts that the arguments input and output types are known, and if so, returns a concrete
     /// [`Argument`] with the ability to evaluate.
-    pub fn concrete(mut self) -> Result<Argument> {
+    pub fn concrete(mut self: Box<Self>) -> Result<Argument> {
         // assert that if this is a variable type, the variable exists.
         // This is done to ensure sane errors are returned
         self.assert_var_exists()?;
@@ -166,7 +154,7 @@ impl<'a> ArgBuilder<'a> {
             (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
             (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
-                let hold = self.map_astnode_into_hold()?;
+                let hold = Box::new(self.map_astnode_into_hold()?);
 
                 if hold.ty().as_ref() == &out_ty {
                     Ok(Argument {
@@ -182,10 +170,18 @@ impl<'a> ArgBuilder<'a> {
         }
     }
 
-    fn map_astnode_into_hold(self) -> Result<Hold> {
+    fn map_astnode_into_hold(self: Box<Self>) -> Result<Hold> {
         use astgraph::AstNode::*;
 
-        match &self.ag[self.node.idx()] {
+        let Compiler {
+            ag,
+            tg,
+            lg,
+            compiled_exprs,
+            ..
+        } = self.compiler;
+
+        match &ag[self.node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
@@ -198,7 +194,7 @@ impl<'a> ArgBuilder<'a> {
             Pound { ch: 'i', tag: _ } => {
                 // The input literal is a single step which takes the input and passes it straight
                 // through
-                let out_ty = self.tg[self.node.idx()]
+                let out_ty = tg[self.node.idx()]
                     .output
                     .ty()
                     .cloned()
@@ -208,22 +204,21 @@ impl<'a> ArgBuilder<'a> {
                     f: Arc::new(|input, cx| cx.done(input)),
                 }]);
                 #[cfg(debug_assertions)]
-                stack.add_types(&self.tg[self.node.idx()]);
+                stack.add_types(&tg[self.node.idx()]);
 
                 Ok(Hold::Expr(stack))
             }
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
-            Var(tag) => self
-                .lg
-                .get_checked(self.node.idx(), tag.str(), tag)
-                .and_then(|local| match local {
-                    Local::Var(var) => Ok(Hold::Var(var.clone())),
-                    Local::Ptr { .. } => {
-                        unreachable!("a param argument should shadow the referencer arg node")
-                    }
-                }),
-            Expr(tag) => self
-                .compiled_exprs
+            Var(tag) => {
+                lg.get_checked(self.node.idx(), tag.str(), tag)
+                    .and_then(|local| match local {
+                        Local::Var(var) => Ok(Hold::Var(var.clone())),
+                        Local::Ptr { .. } => {
+                            unreachable!("a param argument should shadow the referencer arg node")
+                        }
+                    })
+            }
+            Expr(tag) => compiled_exprs
                 .get(&self.node.index())
                 .cloned()
                 .map(Hold::Expr)
@@ -243,16 +238,17 @@ impl<'a> ArgBuilder<'a> {
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
-        match &self.ag[self.node.idx()] {
+        let Compiler { ag, lg, .. } = self.compiler;
+
+        match &ag[self.node.idx()] {
             astgraph::AstNode::Var(tag) => {
-                self.lg
-                    .get(self.node.idx(), tag.str())
+                lg.get(self.node.idx(), tag.str())
                     // Ok(Some(true)) if variable exists
                     .map(|_| true)
                     // if NOT sealed, return Ok(Some(false)) -- lg should be updated
                     // NOTE we check the parent op for seal, not the argument itself.
                     .or_else(|| {
-                        let sealed = self.lg.sealed(self.node.op(self.ag).idx());
+                        let sealed = lg.sealed(self.node.op(ag).idx());
                         (!sealed).then(|| false)
                     })
                     // Error with a HARD error
@@ -292,18 +288,16 @@ impl From<&Knowledge> for Kn {
 
 // ###### ARGUMENT #############################################################
 /// Compiled argument.
-///
-/// TODO: reduce the size of this, possibly by boxing the Hold??
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Argument {
     /// The argument tag.
     pub tag: Tag,
     in_ty: Type,
     out_ty: Type,
-    hold: Hold,
+    hold: Box<Hold>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum Hold {
     Lit(Value),
     Var(Variable),
@@ -338,7 +332,7 @@ impl Argument {
     {
         let tag = &self.tag;
 
-        match &self.hold {
+        match &*self.hold {
             Hold::Lit(x) => {
                 let exp_ty = T::as_type();
                 if exp_ty == self.out_ty {
@@ -362,7 +356,7 @@ impl Argument {
     where
         F: FnOnce() -> Value,
     {
-        let r = match &self.hold {
+        let r = match &*self.hold {
             Hold::Lit(x) => Ok(x.clone()),
             Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
             Hold::Expr(stack) => stack.eval(input(), cx.clone()).map(|x| x.0),
@@ -392,7 +386,7 @@ impl Argument {
             V(Cow<'r, Value>),
             E(&'r eval::Stack),
         }
-        let r = match &self.hold {
+        let r = match &*self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
             Hold::Var(x) => R::V(Cow::Owned(x.fetch(&cx.env).clone())),
             Hold::Expr(e) => R::E(e),
@@ -443,31 +437,25 @@ impl<'a> Block<'a> {
     /// about the argument.
     /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
     /// an [`Argument`] is produced.
-    pub fn next_arg(&mut self) -> Result<ArgBuilder> {
+    pub fn next_arg(&mut self) -> Result<Box<ArgBuilder>> {
         let btag = self.blk_tag().clone();
-        let node = pop(&mut self.args, self.args_count, &btag)?;
-        self.args_count += 1;
 
         let Block {
-            ag,
-            tg,
-            lg,
             chgs,
-            in_ty: blk_in_ty,
-            compiled_exprs,
+            in_ty,
+            args,
+            args_count,
             ..
         } = self;
 
-        let blk_in_ty = Some(blk_in_ty.clone());
+        let node = pop(args, *args_count, &btag)?;
+        *args_count += 1;
 
         Ok(ArgBuilder::new(
             node,
-            ag,
-            tg,
-            lg,
+            self.compiler,
             chgs,
-            blk_in_ty,
-            compiled_exprs,
+            Some(in_ty.clone()),
         ))
     }
 }
@@ -480,9 +468,8 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        // TODO review this sizing, maybe it can be reduced by boxing
-        assert_eq!(size_of::<Argument>(), 192);
-        assert_eq!(size_of::<Hold>(), 96);
-        assert_eq!(size_of::<arg::ArgBuilder>(), 96);
+        assert_eq!(size_of::<Argument>(), 48);
+        assert_eq!(size_of::<Hold>(), 64);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 72);
     }
 }

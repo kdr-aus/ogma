@@ -88,7 +88,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
 
             let (var, code) = build_tuple_cmp_code(els);
 
-            let mut injector = eng::CodeInjector::new(code, blk.defs)
+            let mut injector = eng::CodeInjector::new(code, blk.defs())
                 .map_err(|e| eprintln!("{}", e))
                 .expect("this should parse fine");
 
@@ -98,7 +98,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
 
             let injector = injector
-                .compile(ty, blk.defs)
+                .compile(ty, blk.defs())
                 .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();
@@ -235,7 +235,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
 
             let (var, code) = build_tuple_eq_code(els);
 
-            let mut injector = eng::CodeInjector::new(code, blk.defs)
+            let mut injector = eng::CodeInjector::new(code, blk.defs())
                 .map_err(|e| eprintln!("{}", e))
                 .expect("this should parse fine");
 
@@ -245,7 +245,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
 
             let injector = injector
-                .compile(ty, blk.defs)
+                .compile(ty, blk.defs())
                 .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();

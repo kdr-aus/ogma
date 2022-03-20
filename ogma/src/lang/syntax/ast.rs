@@ -8,11 +8,15 @@
 //! ^-----------------------------------------^ --> Expression
 //! ```
 use ::kserd::Number;
-use std::{borrow::Cow, fmt, path::Path, sync::Arc};
+use std::{borrow::Cow, fmt, ops, path::Path, sync::Arc};
 
 /// `Tag` only implements tag _value_ equality checking (as in `.str()`).
 #[derive(Clone)]
-pub struct Tag {
+pub struct Tag(Arc<Tag_>);
+
+/// Inner tag.
+#[derive(Clone)]
+pub struct Tag_ {
     /// The location this tag is referencing.
     pub anchor: Location,
     /// The source line this tag slices.
@@ -25,12 +29,25 @@ pub struct Tag {
 
 impl Default for Tag {
     fn default() -> Self {
-        Self {
+        Tag(Arc::new(Tag_ {
             anchor: Location::Shell,
             line: "".into(),
             start: 0,
             end: 0,
-        }
+        }))
+    }
+}
+
+impl ops::Deref for Tag {
+    type Target = Tag_;
+    fn deref(&self) -> &Tag_ {
+        self.0.deref()
+    }
+}
+
+impl From<Tag_> for Tag {
+    fn from(t: Tag_) -> Self {
+        Tag(Arc::new(t))
     }
 }
 
@@ -57,6 +74,11 @@ impl Tag {
     /// Treat this tag as a range.
     pub fn range(&self) -> std::ops::Range<usize> {
         self.start..self.end
+    }
+
+    /// COW the inner tag.
+    pub fn make_mut(&mut self) -> &mut Tag_ {
+        Arc::make_mut(&mut self.0)
     }
 }
 
@@ -95,7 +117,9 @@ pub enum Location {
     /// Defined in the current sessions shell.
     Shell,
     /// Defined in a file. `(filepath, line)`.
-    File(Arc<Path>, usize),
+    ///
+    /// Limiting line counts to 2^16.
+    File(Arc<Path>, u16),
 }
 
 impl Default for Location {
@@ -106,7 +130,7 @@ impl Default for Location {
 
 impl Location {
     /// Construct a location from a file and a line number.
-    pub fn file<F: AsRef<Path>>(file: F, line: usize) -> Self {
+    pub fn file<F: AsRef<Path>>(file: F, line: u16) -> Self {
         Location::File(Arc::from(file.as_ref()), line)
     }
 }
@@ -212,7 +236,7 @@ impl IBlock for PrefixBlock {
                 Term::Flag(x) => x.end,
             })
             .unwrap_or(tag.end);
-        tag.end = end;
+        tag.make_mut().end = end;
         tag
     }
 
@@ -257,9 +281,9 @@ impl IBlock for DotOperatorBlock {
     fn block_tag(&self) -> Tag {
         let mut tag = self.lhs.tag().clone();
         if matches!(self.lhs, Argument::Var(_)) {
-            tag.start = tag.start.saturating_sub(1);
+            tag.make_mut().start = tag.start.saturating_sub(1);
         }
-        tag.end = self.rhs.end;
+        tag.make_mut().end = self.rhs.end;
         tag
     }
 
@@ -386,19 +410,19 @@ mod tests {
 
     #[test]
     fn tag_testing() {
-        let tag = Tag {
+        let tag = Tag::from(Tag_ {
             anchor: Location::Shell,
             line: Arc::from("Hello, world!"),
             start: 0,
             end: 5,
-        };
+        });
         assert_eq!(tag.range(), 0..5);
         assert_eq!(&format!("{:?}", tag), r#"Tag("Hello", 0..5)"#);
     }
 
     #[test]
-    fn tag_sizing() {
-        // TODO -- reduce size of tag.
-        assert_eq!(std::mem::size_of::<Tag>(), 64);
+    fn sizing() {
+        assert_eq!(std::mem::size_of::<Tag>(), 8);
+        assert_eq!(std::mem::size_of::<Location>(), 24);
     }
 }

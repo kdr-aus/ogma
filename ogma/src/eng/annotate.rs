@@ -12,7 +12,10 @@ pub fn types(blk: &Block, arg: graphs::ArgNode, verbose: bool) -> String {
 fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool) {
     use AstNode::*;
 
-    let Block { ag, tg, .. } = blk;
+    let Block {
+        compiler: Compiler { ag, tg, .. },
+        ..
+    } = blk;
 
     let out_ty = tg[node].output.ty();
 
@@ -57,7 +60,10 @@ fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool)
 }
 
 fn fmt_op(s: &mut String, blk: &Block, op: OpNode, v: bool) {
-    let Block { ag, tg, .. } = blk;
+    let Block {
+        compiler: Compiler { ag, tg, .. },
+        ..
+    } = blk;
 
     let out_ty = tg[op.idx()].output.ty();
     let in_ty = tg[op.idx()].input.ty();

@@ -25,6 +25,30 @@ pub use self::comp::{compile, FullCompilation};
 
 type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
+// ###### COMPILER #############################################################
+#[derive(Clone)]
+struct Compiler<'d> {
+    defs: &'d Definitions,
+    ag: graphs::astgraph::AstGraph,
+    tg: graphs::tygraph::TypeGraph,
+    lg: graphs::locals_graph::LocalsGraph,
+    /// The edges in the `tg` that have been resolved and flowed.
+    flowed_edges: IndexSet,
+    /// A map of **Op** nodes which have succesfully compiled into a `Step`.
+    compiled_ops: IndexMap<Step>,
+    /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
+    compiled_exprs: IndexMap<eval::Stack>,
+    /// A op node which has been flag for output inferrence.
+    output_infer_opnode: Option<graphs::OpNode>,
+    /// A map of **Def** nodes which have had their call site parameters prepared as variables.
+    callsite_params: IndexMap<Vec<comp::CallsiteParam>>,
+    /// Depth limit of inference to loop down to.
+    inferrence_depth: u32,
+}
+
+/// Boxed compiler, should be used when passsing by value.
+type Compiler_<'a> = Box<Compiler<'a>>;
+
 // ###### BLOCK ################################################################
 /// A compilation unit for a single [`ast::Block`].
 ///
@@ -35,6 +59,9 @@ type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 pub struct Block<'a> {
     /// The OP node index from the compiler graphs.
     node: graphs::OpNode,
+
+    /// A _read-only_ compiler reference.
+    compiler: &'a Compiler<'a>,
 
     // NOTE that the input type is not referenced via the TG.
     // This is done so that this block can be tested against differing input types for InferInput
@@ -58,15 +85,6 @@ pub struct Block<'a> {
     /// Only 255 arguments are supported.
     args_count: u8,
 
-    /// The compiler's ast graph.
-    ag: &'a graphs::astgraph::AstGraph,
-    /// The compiler's type graph.
-    tg: &'a graphs::tygraph::TypeGraph, // notice the immutability!
-    /// The compiler's local's graph.
-    lg: &'a graphs::locals_graph::LocalsGraph,
-    /// The compiler's compiled expressions.
-    compiled_exprs: &'a IndexMap<eval::Stack>,
-
     /// A list of changes to be made to the type graph.
     ///
     /// This is stored as a mutable reference since the block is usually passed by value to
@@ -78,9 +96,6 @@ pub struct Block<'a> {
 
     /// Flag that this block's output should be inferred if getting to output inferencing phase.
     infer_output: &'a mut bool,
-
-    /// The definitions carried through.
-    pub defs: &'a Definitions,
 
     /// Carry information about an asserted output type.
     /// Check this against upon finalisation to ensure it matches.
@@ -112,8 +127,12 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        // TODO review this sizing, maybe it can be reduced by boxing
-        assert_eq!(size_of::<Block>(), 144);
-        assert_eq!(size_of::<Tag>(), 64);
+        assert_eq!(size_of::<Compiler>(), 400); // oomph!
+                                                // NOTE
+                                                // Although block sizing is large, it would not really be a hot spot, and the cost of
+                                                // refactoring somewhat outweighs any benefit, without doing any proper profiling to
+                                                // support it.
+        assert_eq!(size_of::<Block>(), 96 + size_of::<Option<Type>>()); // `output_ty` is only on debug builds
+        assert_eq!(size_of::<Step>(), 32);
     }
 }
