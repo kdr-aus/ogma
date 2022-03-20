@@ -1,7 +1,27 @@
 //! Evaluation.
-
 use super::*;
 
+// ###### CONTEXT ##############################################################
+#[derive(Clone)]
+pub struct Context<'a> {
+    pub env: Environment,
+    pub root: &'a std::path::Path,
+    pub wd: &'a std::path::Path,
+}
+
+impl<'a> Context<'a> {
+    /// _Always_ returns `Ok`.
+    pub fn done<V: Into<Value>>(self, value: V) -> StepR {
+        Ok((value.into(), self.env))
+    }
+
+    /// _Always_ returns `Ok`.
+    pub fn done_o<T>(self, value: T) -> Result<(T, Environment)> {
+        Ok((value, self.env))
+    }
+}
+
+// ###### STACK ################################################################
 #[derive(Debug, Clone)]
 pub struct Stack {
     #[cfg(debug_assertions)]
@@ -89,6 +109,7 @@ impl From<Stack> for Step {
     }
 }
 
+// ###### CODE INJECTOR ########################################################
 pub struct CodeInjector<T> {
     /// Map of block argument to an _injector's_ local variable.
     args: Vec<(Argument, Variable, Option<Value>)>,

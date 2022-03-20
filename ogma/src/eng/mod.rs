@@ -8,7 +8,6 @@ mod blk;
 mod comp;
 mod eval;
 mod graphs;
-mod hir;
 mod step;
 mod var;
 
@@ -17,8 +16,7 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 
 pub(crate) use self::{
     annotate::types as annotate_types,
-    eval::{CodeInjector, Eval},
-    hir::Context,
+    eval::{Context, CodeInjector, Eval},
     var::{Environment, Local},
 };
 

@@ -869,9 +869,7 @@ mod tests {
     #[test]
     fn compilation_test_15() {
         // testing Expr params
-        let x = compile("Table | last { get foo --Num }").unwrap();
-
-        let defs = &mut Definitions::default();
+        compile("Table | last { get foo --Num }").unwrap();
     }
 
     #[test]
