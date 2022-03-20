@@ -8,29 +8,20 @@ pub struct ArgBuilder<'a> {
     in_ty: Kn,
     out_ty: Kn,
 
-    // compiler references
-    ag: &'a AstGraph,
-    lg: &'a LocalsGraph,
+    compiler: &'a Compiler<'a>,
     blk_in_ty: Option<Type>,
     chgs: Chgs<'a>,
-    compiled_exprs: &'a IndexMap<eval::Stack>,
-
-    #[cfg(debug_assertions)]
-    tg: &'a tygraph::TypeGraph,
 }
 
 impl<'a> ArgBuilder<'a> {
-    pub fn new(
+    pub(super) fn new(
         node: ArgNode,
-        ag: &'a AstGraph,
-        tg: &'a tygraph::TypeGraph,
-        lg: &'a LocalsGraph,
+        compiler: &'a Compiler<'a>,
         chgs: Chgs<'a>,
         blk_in_ty: Option<Type>,
-        compiled_exprs: &'a IndexMap<eval::Stack>,
     ) -> Box<Self> {
         // see if the input and/or output types are known
-        let tys = &tg[node.idx()]; // node should exist
+        let tys = &compiler.tg[node.idx()]; // node should exist
         let in_ty = Kn::from(&tys.input);
         let out_ty = Kn::from(&tys.output);
 
@@ -38,20 +29,17 @@ impl<'a> ArgBuilder<'a> {
             node,
             in_ty,
             out_ty,
-            ag,
-            lg,
+            compiler,
             chgs,
             blk_in_ty,
-            compiled_exprs,
-            tg,
         })
         .follow_local_arg_ptr()
     }
 
     fn follow_local_arg_ptr(mut self: Box<Self>) -> Box<Self> {
-        let new_node = self.ag[self.node.idx()]
+        let new_node = self.compiler.ag[self.node.idx()]
             .var()
-            .and_then(|t| self.lg.get(self.node.idx(), t.str()))
+            .and_then(|t| self.compiler.lg.get(self.node.idx(), t.str()))
             .and_then(|l| match l {
                 Local::Ptr { to, tag: _ } => Some(to),
                 _ => None,
@@ -68,7 +56,7 @@ impl<'a> ArgBuilder<'a> {
 
     /// The arguments tag.
     pub fn tag(&self) -> &Tag {
-        self.ag[self.node.idx()].tag()
+        self.compiler.ag[self.node.idx()].tag()
     }
 
     pub fn node(&self) -> ArgNode {
@@ -185,7 +173,9 @@ impl<'a> ArgBuilder<'a> {
     fn map_astnode_into_hold(self: Box<Self>) -> Result<Hold> {
         use astgraph::AstNode::*;
 
-        match &self.ag[self.node.idx()] {
+        let Compiler { defs, ag, tg, lg, flowed_edges, compiled_ops, compiled_exprs, output_infer_opnode, callsite_params, inferrence_depth } = self.compiler;
+
+        match &ag[self.node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
@@ -198,7 +188,7 @@ impl<'a> ArgBuilder<'a> {
             Pound { ch: 'i', tag: _ } => {
                 // The input literal is a single step which takes the input and passes it straight
                 // through
-                let out_ty = self.tg[self.node.idx()]
+                let out_ty = tg[self.node.idx()]
                     .output
                     .ty()
                     .cloned()
@@ -208,13 +198,13 @@ impl<'a> ArgBuilder<'a> {
                     f: Arc::new(|input, cx| cx.done(input)),
                 }]);
                 #[cfg(debug_assertions)]
-                stack.add_types(&self.tg[self.node.idx()]);
+                stack.add_types(&tg[self.node.idx()]);
 
                 Ok(Hold::Expr(stack))
             }
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
-            Var(tag) => self
-                .lg
+            Var(tag) => 
+                lg
                 .get_checked(self.node.idx(), tag.str(), tag)
                 .and_then(|local| match local {
                     Local::Var(var) => Ok(Hold::Var(var.clone())),
@@ -222,8 +212,8 @@ impl<'a> ArgBuilder<'a> {
                         unreachable!("a param argument should shadow the referencer arg node")
                     }
                 }),
-            Expr(tag) => self
-                .compiled_exprs
+            Expr(tag) => 
+                compiled_exprs
                 .get(&self.node.index())
                 .cloned()
                 .map(Hold::Expr)
@@ -243,16 +233,18 @@ impl<'a> ArgBuilder<'a> {
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
-        match &self.ag[self.node.idx()] {
+        let Compiler { defs, ag, tg, lg, flowed_edges, compiled_ops, compiled_exprs, output_infer_opnode, callsite_params, inferrence_depth } = self.compiler;
+
+        match &ag[self.node.idx()] {
             astgraph::AstNode::Var(tag) => {
-                self.lg
+                lg
                     .get(self.node.idx(), tag.str())
                     // Ok(Some(true)) if variable exists
                     .map(|_| true)
                     // if NOT sealed, return Ok(Some(false)) -- lg should be updated
                     // NOTE we check the parent op for seal, not the argument itself.
                     .or_else(|| {
-                        let sealed = self.lg.sealed(self.node.op(self.ag).idx());
+                        let sealed = lg.sealed(self.node.op(ag).idx());
                         (!sealed).then(|| false)
                     })
                     // Error with a HARD error
@@ -464,12 +456,9 @@ impl<'a> Block<'a> {
 
         Ok(ArgBuilder::new(
             node,
-            ag,
-            tg,
-            lg,
+            self.compiler,
             chgs,
             blk_in_ty,
-            compiled_exprs,
         ))
     }
 }
@@ -484,6 +473,6 @@ mod tests {
 
         assert_eq!(size_of::<Argument>(), 48);
         assert_eq!(size_of::<Hold>(), 64);
-        assert_eq!(size_of::<arg::ArgBuilder>(), 96);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 72);
     }
 }

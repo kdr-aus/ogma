@@ -515,13 +515,9 @@ impl<'d> Compiler<'d> {
                  }| {
                     let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
                     let arg = arg::ArgBuilder::new(
-                        arg,
-                        ag,
-                        tg,
-                        lg,
+                        arg, self,
                         chgs,
                         Some(in_ty.clone()),
-                        compiled_exprs,
                     )
                     .supplied(in_ty.clone());
                     let arg = match param.ty().cloned() {
