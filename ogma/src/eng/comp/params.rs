@@ -34,8 +34,6 @@ impl<'d> Compiler<'d> {
         let mut chgd = false;
 
         for def in defs {
-            let params = def.params(&self.ag);
-
             match map_def_params_into_variables(self, def, chgs)? {
                 LocalInjection::LgChange => (), // continue,
                 LocalInjection::Success { callsite_params } => {
@@ -53,8 +51,9 @@ impl<'d> Compiler<'d> {
                     // no more changes should occur since we have had succcess building.
                     self.lg.seal_node(def.expr(&self.ag).idx(), &self.ag);
                 }
-                LocalInjection::UnknownReturnTy(argnode) => {
-                    // TODO what to do about unknown return arguments!?
+                LocalInjection::UnknownReturnTy(_) => {
+                    // NOTE what to do about unknown return arguments!?
+                    // So far it has not been an issue?
                 }
             }
         }
@@ -82,14 +81,7 @@ pub fn map_def_params_into_variables(
     defnode: DefNode,
     chgs: Chgs,
 ) -> Result<LocalInjection> {
-    let Compiler {
-        ag,
-        tg,
-        lg,
-        compiled_exprs,
-        defs,
-        ..
-    } = compiler;
+    let Compiler { ag, tg, defs, .. } = compiler;
 
     // flags are not supported:
     let flags = ag.get_flags(defnode);
@@ -237,7 +229,7 @@ fn map_callsite_param(
         .ok()))
 }
 
-fn finalise_args(mut args: &[ArgNode], ag: &AstGraph) -> Result<()> {
+fn finalise_args(args: &[ArgNode], ag: &AstGraph) -> Result<()> {
     if !args.is_empty() {
         Err(Error::unused_args(args.iter().map(|a| ag[a.idx()].tag())))
     } else {

@@ -1,13 +1,22 @@
 use super::*;
 use ::libs::divvy::Str;
 use graphs::ArgNode;
-use std::{cell::*, rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 // ###### VARIABLE #############################################################
 #[derive(Debug, Clone)]
 pub enum Local {
     Var(Variable),
     Ptr { to: ArgNode, tag: Tag },
+}
+
+/// A location in memory.
+#[derive(Debug, Clone)]
+pub struct Variable {
+    /// The tag.
+    pub tag: Tag,
+    ty: Type,
+    env_idx: usize,
 }
 
 // TODO can this be Arc<[Value]>???
@@ -21,7 +30,15 @@ impl Environment {
     }
 }
 
+/// Module scoped constructor.
 impl Variable {
+    pub(super) fn new(tag: Tag, ty: Type, env_idx: usize) -> Self {
+        Self { tag, ty, env_idx }
+    }
+}
+
+impl Variable {
+    /// The variables type.
     pub fn ty(&self) -> &Type {
         &self.ty
     }
@@ -31,10 +48,8 @@ impl Variable {
         self.env_idx
     }
 
+    /// Fetch the value found in the memory location, in the environment.
     pub fn fetch<'a>(&self, env: &'a Environment) -> &'a Value {
-        dbg!(&self);
-        dbg!(env);
-
         debug_assert!(
             !self.is_noop(),
             "tried fetching a value from a NOOP variable"
@@ -55,12 +70,8 @@ impl Variable {
         val
     }
 
+    /// Populate the location in memory (within the `env`ironment) with `val`ue.
     pub fn set_data(&self, env: &mut Environment, val: Value) {
-        dbg!("in set_data");
-        dbg!(self.is_noop());
-        dbg!(&val);
-        dbg!(&self);
-
         debug_assert!(
             self.ty == val.ty(),
             "trying to set a variable with type `{}` but the variable is of type `{}`",
@@ -94,105 +105,6 @@ impl Variable {
 
     fn is_noop(&self) -> bool {
         self.env_idx == usize::MAX
-    }
-}
-
-impl Hold {
-    pub fn ty(&self) -> std::borrow::Cow<Type> {
-        use std::borrow::Cow::*;
-        match self {
-            Hold::Lit(v) => Owned(v.ty()),
-            Hold::Var(v) => Borrowed(v.ty()),
-            Hold::Expr(s) => Borrowed(s.out_ty()),
-        }
-    }
-}
-
-// ###### LOCALS ###############################################################
-#[derive(Debug)]
-struct LocalEntry {
-    // TODO remove this???
-    _defined_depth: u32,
-    // TODO remove this???
-    _local: Local,
-}
-
-/// A map of available variables based on an string name.
-///
-/// Locals is easily shareable and Cow for the variables maps. It also stores a **shared** counter
-/// which increments _everytime_ an entry is made into the variable map.
-/// This counter, along with the variable storing an index into the environment, makes this system
-/// fairly robust.
-///
-/// Scoping is done by _not_ passing along an altered map. For instance, a block will pass on its
-/// locals to the next block, so any changes to the map are available. For an expression, the map
-/// is not passed along, instead the changes are local to the expression.
-#[derive(Debug, Default)]
-pub struct Locals {
-    vars: Rc<HashMap<Str, Local>>,
-    count: Rc<Cell<usize>>,
-}
-
-/// Equality is done by reference.
-impl PartialEq for Locals {
-    fn eq(&self, o: &Self) -> bool {
-        Rc::ptr_eq(&self.vars, &o.vars) && Rc::ptr_eq(&self.count, &o.count)
-    }
-}
-/// Equality is done by reference.
-impl Eq for Locals {}
-
-impl Locals {
-    /// Enter a new impl environment where it does not have access to the caller scope.
-    ///
-    /// This is used for impls where it _should not have access to caller scope_. Any _new_ locals
-    /// will be forgotten once scope ends.
-    pub fn enter_impl(&self) -> Self {
-        Self {
-            vars: Default::default(),
-            count: Rc::clone(&self.count),
-        }
-    }
-
-    /// Get a local by name.
-    pub fn get(&self, name: &str) -> Option<&Local> {
-        self.vars.get(name)
-    }
-
-    /// Add an already existent variable aliased under the given name in the local environment.
-    pub fn add_var(&mut self, name: Str, var: Variable) {
-        let vars = Rc::make_mut(&mut self.vars);
-        vars.insert(name, Local::Var(var));
-    }
-
-    /// Add a parameter mapped to this name.
-    pub fn add_param(&mut self, name: Str, arg: Argument) {
-        todo!()
-        //         let vars = Rc::make_mut(&mut self.vars);
-        //         vars.insert(name, Local::Param(arg));
-    }
-
-    /// Add a **new** variable (a new memory location) into the environment.
-    pub fn add_new_var(&mut self, name: Str, ty: Type, tag: Tag) -> Variable {
-        todo!();
-        //         // increment place location
-        //         let var = Variable {
-        //             tag,
-        //             ty,
-        //             env_idx: self.count.get(),
-        //         };
-        //         self.count.set(var.env_idx + 1);
-        //         self.add_var(name, var.clone());
-        //         var
-    }
-}
-
-impl Clone for Locals {
-    fn clone(&self) -> Self {
-        Self {
-            vars: Rc::clone(&self.vars),
-            count: Rc::clone(&self.count),
-        }
     }
 }
 

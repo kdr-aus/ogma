@@ -335,38 +335,6 @@ impl<T> BinaryOp<T> {
         .map(Box::new)
     }
 
-    /// Creates the expression: `<cmd> $rhs`. Returns the variable tag.
-    fn create_expr_and_var(cmd: &str) -> (ast::Expression, Tag) {
-        // probably can just use the code injector
-        use ast::*;
-        let line: Arc<str> = Arc::from(format!("{} $rhs", cmd));
-        let end = line.len();
-        let tag = Tag {
-            anchor: Location::Ogma,
-            line,
-            start: 0,
-            end,
-        };
-        let op = Tag {
-            end: cmd.len(),
-            ..tag.clone()
-        }; // cmd
-        let var = Tag {
-            start: op.end + 2, // covers space and $
-            end: 8,
-            ..tag.clone()
-        }; // `rhs`
-        let e = Expression {
-            tag,
-            blocks: vec![Box::new(PrefixBlock {
-                op,
-                terms: vec![Term::Arg(Argument::Var(var.clone()))],
-            })],
-        };
-
-        (e, var)
-    }
-
     pub fn pin_env(&self) -> BinaryOpRef<T> {
         BinaryOpRef {
             env: self.injector.env().clone(),

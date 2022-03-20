@@ -74,8 +74,6 @@ impl<'d> Compiler<'d> {
                 .collect::<Vec<_>>()
         };
 
-        dbg!(&infer_nodes);
-
         let mut success = false;
         let mut err = None;
 
@@ -165,24 +163,13 @@ fn input_via_block_compilation(
     let _sink1 = &mut Default::default();
     let _sink2 = &mut Default::default();
 
-    eprintln!(
-        "Inferring input for {}",
-        compiler.ag()[op.idx()].op().unwrap().1.str()
-    );
-
     for (_name, ty) in types {
-        eprintln!("🔬 Testing compilation with inferred input: {}", _name);
-
         let compiled = compiler
             .compile_block(op, ty.clone(), _sink1, _sink2)
             .is_ok();
-        if compiled {
-            eprintln!("🏁 Able to be compiled with input type: {}", _name);
-        }
 
         match (compiled, inferred.take()) {
             (true, Some(ty1)) => {
-                eprintln!("❌ FAILED -- Can compiled with two or more input types");
                 return Err(Error::Ambiguous {
                     ty1,
                     ty2: ty.clone(),
@@ -207,11 +194,7 @@ fn input_via_expr_compilation(
 
     let mut inferred = None;
 
-    eprintln!("Inferring input for {}", expr.tag(compiler_outer.ag()));
-
     for (_name, ty) in types {
-        eprintln!("🔬 Testing compilation with inferred input: {}", _name);
-
         // set the INPUT of the block to 'ty'
         let mut compiler = compiler_outer.clone();
         compiler.apply_graph_chgs(once(InferInput(expr.idx(), ty.clone()).into()));
@@ -220,22 +203,18 @@ fn input_via_expr_compilation(
 
         // recurse into compile call -- breaking when the op gets compiled
         match compiler.compile(expr) {
-            Ok(c) => {
-                eprintln!("🏁 Able to be compiled with input type: {}", _name);
-                match inferred.take() {
-                    Some((ty1, _)) => {
-                        eprintln!("❌ FAILED -- Can compiled with two or more input types");
-                        return Err((
-                            compiler_outer,
-                            Error::Ambiguous {
-                                ty1,
-                                ty2: ty.clone(),
-                            },
-                        ));
-                    }
-                    None => inferred = Some((ty.clone(), c)),
+            Ok(c) => match inferred.take() {
+                Some((ty1, _)) => {
+                    return Err((
+                        compiler_outer,
+                        Error::Ambiguous {
+                            ty1,
+                            ty2: ty.clone(),
+                        },
+                    ));
                 }
-            }
+                None => inferred = Some((ty.clone(), c)),
+            },
             Err(_) => (), // continue
         }
     }
@@ -250,16 +229,9 @@ fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, Compi
     // if we wanted to make this deterministic we could sort on name
     let types = compiler.defs.types().iter();
 
-    eprintln!(
-        "Inferring output for {}",
-        compiler.ag()[op.idx()].op().unwrap().1.str()
-    );
-
     let parent = op.parent(compiler.ag());
 
     for (_name, ty) in types {
-        eprintln!("🔬 Testing compilation with inferred output: {}", _name);
-
         // set the OUTPUT of the block to 'ty'
         let mut compiler = compiler.clone();
         compiler.apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()));
@@ -267,8 +239,6 @@ fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, Compi
         // recurse into compile call -- breaking when the parent expr gets compiled
         match compiler.compile(parent) {
             Ok(compiler) => {
-                eprintln!("🏁 Able to be compiled with output type: {}", _name);
-
                 // break early, output inferring is greedy
                 return Ok(compiler);
             }
@@ -292,12 +262,14 @@ impl Error {
                 ..Default::default()
             },
             // TODO make this error better,
-            // name the attempeted types
             // give a code example of type annotation
             Self::Ambiguous { ty1, ty2 } => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one input type can compile op".into(),
-                traces: trace(blk, None),
+                traces: trace(
+                    blk,
+                    format!("this can be compiled with `{}` and `{}`", ty1, ty2),
+                ),
                 help_msg: Some("try specifying input type to the block".into()),
                 ..Default::default()
             },

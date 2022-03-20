@@ -159,8 +159,6 @@ fn is_gt(res: Result<Value>) {
 // ------ Multiline Expressions ------------------------------------------------
 #[test]
 fn multiline_expr() {
-    return; // TODO wire in
-
     let d = &Definitions::new();
 
     let x = process_w_nil(
@@ -206,8 +204,6 @@ append { get snd |
 
 #[test]
 fn multiline_defs() {
-    return; // TODO wire in
-
     let d = &mut Definitions::new();
 
     let x = process_definition(
@@ -239,8 +235,6 @@ fn multiline_defs() {
 
 #[test]
 fn multiline_errs() {
-    return; // TODO wire in
-
     let d = &Definitions::new();
 
     let x = process_w_nil(
@@ -253,7 +247,7 @@ fn multiline_errs() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `Number`, found `String`
+        "Semantics Error: expecting argument with output type `Number`, found `String`
 --> shell:7
  |     * 'foo'
  |        ^^^ this argument returns type `String`
@@ -291,18 +285,15 @@ fn multiline_errs() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `Bool`, found `Number`
+        "Typing Error: Type resolution failed. Conflicting obligation type
+--> shell:14
+ |     get snd | + 1
+ |               ^ this node returns a `Number`
 --> shell:7
  | filter {
  |     get snd | + 1
  | }
- | ^^^^^^^^^^^^^^^^^ this argument returns type `Number`
---> shell:7
- | filter {
- |     get snd | + 1
- | }
- | ^^^^^^^^^^^^^^^^^ invoked here
---> help: commands may require specific argument types, use `--help` to view requirements
+ | ^^^^^^^^^^^^^^^^^ but this node is obliged to return `Bool`
 "
     );
 
@@ -317,16 +308,14 @@ fn multiline_errs() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: expecting argument with type `Bool`, found `Number`
+        "Typing Error: Type resolution failed. Conflicting obligation type
+--> shell:4
+ |     - 2 }
+ |     ^ this node returns a `Number`
 --> shell:0
  | { + 1 |
  |     - 2 }
- | ^^^^^^^^^ this argument returns type `Number`
---> shell:0
- | { + 1 |
- |     - 2 }
- | ^^^^^^^^^ invoked here
---> help: commands may require specific argument types, use `--help` to view requirements
+ | ^^^^^^^^^ but this node is obliged to return `Bool`
 "
     );
 
@@ -353,8 +342,6 @@ fn multiline_errs() {
 // ------ Miscellaneous --------------------------------------------------------
 #[test]
 fn too_many_flags() {
-    return; // TODO wire in
-
     let def = &Definitions::new();
     let x = process_w_nil("\\ 5 --foo --bar", def)
         .unwrap_err()
@@ -362,10 +349,13 @@ fn too_many_flags() {
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: not expecting `foo` flag
+        r#"Semantics Error: not expecting flags: `foo`, `bar`
 --> shell:6
  | \ 5 --foo --bar
  |       ^^^ flag not supported
+--> shell:12
+ | \ 5 --foo --bar
+ |             ^^^ flag not supported
 --> help: try using the `--help` flag to view requirements
 "#
     );
@@ -373,8 +363,6 @@ fn too_many_flags() {
 
 #[test]
 fn err_wrong_return_type() {
-    return; // TODO wire in
-
     let def = &Definitions::new();
     let x = process_w_table("filter { \\ 5 }", def)
         .unwrap_err()
@@ -382,22 +370,19 @@ fn err_wrong_return_type() {
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: expecting argument with type `Bool`, found `Number`
+        r#"Typing Error: Type resolution failed. Conflicting obligation type
+--> shell:9
+ | filter { \ 5 }
+ |          ^ this node returns a `Number`
 --> shell:7
  | filter { \ 5 }
- |        ^^^^^^^ this argument returns type `Number`
---> shell:7
- | filter { \ 5 }
- |        ^^^^^^^ invoked here
---> help: commands may require specific argument types, use `--help` to view requirements
+ |        ^^^^^^^ but this node is obliged to return `Bool`
 "#
     );
 }
 
 #[test]
 fn unused_arg_test() {
-    return; // TODO wire in
-
     let def = &Definitions::new();
     let x = process_w_nil("\\ 5 { testing 2 { foo  bar } }", def)
         .unwrap_err()
@@ -405,19 +390,17 @@ fn unused_arg_test() {
     println!("{}", x);
     assert_eq!(
         &x,
-        r#"Semantics Error: too many arguments supplied
---> shell:4
+        r#"Unknown Command: operation `testing` not defined
+--> shell:6
  | \ 5 { testing 2 { foo  bar } }
- |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ expression argument is unnecessary
---> help: the command does not require or support additional arguments
+ |       ^^^^^^^ `testing` not found
+--> help: view a list of definitions using `def --list`
 "#
     );
 }
 
 #[test]
 fn fs_caching_removes_changed_files() {
-    return; // TODO wire in
-
     let defs = &Definitions::new();
 
     std::fs::write("ls-test/test-file.csv", "a,b\n1,2").unwrap();
@@ -444,8 +427,6 @@ fn fs_caching_removes_changed_files() {
 
 #[test]
 fn incorrect_input_syntax() {
-    return; // TODO wire in
-
     let defs = &Definitions::new();
 
     let x = process_w_nil("\\ file.csv | \\", defs)
@@ -464,8 +445,6 @@ fn incorrect_input_syntax() {
 
 #[test]
 fn no_cmd_defined() {
-    return; // TODO wire in
-
     let defs = &Definitions::new();
 
     let x = process_w_table("undefined", defs).unwrap_err().to_string();
@@ -497,8 +476,6 @@ fn no_cmd_defined() {
 // ------ General Bugs ---------------------------------------------------------
 #[test]
 fn gt_should_resolve_as_bool_return_type() {
-    return; // TODO wire in
-
     // This tests that the greater than op, which diverts to cmp, will properly register as
     // returning a Type::Bool
     let defs = &Definitions::new();
@@ -518,8 +495,6 @@ fn gt_should_resolve_as_bool_return_type() {
 
 #[test]
 fn forbid_recursion() {
-    return; // TODO wire in
-
     let defs = &mut Definitions::new();
     let x = process_definition(
         "def test-recursion () { test-recursion }",
@@ -537,15 +512,13 @@ fn forbid_recursion() {
  | def test-recursion () { test-recursion }
  |                         ^^^^^^^^^^^^^^ `test-recursion` not found
 --> help: recursion is not supported.
-for alternatives, please see <https://docs.daedalus.report/ogma.book/11%20(no)%20recursion.md>
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>
 "
     );
 }
 
 #[test]
 fn transitive_args_in_defs() {
-    return; // TODO wire in
-
     let defs = &mut Definitions::new();
     process_definition(
         "def col-gt10 (col) { get $col | > 10 }",
@@ -603,8 +576,6 @@ fn transitive_args_in_defs() {
 
 #[test]
 fn invalid_def_impl_err() {
-    return; // TODO wire in
-
     let defs = &mut Definitions::new();
     process_definition(
         "def wrong-filter (col) { filter > $col }",
@@ -626,9 +597,6 @@ fn invalid_def_impl_err() {
 --> shell:32
  | def wrong-filter (col) { filter > $col }
  |                                 ^^^^^^ invoked here
---> shell:25
- | def wrong-filter (col) { filter > $col }
- |                          ^^^^^^^^^^^^^^ invoked here
 --> shell:0
  | wrong-filter not-here
  | ^^^^^^^^^^^^^^^^^^^^^ invoked here
@@ -639,8 +607,6 @@ fn invalid_def_impl_err() {
 
 #[test]
 fn nested_accumulation_soundness() {
-    return; // TODO wire in
-
     let defs = &Definitions::new();
     let x = process_w_nil(
         "range 1 10 | append { range 1 11 | fold 0 { + $row.i } }",
@@ -653,8 +619,6 @@ fn nested_accumulation_soundness() {
 
 #[test]
 fn parallelised_variable_soundness() {
-    return; // TODO wire in
-
     let defs = &Definitions::new();
     let x = process_w_nil("range 1 50 | append { get i | let $x | + $x $x }", defs);
     let mut exp = vec![vec![o("i"), o("_append1")]];
@@ -664,8 +628,6 @@ fn parallelised_variable_soundness() {
 
 #[test]
 fn no_padding() {
-    return; // TODO wire in
-
     let d = &mut Definitions::default();
     let f = |s| process_w_table(s, d);
     assert_eq!(
@@ -685,8 +647,6 @@ fn no_padding() {
 
 #[test]
 fn def_argument_resolving_soundness() {
-    return; // TODO wire in
-
     let defs = &mut Definitions::new();
     process_definition("def foo (x) { \\ 5 | + $x }", Location::Shell, None, defs).unwrap();
 
@@ -709,8 +669,6 @@ fn def_argument_resolving_soundness() {
 
 #[test]
 fn def_argument_resolving_soundness2() {
-    return; // TODO wire in
-
     let defs = &mut Definitions::new();
     process_definition(
         "def foo (x:Expr) { \\ 5 | + $x }",
@@ -725,7 +683,7 @@ fn def_argument_resolving_soundness2() {
     assert_eq!(x, Ok(Value::Num(7.into())));
 
     process_definition(
-        "def foo (c x:Expr) { filter $c $x }",
+        "def foo (c x:Expr) { filter --Num $c $x }",
         Location::Shell,
         None,
         defs,

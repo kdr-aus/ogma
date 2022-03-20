@@ -18,6 +18,16 @@ impl<'a> Block<'a> {
             .1
     }
 
+    /// The input [`Type`] of the block.
+    pub fn in_ty(&self) -> &Type {
+        &self.in_ty
+    }
+
+    /// Returns the _number of arguments remaining_.
+    pub fn args_len(&self) -> usize {
+        self.args.len()
+    }
+
     /// Assert that this block will return the given type.
     ///
     /// Asserting an output type gives the type inferer knowledge about this block's output.
@@ -42,6 +52,23 @@ impl<'a> Block<'a> {
             .push(graphs::tygraph::Chg::KnownOutput(self.node.idx(), ty).into());
     }
 
+    /// Gets the flag that matches a given name.
+    ///
+    /// If no name is given with `None`, _the first flag first is returned, if there is one._
+    ///
+    /// > The flag is **removed** from the flag stack.
+    pub fn get_flag<'b, N: Into<Option<&'b str>>>(&mut self, flag: N) -> Option<Tag> {
+        match flag.into() {
+            Some(name) => self
+                .flags
+                .iter()
+                .position(|x| x.str() == name)
+                .map(|i| self.flags.remove(i)),
+            None => self.flags.pop(),
+        }
+    }
+
+    /// See if there is a next argument node, without popping off the stack.
     pub fn peek_next_arg_node(&self) -> Option<graphs::ArgNode> {
         self.args.last().copied()
     }
@@ -64,7 +91,6 @@ impl<'a> Block<'a> {
                     .new_var(next.idx(), Str::new(var.str()), ty, var.clone())
                     .map_err(|chg| {
                         self.chgs.push(chg.into());
-                        dbg!("this one");
                         Error::update_locals_graph(var)
                     }),
                 None => Ok(Variable::noop(var.clone(), ty)),
@@ -108,7 +134,6 @@ impl<'a> Block<'a> {
             .new_var(arg.idx(), name, ty, tag.clone())
             .map_err(|chg| {
                 self.chgs.push(chg.into());
-                dbg!("this one");
                 Error::update_locals_graph(tag)
             })
     }
@@ -124,32 +149,67 @@ impl<'a> Block<'a> {
             .ok_or_else(|| Error::insufficient_args(self.op_tag(), self.args_count, None))?;
         self.inject_manual_var_into_arg_locals(n, name, ty)
     }
+}
 
-    fn get_var_def_or_add_change(
-        &mut self,
-        name: Str,
-        ty: Type,
-        tag: Tag,
-        op: OpNode,
-    ) -> Result<Variable> {
-        todo!("wire in");
-        //         let locals = self.lg.get(op).ok_or_else(|| Error::locals_unavailable(&tag))?;
-        //
-        //         match locals.get(&name) {
-        //             Some(Local::Var(v)) if v.defined_at() == op => Ok(v.clone()),
-        //             _ => {
-        //                 let e = Error::locals_unavailable(&tag);
-        //                 // flag to add
-        //                 todo!();
-        // //                 self.chgs.push(locals_graph::Chg::NewVar {
-        // //                     name,
-        // //                     ty,
-        // //                     tag,
-        // //                     defined_at: op
-        // //                 }.into());
-        //
-        //                 Err(e)
-        //             }
-        //         }
+/// Evalulation functions.
+impl<'a> Block<'a> {
+    /// Most flexible evaluation option, but also most brittle.
+    ///
+    /// **BE EXTRA CAREFUL WITH THE `out_ty` THAT IT MATCHES THE EVAL VALUE.
+    /// It is recommended to thoroughly test code paths through here to ensure type validity.**
+    ///
+    /// # Usage
+    /// - Input value ([`Value`]) should be cast to expected input type (use `.try_into()?`).
+    /// - Arguments can use this type if they are expecting the blocks input.
+    ///
+    /// ## Arguments
+    /// Arguments **do not need to use blocks input**. If no input type is needed, the argument can
+    /// be built with `Type::Nil` and `Value::Nil` can be passed on through!
+    pub fn eval<F>(self, out_ty: Type, f: F) -> Result<Step>
+    where
+        F: Fn(Value, Context) -> StepR,
+        F: Func<StepR>,
+    {
+        self.finalise(&out_ty)?;
+        Ok(Step {
+            out_ty,
+            f: Arc::new(f),
+        })
+    }
+
+    /// Preferred way of creating a eval step.
+    ///
+    /// This supplies the [`Value`] input but uses type inference on `O` to get the output type.
+    pub fn eval_o<F, O>(self, f: F) -> Result<Step>
+    where
+        F: Fn(Value, Context) -> Result<(O, Environment)>,
+        F: Func<Result<(O, Environment)>>,
+        O: AsType + Into<Value>,
+    {
+        self.eval(O::as_type(), move |v, c| {
+            f(v, c).map(|(x, e)| (Into::into(x), e))
+        })
+    }
+
+    /// Carry out checks of the block's state.
+    fn finalise(&self, _out_ty: &Type) -> Result<()> {
+        if !self.flags.is_empty() {
+            Err(Error::unused_flags(self.flags.iter()))
+        } else if !self.args.is_empty() {
+            Err(Error::unused_args(
+                self.args.iter().map(|a| self.ag[a.idx()].tag()),
+            ))
+        } else {
+            #[cfg(debug_assertions)]
+            match &self.output_ty {
+                Some(t) => debug_assert_eq!(
+                    t, _out_ty,
+                    "asserted output type should match finalisation type"
+                ),
+                None => (), // no assertion, no failure
+            };
+
+            Ok(())
+        }
     }
 }

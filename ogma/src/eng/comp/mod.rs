@@ -34,9 +34,6 @@ pub fn compile_with_seed_vars(
     input_ty: Type,
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
-    eprintln!("COMPILING: '{}'", expr.tag);
-    dbg!(&seed_vars);
-
     let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
     let lg = LocalsGraph::build(&ag);
@@ -58,15 +55,13 @@ pub fn compile_with_seed_vars(
 
     compiler.lg.seed(seed_vars);
 
-    dbg!(&compiler.lg);
-
     let mut compiler = compiler.compile(ExprNode(0.into()))?;
 
     let err = "should exist on successful compilation";
 
     // NOTE: this can be used to investigate compilation/evaluation issues by visualising the
     // compiler state. gated by a compilation flag, it must be turned off for release modes
-    compiler.write_debug_report("debug-compiler.md");
+    // compiler.write_debug_report("debug-compiler.md");
 
     Ok(FullCompilation {
         eval_stack: compiler.compiled_exprs.remove(&0).expect(err), // root expr stack
@@ -74,8 +69,11 @@ pub fn compile_with_seed_vars(
     })
 }
 
+/// Successful compilation structure.
 pub struct FullCompilation {
+    /// Compiled evaluation stack, which can be evaluated.
     pub eval_stack: eval::Stack,
+    /// The seeding locals environment.
     pub env: Environment,
 }
 
@@ -130,85 +128,48 @@ impl<'d> Compiler<'d> {
 
     // TODO box here
     fn compile<B: BreakOn>(mut self, break_on: B) -> Result<Self> {
-        let mut err = None;
-
         let brk_key = &break_on.idx();
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))
         {
-            self.write_debug_report("debug-compiler.md");
-
-            eprintln!("Resolving TG");
             self.resolve_tg()?;
 
-            eprintln!("Populating compiled expressions");
             if self.populate_compiled_expressions() {
-                eprintln!("✅ SUCCESS");
                 continue;
             }
 
-            eprintln!("Assigning variable types");
             if self.assign_variable_types() {
-                eprintln!("✅ SUCCESS");
                 continue;
             }
 
-            eprintln!("Inserting available def locals");
             if self.insert_available_def_locals()? {
-                eprintln!("✅ SUCCESS");
                 continue;
             }
 
-            eprintln!("Linking def's args for known paths");
             if self.link_known_def_path_args() {
-                eprintln!("✅ SUCCESS");
                 continue;
             }
 
-            eprintln!("Compiling blocks");
-            match self.compile_blocks() {
-                Ok(()) => {
-                    eprintln!("✅ SUCCESS");
-                    continue;
-                }
+            // first time an error can occur
+            let mut err = match self.compile_blocks() {
+                Ok(()) => continue,
                 // Break early if a hard error.
                 Err(e) if e.hard => return Err(e),
-                Err(e) => err = Some(e),
-            }
+                Err(e) => e,
+            };
 
-            // TODO remove this
-            //             eprintln!("Flow compiled op's locals");
-            //             if self.flow_compiled_ops_locals() {
-            //                 eprintln!("✅ SUCCESS");
-            //                 continue;
-            //             }
-
-            eprintln!("Inferring inputs");
             match self.infer_inputs() {
-                Ok(true) => {
-                    eprintln!("✅ SUCCESS");
-                    continue;
-                }
-                Err(e) => err = Some(e),
+                Ok(true) => continue,
+                Err(e) => err = e, // TODO; maybe the error should not be updated here? instead use compiler error?
                 _ => (),
             }
 
-            eprintln!("Inferring outputs");
             if self.infer_outputs() {
-                eprintln!("✅ SUCCESS");
                 continue;
             }
 
-            self.write_debug_report("debug-compiler.md");
-
-            return Err(err.unwrap_or_else(||
-                Error {
-                    cat: err::Category::Internal,
-                    desc: "compilation failed with no other errors".into(),
-                    help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
-                        ..Error::default()
-        }
-        ));
+            // if we have gotten here, unable to compile
+            return Err(err);
         }
 
         Ok(self)
@@ -226,31 +187,6 @@ impl<'d> Compiler<'d> {
             Lg(c) => self.lg.apply_chg(c),
         })
         .fold(false, std::ops::BitOr::bitor)
-    }
-
-    /// Inserts a locals _input_ entry into the locals map.
-    /// This function is recursive, it walks through child expression arguments and also inserts
-    /// the locals entry into the _first_ op node.
-    fn insert_locals(&mut self, locals: &Locals, op: OpNode) {
-        todo!("remove");
-        //         let _is_empty = self.locals.insert(op.index(), locals.clone()).is_none();
-        //
-        //         debug_assert!(
-        //             _is_empty,
-        //             "just replaced an already populated locals, which should not happen"
-        //         );
-        //
-        //         // repeat this process for each expr argument
-        //         let ops = self
-        //             .ag
-        //             .neighbors(op.idx())
-        //             .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
-        //             .map(|e| e.first_op(&self.ag))
-        //             .collect::<Vec<_>>();
-        //
-        //         for op in ops {
-        //             self.insert_locals(locals, op);
-        //         }
     }
 
     /// Iterates over def nodes that are deduced to be the compilation path.
@@ -507,15 +443,14 @@ impl<'d> Compiler<'d> {
         let cmd_node = self
             .ag
             .get_impl(opnode, &in_ty)
-            .ok_or_else(|| Error::op_not_found(self.ag[opnode.idx()].tag()))?;
+            .ok_or_else(|| Error::op_not_found(self.ag[opnode.idx()].tag(), false))?;
 
         match &self.ag[cmd_node.idx()] {
-            AstNode::Intrinsic { op, intrinsic } => {
+            AstNode::Intrinsic { op: _, intrinsic } => {
                 let block = Block::construct(self, cmd_node, in_ty, chgs, infer_output);
-
                 intrinsic(block)
             }
-            AstNode::Def { expr, params } => {
+            AstNode::Def { expr: _, params: _ } => {
                 // check if there exists an entry for the sub-expression,
                 // if so, wrap that in a Step and call it done!
                 let defnode = DefNode(cmd_node.idx());
@@ -578,16 +513,12 @@ impl<'d> Compiler<'d> {
         chgs: Chgs,
     ) -> Result<Vec<(Variable, Argument)>> {
         let Compiler {
-            defs,
             ag,
             tg,
             lg,
-            flowed_edges,
-            compiled_ops,
             compiled_exprs,
-            output_infer_opnode,
             callsite_params,
-            inferrence_depth,
+            ..
         } = self;
 
         let args = ag.get_args(def);
@@ -625,53 +556,9 @@ impl<'d> Compiler<'d> {
     }
 }
 
-/// Flow compiled op's locals.
-impl<'d> Compiler<'d> {
-    /// Flows locals about according to the following:
-    ///
-    /// 1. Op is compiled but next op has no locals.
-    ///   - This may occur if the op can be compiled with `None` locals
-    fn flow_compiled_ops_locals(&mut self) -> bool {
-        todo!("remove this");
-
-        //         let ops = self
-        //             .ag
-        //             .node_indices()
-        //             // get just ops
-        //             .filter_map(|n| self.ag[n].op().map(|_| OpNode(n)))
-        //             .collect::<Vec<_>>();
-        //
-        //         let mut chgd = false;
-        //
-        //         for op in ops {
-        //             let opidx = &op.index();
-        //
-        //             let compiled = self.compiled_ops.contains_key(opidx);
-        //
-        //             // 1. op is compiled, but next op has no locals
-        //             if compiled {
-        //                 if let Some(next) = op.next(&self.ag) {
-        //                     match (
-        //                         self.locals.get(opidx).cloned(),
-        //                         self.locals.contains_key(&next.index()),
-        //                     ) {
-        //                         (Some(locals), false) => {
-        //                             chgd = true;
-        //                             self.insert_locals(&locals, next);
-        //                         }
-        //                         _ => (),
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //
-        //         chgd
-    }
-}
-
 #[cfg(debug_assertions)]
 impl<'a> Compiler<'a> {
-    pub fn write_debug_report<F: AsRef<std::path::Path>>(&self, file: F) {
+    pub fn _write_debug_report<F: AsRef<std::path::Path>>(&self, file: F) {
         use std::fmt::Write;
         let mut report = String::new();
 
@@ -695,7 +582,7 @@ impl<'a> Compiler<'a> {
 
         writeln!(&mut report, "## Current Compiled Ops").unwrap();
         writeln!(&mut report, "---").unwrap();
-        self.debug_index_map(&self.compiled_ops, &mut report)
+        self._debug_index_map(&self.compiled_ops, &mut report)
             .unwrap();
 
         let path = file.as_ref();
@@ -703,7 +590,7 @@ impl<'a> Compiler<'a> {
         std::fs::write(path, report).unwrap();
     }
 
-    fn debug_index_map<T>(&self, map: &IndexMap<T>, buf: &mut String) -> std::fmt::Result {
+    fn _debug_index_map<T>(&self, map: &IndexMap<T>, buf: &mut String) -> std::fmt::Result {
         use std::fmt::Write;
 
         let mut keys = map.keys().copied().collect::<Vec<_>>();
@@ -732,26 +619,21 @@ impl<'a> Block<'a> {
         chgs: Chgs<'a>,
         output_infer: &'a mut bool,
     ) -> Self {
-        let opnode = node.parent(&compiler.ag);
-        let mut flags = compiler.ag.get_flags(node);
-        let mut args = compiler.ag.get_args(node);
-        let defs = &compiler.defs;
-
-        flags.reverse();
-        args.reverse();
-
         let Compiler {
             defs,
             ag,
             tg,
             lg,
-            flowed_edges,
-            compiled_ops,
-            output_infer_opnode,
-            callsite_params,
             compiled_exprs,
-            inferrence_depth,
+            ..
         } = compiler;
+
+        let opnode = node.parent(ag);
+        let mut flags = ag.get_flags(node);
+        let mut args = ag.get_args(node);
+
+        flags.reverse();
+        args.reverse();
 
         Block {
             node: opnode,
@@ -869,17 +751,6 @@ mod tests {
         compile("ls | filter foo eq #n | len").unwrap();
         compile("ls | filter foo eq #t | len").unwrap();
         compile("ls | filter foo eq #f | len").unwrap();
-
-        // now to test more complex expressions
-        // TODO these expressions SHOULD fail the inferer, since `\\` takes _any_ type, it can not
-        // infer what type `filter` is should be passing through.
-        // This is interesting, and it would be good to get decent error messages explaining why
-        // the inference failed and where to put a type
-        //         compile("ls | filter foo eq { \\ #n } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ #t } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ #f } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ 3 } | len").unwrap();
-        //         compile("ls | filter foo eq { \\ 'bar' } | len").unwrap();
     }
 
     #[test]
@@ -998,9 +869,7 @@ mod tests {
     #[test]
     fn compilation_test_15() {
         // testing Expr params
-        let x = compile("Table | last { get foo --Num }").unwrap();
-
-        let defs = &mut Definitions::default();
+        compile("Table | last { get foo --Num }").unwrap();
     }
 
     #[test]

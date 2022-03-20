@@ -81,8 +81,6 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         Ty::Def(x) if x.is_tuple() => {
-            dbg!("here");
-
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),
                 _ => 0,
@@ -96,10 +94,8 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
 
             let ty = blk.in_ty().clone();
 
-            dbg!("here");
             // map the RHS to a var. RHS returns the same type as block's input
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
-            dbg!("failed map");
 
             let injector = injector
                 .compile(ty, blk.defs)
@@ -123,22 +119,6 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
-}
-
-/// follows the pattern `let {get t# | cmp $rhs.t#} $c#` and `if {\\ $c# | != Ord::Eq} $c#`.
-fn build_tuple_cmp_def_str(els: usize) -> String {
-    use std::fmt::Write;
-    let mut s = "def tuple-cmp (rhs) { let ".to_string();
-    for i in 0..els {
-        write!(&mut s, "{{get t{0} | cmp $rhs.t{0}}} $c{0} ", i).ok();
-    }
-    s += "| if ";
-    let els = els.saturating_sub(1);
-    for i in 0..els {
-        write!(&mut s, "{{\\ $c{0} | != Ord::Eq}} $c{0} ", i).ok();
-    }
-    write!(&mut s, "$c{} }}", els).ok(); // instead of testing every element, pass the last through
-    s
 }
 
 /// follows the pattern `let {get t# | cmp $rhs.t#} $c#` and `if {\\ $c# | != Ord::Eq} $c#`.
@@ -248,8 +228,6 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             })
         }
         Ty::Def(x) if x.is_tuple() => {
-            // TODO
-            // Tuple inferring will not since they are not stored in the types
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),
                 _ => 0,
@@ -288,17 +266,6 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
         }
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
-}
-
-/// follows the pattern `and {get t# | = $rhs.t#}`.
-fn build_tuple_eq_def_str(els: usize) -> String {
-    use std::fmt::Write;
-    let mut s = "def tuple-eq (rhs) { and ".to_string();
-    for i in 0..els {
-        write!(&mut s, "{{get t{0} | = $rhs.t{0}}} ", i).ok();
-    }
-    s.push('}');
-    s
 }
 
 /// follows the pattern `and {get t# | = $rhs.t#}`.
@@ -373,38 +340,34 @@ mod tests {
 
     #[test]
     fn build_tuple_eq_test() {
-        let f = build_tuple_eq_def_str;
-        assert_eq!(&f(1), "def tuple-eq (rhs) { and {get t0 | = $rhs.t0} }");
+        let f = build_tuple_eq_code;
+        assert_eq!(&f(1).1, "and { get t0 | = $rhs.t0 } ");
         assert_eq!(
-            &f(2),
-            "def tuple-eq (rhs) { and {get t0 | = $rhs.t0} {get t1 | = $rhs.t1} }"
+            &f(2).1,
+            "and { get t0 | = $rhs.t0 } { get t1 | = $rhs.t1 } "
         );
-        assert_eq!(&f(3), "def tuple-eq (rhs) { and {get t0 | = $rhs.t0} {get t1 | = $rhs.t1} {get t2 | = $rhs.t2} }");
+        assert_eq!(
+            &f(3).1,
+            "and { get t0 | = $rhs.t0 } { get t1 | = $rhs.t1 } { get t2 | = $rhs.t2 } "
+        );
     }
 
     #[test]
     fn build_tuple_cmp_test() {
-        let f = build_tuple_cmp_def_str;
+        let f = build_tuple_cmp_code;
+        assert_eq!(&f(1).1, "let {get t0 | cmp $rhs.t0} $c0 | if $c0");
         assert_eq!(
-            &f(1),
-            "def tuple-cmp (rhs) { \
-         let {get t0 | cmp $rhs.t0} $c0 | if \
-         $c0 }"
+            &f(2).1,
+            "let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 | if {\\ $c0 | != Ord::Eq} $c0 $c1"
         );
         assert_eq!(
-            &f(2),
-            "def tuple-cmp (rhs) { \
-         let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 | if \
-         {\\ $c0 | != Ord::Eq} $c0 \
-         $c1 }"
-        );
-        assert_eq!(
-            &f(3),
-            "def tuple-cmp (rhs) { \
-         let {get t0 | cmp $rhs.t0} $c0 {get t1 | cmp $rhs.t1} $c1 {get t2 | cmp $rhs.t2} $c2 | if \
-         {\\ $c0 | != Ord::Eq} $c0 \
-         {\\ $c1 | != Ord::Eq} $c1 \
-         $c2 }"
+            &f(3).1,
+            "let {get t0 | cmp $rhs.t0} $c0 \
+                 {get t1 | cmp $rhs.t1} $c1 \
+                 {get t2 | cmp $rhs.t2} $c2 | if \
+                    {\\ $c0 | != Ord::Eq} $c0 \
+                    {\\ $c1 | != Ord::Eq} $c1 \
+                    $c2"
         );
     }
 }

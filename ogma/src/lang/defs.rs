@@ -425,11 +425,15 @@ fn process_ty<'a>(
 }
 
 fn assert_all_ops_defined(def: &ast::DefinitionImpl, defs: &Implementations) -> Result<()> {
+    let name = &def.name;
+
     let mut check = vec![def.expr.clone()];
     while let Some(expr) = check.pop() {
         for block in &expr.blocks {
-            if !defs.contains_op(block.op().str()) {
-                return Err(Error::op_not_found(&block.op()));
+            let op = block.op();
+
+            if !defs.contains_op(op.str()) {
+                return Err(Error::op_not_found(&op, &*op == name));
             }
             check.extend(block.terms().iter().filter_map(|term| match term {
                 ast::Term::Arg(ast::Argument::Expr(expr)) => Some(expr.clone()),

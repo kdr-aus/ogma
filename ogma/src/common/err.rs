@@ -172,12 +172,19 @@ impl Error {
         }
     }
 
-    pub(crate) fn op_not_found(op: &Tag) -> Self {
+    pub(crate) fn op_not_found(op: &Tag, recursion_detected: bool) -> Self {
+        let hlp = if recursion_detected {
+            "recursion is not supported.
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>"
+        } else {
+            "view a list of definitions using `def --list`".into()
+        };
+
         Error {
             cat: Category::UnknownCommand,
             desc: format!("operation `{}` not defined", op),
             traces: trace(op, format!("`{}` not found", op)),
-            help_msg: Some("view a list of definitions using `def --list`".into()),
+            help_msg: Some(hlp.into()),
             ..Self::default()
         }
     }
@@ -237,11 +244,11 @@ impl Error {
 
     pub(crate) fn unused_flags<'a, T>(flags: T) -> Self
     where
-        T: Iterator<Item = &'a Tag>,
+        T: DoubleEndedIterator<Item = &'a Tag>,
     {
         let delim = ", ";
 
-        let (desc, traces) = flags.fold(
+        let (desc, traces) = flags.rev().fold(
             (String::from("not expecting flags: "), Vec::new()),
             |(desc, mut traces), flag| {
                 traces.push(Trace::from_tag(flag, "flag not supported".to_string()));
@@ -543,19 +550,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn unknown_blk_input_type(op: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("unable to infer input type for op `{}`", op),
-            traces: trace(op, None),
-            help_msg: Some(format!(
-                "use `{0} --help` to view requirements. consider implementing `def {0}`",
-                op
-            )),
-            ..Self::default()
-        }
-    }
-
     pub(crate) fn unknown_blk_output_type(blk: &Tag) -> Self {
         Error {
             cat: Category::Semantics,
@@ -666,17 +660,6 @@ impl Error {
                 "variables must be in scope and can be defined using the `let` command".into(),
             ),
             hard: true, // unrecoverable, variable not found in locals
-        }
-    }
-
-    // TODO obsolete with LG
-    pub(crate) fn locals_unavailable(var: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: "locals map is unavailable".into(),
-            traces: trace(var, Some("this variable needs access to the locals".into())),
-            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
-                ..Self::default()
         }
     }
 }

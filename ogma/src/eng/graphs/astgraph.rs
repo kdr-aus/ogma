@@ -1,5 +1,4 @@
 use super::*;
-use crate::prelude::*;
 use kserd::Number;
 use petgraph::prelude::*;
 use std::ops::Deref;
@@ -45,7 +44,7 @@ pub enum AstNode {
     Expr(Tag),
 }
 
-// TODO note that this is a mechanism for allowing transitive flags through the defs
+// NOTE that this is a mechanism for allowing transitive flags through the defs
 /// The edges of the AST graph.
 ///
 /// Most edges are `Normal`.
@@ -204,7 +203,7 @@ impl AstGraph {
         let impls = defs.impls();
 
         if !impls.contains_op(op.str()) {
-            return Err(Error::op_not_found(&op));
+            return Err(Error::op_not_found(&op, false));
         }
 
         let op_impls = impls
@@ -219,7 +218,7 @@ impl AstGraph {
             // sub-root
             let cmd = match im {
                 // always include an intrinsic
-                Implementation::Intrinsic { loc, f } => self.0.add_node(AstNode::Intrinsic {
+                Implementation::Intrinsic { loc: _, f } => self.0.add_node(AstNode::Intrinsic {
                     op: op.clone(),
                     intrinsic: f.clone(),
                 }),
@@ -380,8 +379,6 @@ impl AstGraph {
     where
         F: Fn(NodeIndex) -> bool,
     {
-        // TODO -- test this!
-
         fn find_last_match<'a, F>(
             g: &'a AstGraph,
             sink: NodeIndex,
@@ -653,13 +650,16 @@ impl fmt::Display for AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk } => write!(f, "Op({})", op.str()),
-            Intrinsic { op, intrinsic: _ } => write!(f, "Intrinsic"),
-            Def { expr, params } => write!(f, "Def"),
+            Op { op, blk: _ } => write!(f, "Op({})", op.str()),
+            Intrinsic {
+                op: _,
+                intrinsic: _,
+            } => write!(f, "Intrinsic"),
+            Def { expr: _, params: _ } => write!(f, "Def"),
             Flag(t) => write!(f, "Flag(--{})", t.str()),
             Ident(x) => write!(f, "Ident({})", x.str()),
-            Num { val, tag } => write!(f, "Num({})", val),
-            Pound { ch, tag } => write!(f, "Pound(#{})", ch),
+            Num { val, tag: _ } => write!(f, "Num({})", val),
+            Pound { ch, tag: _ } => write!(f, "Pound(#{})", ch),
             Var(t) => write!(f, "Var(${})", t.str()),
             Expr(t) => write!(f, "Expr({})", t.str()),
         }
