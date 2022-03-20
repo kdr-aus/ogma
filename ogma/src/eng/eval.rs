@@ -85,7 +85,6 @@ impl From<Stack> for Step {
         Step {
             out_ty,
             f,
-            type_annotation: String::new(),
         }
     }
 }
@@ -136,8 +135,7 @@ impl CodeInjector<Build> {
             .returns(returns)?
             .concrete()?;
         let ty = arg.out_ty().clone();
-        // TODO is there a way to not use a default tag?
-        let var = self.data.locals.add(name.into(), ty, Tag::default());
+        let var = self.data.locals.add(name.into(), ty, arg.tag.clone());
         self.args.push((arg, var, input));
         Ok(())
     }

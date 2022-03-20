@@ -44,9 +44,7 @@ pub struct Argument {
 #[derive(Debug, Clone)]
 enum Hold {
     Lit(Value),
-    // TODO -- this needs some thought,
     Var(Variable),
-    // TODO -- this needs some thought,
     Expr(eval::Stack),
 }
 
@@ -104,7 +102,6 @@ pub struct Block<'a> {
     /// Flag that this block's output should be inferred if getting to output inferencing phase.
     infer_output: &'a mut bool,
 
-    // TODO is this removable??
     /// The definitions carried through.
     pub defs: &'a Definitions,
 
@@ -149,14 +146,6 @@ impl<T, O> Func<O> for T where T: Fn(Value, Context) -> O + Send + Sync + 'stati
 pub struct Step {
     out_ty: Type,
     f: Arc<dyn Func<StepR>>,
-
-    /// A tracked type annotation code representation.
-    /// This comes directly off the block when transforming into a `Step`.
-    ///
-    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
-    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
-    /// moved into that system.
-    type_annotation: String,
 }
 
 type StepR = Result<(Value, Environment)>;

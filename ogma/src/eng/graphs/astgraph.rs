@@ -44,7 +44,7 @@ pub enum AstNode {
     Expr(Tag),
 }
 
-// TODO note that this is a mechanism for allowing transitive flags through the defs
+// NOTE that this is a mechanism for allowing transitive flags through the defs
 /// The edges of the AST graph.
 ///
 /// Most edges are `Normal`.

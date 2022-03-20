@@ -231,7 +231,6 @@ impl<'a> ArgBuilder<'a> {
                 let mut stack = eval::Stack::new(vec![Step {
                     out_ty,
                     f: Arc::new(|input, cx| cx.done(input)),
-                    type_annotation: String::new(),
                 }]);
                 #[cfg(debug_assertions)]
                 stack.add_types(&self.tg[self.node.idx()]);
@@ -324,44 +323,6 @@ impl<'a> Block<'a> {
             blk_in_ty,
             compiled_exprs,
         ))
-    }
-
-    /// Similar to [`Block::next_arg`], but does not pop the argument list.
-    pub fn next_arg_do_not_remove(&mut self) -> Result<ArgBuilder> {
-        todo!("wire in");
-
-        //         // TODO remove this function???
-        //         let node = self
-        //             .args
-        //             .last()
-        //             .copied()
-        //             .ok_or_else(|| Error::insufficient_args(self.blk_tag(), self.args_count))?;
-        //
-        //         let btag = self.blk_tag().clone();
-        //
-        //         let Block {
-        //             node: opnode,
-        //             ag,
-        //             tg,
-        //             lg,
-        //             chgs,
-        //             in_ty: blk_in_ty,
-        //             compiled_exprs,
-        //             ..
-        //         } = self;
-        //
-        //         let blk_in_ty = Some(blk_in_ty.clone());
-        //         let locals = lg.get(*opnode);
-        //
-        //         Ok(ArgBuilder::new(
-        //             node,
-        //             ag,
-        //             tg,
-        //             tg_chgs,
-        //             blk_in_ty,
-        //             locals,
-        //             compiled_exprs,
-        //         ))
     }
 }
 

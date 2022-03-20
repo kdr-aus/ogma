@@ -523,10 +523,11 @@ impl Knowledge {
     ///
     /// If there is a conflict between the two pieces of knowledge, a `Err(Conflict)` is returned.
     pub fn can_flow(&self, into: &Knowledge) -> std::result::Result<(), Conflict> {
-        // TODO implement this properly
+        // NOTE this is not exhaustive.
         // For now we basically disallow many of the flow types
         // This is to test the TG flow and to ensure that the TG's flow is something that makes
         // sense but is also not overly constrained.
+        // Any panics found in the wild should be sense-checked.
         use Conflict::*;
         use Knowledge::*;
 

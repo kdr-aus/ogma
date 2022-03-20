@@ -19,7 +19,6 @@ impl Step {
         Self {
             out_ty,
             f,
-            type_annotation: String::new(),
         }
     }
 }
@@ -29,7 +28,6 @@ impl Clone for Step {
         Step {
             out_ty: self.out_ty.clone(),
             f: Arc::clone(&self.f),
-            type_annotation: self.type_annotation.clone(),
         }
     }
 }

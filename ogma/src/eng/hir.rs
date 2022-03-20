@@ -71,7 +71,6 @@ impl<'a> Block<'a> {
         Ok(Step {
             out_ty,
             f: Arc::new(f),
-            type_annotation: String::new(),
         })
     }
 
