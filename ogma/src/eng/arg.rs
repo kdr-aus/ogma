@@ -166,7 +166,7 @@ impl<'a> ArgBuilder<'a> {
             (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
             (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
-                let hold = self.map_astnode_into_hold()?;
+                let hold = Box::new(self.map_astnode_into_hold()?);
 
                 if hold.ty().as_ref() == &out_ty {
                     Ok(Argument {
@@ -292,18 +292,16 @@ impl From<&Knowledge> for Kn {
 
 // ###### ARGUMENT #############################################################
 /// Compiled argument.
-///
-/// TODO: reduce the size of this, possibly by boxing the Hold??
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Argument {
     /// The argument tag.
     pub tag: Tag,
     in_ty: Type,
     out_ty: Type,
-    hold: Hold,
+    hold: Box<Hold>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum Hold {
     Lit(Value),
     Var(Variable),
@@ -338,7 +336,7 @@ impl Argument {
     {
         let tag = &self.tag;
 
-        match &self.hold {
+        match &*self.hold {
             Hold::Lit(x) => {
                 let exp_ty = T::as_type();
                 if exp_ty == self.out_ty {
@@ -362,7 +360,7 @@ impl Argument {
     where
         F: FnOnce() -> Value,
     {
-        let r = match &self.hold {
+        let r = match &*self.hold {
             Hold::Lit(x) => Ok(x.clone()),
             Hold::Var(v) => Ok(v.fetch(&cx.env).clone()),
             Hold::Expr(stack) => stack.eval(input(), cx.clone()).map(|x| x.0),
@@ -392,7 +390,7 @@ impl Argument {
             V(Cow<'r, Value>),
             E(&'r eval::Stack),
         }
-        let r = match &self.hold {
+        let r = match &*self.hold {
             Hold::Lit(x) => R::V(Cow::Borrowed(x)),
             Hold::Var(x) => R::V(Cow::Owned(x.fetch(&cx.env).clone())),
             Hold::Expr(e) => R::E(e),
@@ -481,8 +479,8 @@ mod tests {
         use std::mem::size_of;
 
         // TODO review this sizing, maybe it can be reduced by boxing
-        assert_eq!(size_of::<Argument>(), 192);
-        assert_eq!(size_of::<Hold>(), 96);
+        assert_eq!(size_of::<Argument>(), 48);
+        assert_eq!(size_of::<Hold>(), 64);
         assert_eq!(size_of::<arg::ArgBuilder>(), 96);
     }
 }
