@@ -18,33 +18,13 @@ pub(crate) use self::{
     annotate::types as annotate_types,
     eval::{Context, CodeInjector, Eval},
     var::{Environment, Local},
+    arg::{Argument},
 };
 
 pub use self::comp::{compile, FullCompilation};
 
 type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
-// ###### ARGUMENT #############################################################
-/// Compiled argument.
-///
-/// TODO: reduce the size of this, possibly by boxing the Hold??
-/// TODO: Move into `arg` module.
-#[derive(Debug, Clone)]
-pub struct Argument {
-    /// The argument tag.
-    pub tag: Tag,
-    in_ty: Type,
-    out_ty: Type,
-    hold: Hold,
-}
-
-// TODO move this into `arg` module??
-#[derive(Debug, Clone)]
-enum Hold {
-    Lit(Value),
-    Var(Variable),
-    Expr(eval::Stack),
-}
 
 // ###### BLOCK ################################################################
 /// A compilation unit for a single [`ast::Block`].
@@ -168,11 +148,7 @@ mod tests {
         use std::mem::size_of;
 
         // TODO review this sizing, maybe it can be reduced by boxing
-        assert_eq!(size_of::<Argument>(), 192);
-        assert_eq!(size_of::<Hold>(), 96);
-
         assert_eq!(size_of::<Block>(), 144);
-        assert_eq!(size_of::<arg::ArgBuilder>(), 96);
         assert_eq!(size_of::<Tag>(), 64);
     }
 }

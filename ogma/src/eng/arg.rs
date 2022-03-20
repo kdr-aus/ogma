@@ -2,32 +2,7 @@ use super::*;
 use graphs::{astgraph::AstGraph, locals_graph::LocalsGraph, tygraph::Knowledge, *};
 use std::convert::TryInto;
 
-#[derive(Debug)]
-enum Kn {
-    Unknown,
-    Any,
-    Ty(Type),
-}
-
-impl Kn {
-    /// Replace this Kn with `Unknown` and return what was there.
-    fn take(&mut self) -> Self {
-        std::mem::replace(self, Kn::Unknown)
-    }
-}
-
-impl From<&Knowledge> for Kn {
-    fn from(kn: &Knowledge) -> Self {
-        match kn {
-            Knowledge::Unknown => Kn::Unknown,
-            Knowledge::Any => Kn::Any,
-            Knowledge::Known(t) | Knowledge::Obliged(t) | Knowledge::Inferred(t) => {
-                Kn::Ty(t.clone())
-            }
-        }
-    }
-}
-
+// ###### ARG BUILDER ##########################################################
 pub struct ArgBuilder<'a> {
     node: ArgNode,
     in_ty: Kn,
@@ -289,41 +264,56 @@ impl<'a> ArgBuilder<'a> {
     }
 }
 
-impl<'a> Block<'a> {
-    /// Get the [`Block`]'s next argument.
-    ///
-    /// The argument is agnostic to whether it is a variable, literal, or expression.
-    /// The return type is an argument builder, which can be used to assert type information
-    /// about the argument.
-    /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
-    /// an [`Argument`] is produced.
-    pub fn next_arg(&mut self) -> Result<ArgBuilder> {
-        let btag = self.blk_tag().clone();
-        let node = pop(&mut self.args, self.args_count, &btag)?;
-        self.args_count += 1;
+#[derive(Debug)]
+enum Kn {
+    Unknown,
+    Any,
+    Ty(Type),
+}
 
-        let Block {
-            ag,
-            tg,
-            lg,
-            chgs,
-            in_ty: blk_in_ty,
-            compiled_exprs,
-            ..
-        } = self;
-
-        let blk_in_ty = Some(blk_in_ty.clone());
-
-        Ok(ArgBuilder::new(
-            node,
-            ag,
-            tg,
-            lg,
-            chgs,
-            blk_in_ty,
-            compiled_exprs,
-        ))
+impl Kn {
+    /// Replace this Kn with `Unknown` and return what was there.
+    fn take(&mut self) -> Self {
+        std::mem::replace(self, Kn::Unknown)
     }
+}
+
+impl From<&Knowledge> for Kn {
+    fn from(kn: &Knowledge) -> Self {
+        match kn {
+            Knowledge::Unknown => Kn::Unknown,
+            Knowledge::Any => Kn::Any,
+            Knowledge::Known(t) | Knowledge::Obliged(t) | Knowledge::Inferred(t) => {
+                Kn::Ty(t.clone())
+            }
+        }
+    }
+}
+
+// ###### ARGUMENT #############################################################
+/// Compiled argument.
+///
+/// TODO: reduce the size of this, possibly by boxing the Hold??
+#[derive(Debug, Clone)]
+pub struct Argument {
+    /// The argument tag.
+    pub tag: Tag,
+    in_ty: Type,
+    out_ty: Type,
+    hold: Hold,
+}
+
+#[derive(Debug, Clone)]
+enum Hold {
+    Lit(Value),
+    Var(Variable),
+    Expr(eval::Stack),
+}
+
+
+pub fn pop(args: &mut Vec<ArgNode>, arg_count: u8, err_tag: &Tag) -> Result<ArgNode> {
+    args.pop()
+        .ok_or_else(|| Error::insufficient_args(err_tag, arg_count, None))
 }
 
 impl Argument {
@@ -435,7 +425,65 @@ impl Argument {
     }
 }
 
-pub fn pop(args: &mut Vec<ArgNode>, arg_count: u8, err_tag: &Tag) -> Result<ArgNode> {
-    args.pop()
-        .ok_or_else(|| Error::insufficient_args(err_tag, arg_count, None))
+impl Hold {
+    pub fn ty(&self) -> std::borrow::Cow<Type> {
+        use std::borrow::Cow::*;
+        match self {
+            Hold::Lit(v) => Owned(v.ty()),
+            Hold::Var(v) => Borrowed(v.ty()),
+            Hold::Expr(s) => Borrowed(s.out_ty()),
+        }
+    }
+}
+
+impl<'a> Block<'a> {
+    /// Get the [`Block`]'s next argument.
+    ///
+    /// The argument is agnostic to whether it is a variable, literal, or expression.
+    /// The return type is an argument builder, which can be used to assert type information
+    /// about the argument.
+    /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
+    /// an [`Argument`] is produced.
+    pub fn next_arg(&mut self) -> Result<ArgBuilder> {
+        let btag = self.blk_tag().clone();
+        let node = pop(&mut self.args, self.args_count, &btag)?;
+        self.args_count += 1;
+
+        let Block {
+            ag,
+            tg,
+            lg,
+            chgs,
+            in_ty: blk_in_ty,
+            compiled_exprs,
+            ..
+        } = self;
+
+        let blk_in_ty = Some(blk_in_ty.clone());
+
+        Ok(ArgBuilder::new(
+            node,
+            ag,
+            tg,
+            lg,
+            chgs,
+            blk_in_ty,
+            compiled_exprs,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn structures_sizing() {
+        use std::mem::size_of;
+
+        // TODO review this sizing, maybe it can be reduced by boxing
+        assert_eq!(size_of::<Argument>(), 192);
+        assert_eq!(size_of::<Hold>(), 96);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 96);
+    }
 }
