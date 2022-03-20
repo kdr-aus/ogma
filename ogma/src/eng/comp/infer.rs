@@ -3,7 +3,7 @@ use std::iter::once;
 use tygraph::Chg::*;
 
 impl<'d> Compiler<'d> {
-    pub fn infer_inputs(&mut self) -> Result<bool> {
+    pub fn infer_inputs(self: &mut Box<Self>) -> Result<bool> {
         // use the targeted ops inferring method
         let success = self.infer_inputs_tgt_ops();
         if success.is_ok() {
@@ -43,7 +43,7 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    fn infer_inputs_tgt_shallow_expr(&mut self) -> Result<bool> {
+    fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
         if self.inferrence_depth > 5 {
             panic!("reached inferrence depth");
         }
@@ -79,7 +79,7 @@ impl<'d> Compiler<'d> {
 
         for expr in infer_nodes {
             // replace a dummy compiler value
-            let this = self.take();
+            let this = take(self);
             // infer input
             let x = input_via_expr_compilation(expr, this);
 
@@ -108,10 +108,10 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    pub fn infer_outputs(&mut self) -> bool {
+    pub fn infer_outputs(self: &mut Box<Self>) -> bool {
         if let Some(opnode) = self.output_infer_opnode.take() {
             // replace a dummy compiler value
-            let this = self.take();
+            let this = take(self);
             // infer output
             let x = output(opnode, this);
             // store if we were successful
@@ -124,25 +124,25 @@ impl<'d> Compiler<'d> {
             false
         }
     }
+}
 
-    // take a clone of this compiler, replacing it with a dummy
-    fn take(&mut self) -> Self {
-        std::mem::replace(
-            self,
-            Compiler {
-                ag: Default::default(),
-                tg: Default::default(),
-                lg: Default::default(),
-                compiled_ops: Default::default(),
-                compiled_exprs: Default::default(),
-                output_infer_opnode: Default::default(),
-                flowed_edges: Default::default(),
-                callsite_params: Default::default(),
-                defs: self.defs,
-                inferrence_depth: 0,
-            },
-        )
-    }
+// take a clone of this compiler, replacing it with a dummy
+fn take<'a>(this: &mut Compiler_<'a>) -> Compiler_<'a> {
+    std::mem::replace(
+        this,
+        Box::new(Compiler {
+            ag: Default::default(),
+            tg: Default::default(),
+            lg: Default::default(),
+            compiled_ops: Default::default(),
+            compiled_exprs: Default::default(),
+            output_infer_opnode: Default::default(),
+            flowed_edges: Default::default(),
+            callsite_params: Default::default(),
+            defs: this.defs,
+            inferrence_depth: 0,
+        }),
+    )
 }
 
 enum Error {
@@ -185,8 +185,8 @@ fn input_via_block_compilation(
 
 fn input_via_expr_compilation(
     expr: ExprNode,
-    compiler: Compiler,
-) -> std::result::Result<Compiler, (Compiler, Error)> {
+    compiler: Compiler_,
+) -> std::result::Result<Compiler_, (Compiler_, Error)> {
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
     let compiler_outer = compiler;
@@ -196,7 +196,7 @@ fn input_via_expr_compilation(
 
     for (_name, ty) in types {
         // set the INPUT of the block to 'ty'
-        let mut compiler = compiler_outer.clone();
+        let mut compiler: Compiler_ = compiler_outer.clone();
         compiler.apply_graph_chgs(once(InferInput(expr.idx(), ty.clone()).into()));
 
         compiler.inferrence_depth += 1;
@@ -224,7 +224,7 @@ fn input_via_expr_compilation(
         .ok_or_else(|| (compiler_outer, Error::NoTypes))
 }
 
-fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, Compiler> {
+fn output(op: OpNode, compiler: Compiler_) -> std::result::Result<Compiler_, Compiler_> {
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
     let types = compiler.defs.types().iter();
@@ -233,7 +233,7 @@ fn output(op: OpNode, compiler: Compiler) -> std::result::Result<Compiler, Compi
 
     for (_name, ty) in types {
         // set the OUTPUT of the block to 'ty'
-        let mut compiler = compiler.clone();
+        let mut compiler: Compiler_ = compiler.clone();
         compiler.apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()));
 
         // recurse into compile call -- breaking when the parent expr gets compiled

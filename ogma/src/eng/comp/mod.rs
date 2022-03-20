@@ -38,7 +38,7 @@ pub fn compile_with_seed_vars(
     let tg = TypeGraph::build(&ag);
     let lg = LocalsGraph::build(&ag);
 
-    let mut compiler = Compiler {
+    let mut compiler = Box::new(Compiler {
         defs,
         ag,
         tg,
@@ -49,7 +49,7 @@ pub fn compile_with_seed_vars(
         output_infer_opnode: None,
         callsite_params: Default::default(),
         inferrence_depth: 0,
-    };
+    });
 
     compiler.init_tg(input_ty); // initialise TG
 
@@ -105,8 +105,7 @@ impl<'d> Compiler<'d> {
         self.tg.set_root_input_ty(root_ty); // set the root input
     }
 
-    // TODO box here
-    fn compile<B: BreakOn>(mut self, break_on: B) -> Result<Self> {
+    fn compile<B: BreakOn>(mut self: Box<Self>, break_on: B) -> Result<Box<Self>> {
         let brk_key = &break_on.idx();
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))

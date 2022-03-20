@@ -26,7 +26,6 @@ pub use self::comp::{compile, FullCompilation};
 type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
 // ###### COMPILER #############################################################
-// TODO: check sizing, maybe box this??
 #[derive(Clone)]
 struct Compiler<'d> {
     defs: &'d Definitions,
@@ -46,6 +45,9 @@ struct Compiler<'d> {
     /// Depth limit of inference to loop down to.
     inferrence_depth: u32,
 }
+
+/// Boxed compiler, should be used when passsing by value.
+type Compiler_<'a> = Box<Compiler<'a>>;
 
 // ###### BLOCK ################################################################
 /// A compilation unit for a single [`ast::Block`].
@@ -125,10 +127,11 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        // NOTE
-        // Although block sizing is large, it would not really be a hot spot, and the cost of
-        // refactoring somewhat outweighs any benefit, without doing any proper profiling to
-        // support it.
+        assert_eq!(size_of::<Compiler>(), 400); // oomph!
+                                                // NOTE
+                                                // Although block sizing is large, it would not really be a hot spot, and the cost of
+                                                // refactoring somewhat outweighs any benefit, without doing any proper profiling to
+                                                // support it.
         assert_eq!(size_of::<Block>(), 96 + size_of::<Option<Type>>()); // `output_ty` is only on debug builds
         assert_eq!(size_of::<Step>(), 32);
     }
