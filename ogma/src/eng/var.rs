@@ -10,6 +10,15 @@ pub enum Local {
     Ptr { to: ArgNode, tag: Tag },
 }
 
+/// A location in memory.
+#[derive(Debug, Clone)]
+pub struct Variable {
+    /// The tag.
+    pub tag: Tag,
+    ty: Type,
+    env_idx: usize,
+}
+
 // TODO can this be Arc<[Value]>???
 #[derive(Debug, Clone)]
 #[allow(clippy::rc_buffer)]
@@ -18,6 +27,15 @@ pub struct Environment(Arc<Vec<Value>>);
 impl Environment {
     pub fn new(lg: &graphs::locals_graph::LocalsGraph) -> Self {
         Environment(Arc::new(vec![Value::Nil; lg.var_count()]))
+    }
+}
+
+/// Module scoped constructor.
+impl Variable {
+    pub(super) fn new(tag: Tag, ty: Type, env_idx: usize) -> Self {
+        Self {
+            tag, ty, env_idx
+        }
     }
 }
 

@@ -17,7 +17,7 @@ type IndexMap<V> = crate::HashMap<usize, V>;
 pub(crate) use self::{
     annotate::types as annotate_types,
     eval::{Context, CodeInjector, Eval},
-    var::{Environment, Local},
+    var::{Variable, Environment, Local},
     arg::{Argument},
 };
 
@@ -127,16 +127,6 @@ pub struct Step {
 }
 
 type StepR = Result<(Value, Environment)>;
-
-// ###### VARIABLE #############################################################
-/// A location in memory.
-#[derive(Debug, Clone)]
-pub struct Variable {
-    /// The tag.
-    pub tag: Tag,
-    ty: Type,
-    env_idx: usize,
-}
 
 // ###### testing ##############################################################
 #[cfg(test)]
