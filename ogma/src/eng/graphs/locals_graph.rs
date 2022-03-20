@@ -177,7 +177,7 @@ impl LocalsGraph {
                 eng::Local::Var(var) => var.clone(),
                 _ => unreachable!("this call should not create a param local"),
             })
-            .ok_or_else(|| Chg::NewVar {
+            .ok_or(Chg::NewVar {
                 name,
                 ty,
                 tag,
@@ -205,11 +205,10 @@ impl LocalsGraph {
             .map
             .get(&name)
             .filter(|l| l.defined == defined_at)
-            .map(|l| match &self.locals[l.local as usize] {
-                eng::Local::Var(_) => unreachable!("this call should not create a var local"),
-                _ => (),
+            .map(|l| if let eng::Local::Var(_) = &self.locals[l.local as usize] {
+                unreachable!("this call should not create a var local")
             })
-            .ok_or_else(|| Chg::NewLazy {
+            .ok_or(Chg::NewLazy {
                 name,
                 to: point_to,
                 tag,

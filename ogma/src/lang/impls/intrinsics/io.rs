@@ -199,7 +199,7 @@ fn open_intrinsic(mut blk: Block) -> Result<Step> {
         .concrete()?;
     // TODO make this output inferred / default to Table?
     // AND make this to guessing of types based on file extension
-    let as_ty = type_flag(&mut blk)?.unwrap_or_else(|| Ty::Tab);
+    let as_ty = type_flag(&mut blk)?.unwrap_or(Ty::Tab);
 
     match as_ty {
         Ty::Tab => blk.eval_o(move |val, cx| {

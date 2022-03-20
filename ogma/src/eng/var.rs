@@ -27,7 +27,7 @@ impl Environment {
         Environment(vec![Value::Nil; lg.var_count()].into())
     }
 
-    fn make_mut<'a>(&'a mut self) -> &'a mut [Value] {
+    fn make_mut(&mut self) -> &mut [Value] {
         let arc: &mut Arc<_> = &mut self.0;
 
         // we can't just use get_mut since using `return` seems to not work with lifetimes
