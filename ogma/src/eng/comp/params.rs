@@ -100,7 +100,7 @@ pub(super) fn map_def_params_into_variables(
 
     let mut lg_chg = false;
 
-    for (idx, param) in params.into_iter().enumerate() {
+    for (idx, param) in params.iter().enumerate() {
         let idx = idx as u8;
         // point of failure
         let argnode = arg::pop(&mut args, idx, blk_tag).map_err(|_| {

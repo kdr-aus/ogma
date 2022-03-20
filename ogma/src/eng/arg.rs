@@ -138,7 +138,7 @@ impl<'a> ArgBuilder<'a> {
 
     /// Asserts that the arguments input and output types are known, and if so, returns a concrete
     /// [`Argument`] with the ability to evaluate.
-    pub fn concrete(mut self: Box<Self>) -> Result<Argument> {
+    pub fn concrete(mut self) -> Result<Argument> {
         // assert that if this is a variable type, the variable exists.
         // This is done to ensure sane errors are returned
         self.assert_var_exists()?;
@@ -170,7 +170,7 @@ impl<'a> ArgBuilder<'a> {
         }
     }
 
-    fn map_astnode_into_hold(self: Box<Self>) -> Result<Hold> {
+    fn map_astnode_into_hold(self) -> Result<Hold> {
         use astgraph::AstNode::*;
 
         let Compiler {

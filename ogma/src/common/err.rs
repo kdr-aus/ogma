@@ -177,7 +177,7 @@ impl Error {
             "recursion is not supported.
           for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>"
         } else {
-            "view a list of definitions using `def --list`".into()
+            "view a list of definitions using `def --list`"
         };
 
         Error {
@@ -264,7 +264,6 @@ impl Error {
             traces,
             help_msg: Some("try using the `--help` flag to view requirements".into()),
             hard: true, // unrecoverable
-            ..Self::default()
         }
     }
 
@@ -546,7 +545,6 @@ impl Error {
             traces: trace(ty, format!("`{}` not defined", ty)),
             help_msg: Some("view a list of types using `def-ty --list`".into()),
             hard: true, // unrecoverable
-            ..Self::default()
         }
     }
 
@@ -569,7 +567,6 @@ impl Error {
                 op
             )),
             hard: true,
-            ..Self::default()
         }
     }
 

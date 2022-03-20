@@ -216,7 +216,7 @@ impl<'d> Compiler<'d> {
         let mut chgd = false;
 
         for expr in exprs {
-            if let Some(stack) = eval::Stack::build(&self, expr) {
+            if let Some(stack) = eval::Stack::build(self, expr) {
                 chgd = true;
                 let _is_empty = self.compiled_exprs.insert(expr.index(), stack).is_none();
                 debug_assert!(

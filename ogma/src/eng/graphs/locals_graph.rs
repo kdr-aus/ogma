@@ -205,8 +205,10 @@ impl LocalsGraph {
             .map
             .get(&name)
             .filter(|l| l.defined == defined_at)
-            .map(|l| if let eng::Local::Var(_) = &self.locals[l.local as usize] {
-                unreachable!("this call should not create a var local")
+            .map(|l| {
+                if let eng::Local::Var(_) = &self.locals[l.local as usize] {
+                    unreachable!("this call should not create a var local")
+                }
             })
             .ok_or(Chg::NewLazy {
                 name,
