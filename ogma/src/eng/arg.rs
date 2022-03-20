@@ -28,13 +28,13 @@ impl<'a> ArgBuilder<'a> {
         chgs: Chgs<'a>,
         blk_in_ty: Option<Type>,
         compiled_exprs: &'a IndexMap<eval::Stack>,
-    ) -> Self {
+    ) -> Box<Self> {
         // see if the input and/or output types are known
         let tys = &tg[node.idx()]; // node should exist
         let in_ty = Kn::from(&tys.input);
         let out_ty = Kn::from(&tys.output);
 
-        ArgBuilder {
+        Box::new(ArgBuilder {
             node,
             in_ty,
             out_ty,
@@ -44,11 +44,11 @@ impl<'a> ArgBuilder<'a> {
             blk_in_ty,
             compiled_exprs,
             tg,
-        }
+        })
         .follow_local_arg_ptr()
     }
 
-    fn follow_local_arg_ptr(mut self) -> Self {
+    fn follow_local_arg_ptr(mut self: Box<Self>) -> Box<Self> {
         let new_node = self.ag[self.node.idx()]
             .var()
             .and_then(|t| self.lg.get(self.node.idx(), t.str()))
@@ -80,7 +80,7 @@ impl<'a> ArgBuilder<'a> {
     /// > Since the **blocks's** input type is used often, and trying to pass this through is
     /// > difficult with mutable aliasing, the type argument is an `Option`, where the `None`
     /// > variant represents _using the block's input type_.
-    pub fn supplied<T: Into<Option<Type>>>(mut self, ty: T) -> Result<Self> {
+    pub fn supplied<T: Into<Option<Type>>>(mut self: Box<Self>, ty: T) -> Result<Box<Self>> {
         let ty = match ty.into().or_else(|| self.blk_in_ty.clone()) {
             Some(ty) => ty,
             None => return Ok(self),
@@ -113,7 +113,7 @@ impl<'a> ArgBuilder<'a> {
     }
 
     /// Assert that this argument returns a value of type `ty`.
-    pub fn returns(self, ty: Type) -> Result<Self> {
+    pub fn returns(self: Box<Self>, ty: Type) -> Result<Box<Self>> {
         debug_assert!(
             !matches!(self.out_ty, Kn::Any),
             "logic error if output is Any type"
@@ -150,7 +150,7 @@ impl<'a> ArgBuilder<'a> {
 
     /// Asserts that the arguments input and output types are known, and if so, returns a concrete
     /// [`Argument`] with the ability to evaluate.
-    pub fn concrete(mut self) -> Result<Argument> {
+    pub fn concrete(mut self: Box<Self>) -> Result<Argument> {
         // assert that if this is a variable type, the variable exists.
         // This is done to ensure sane errors are returned
         self.assert_var_exists()?;
@@ -182,7 +182,7 @@ impl<'a> ArgBuilder<'a> {
         }
     }
 
-    fn map_astnode_into_hold(self) -> Result<Hold> {
+    fn map_astnode_into_hold(self: Box<Self>) -> Result<Hold> {
         use astgraph::AstNode::*;
 
         match &self.ag[self.node.idx()] {
@@ -441,7 +441,7 @@ impl<'a> Block<'a> {
     /// about the argument.
     /// Once the assertations are done, use `.concrete()` to resolve that the types are known and
     /// an [`Argument`] is produced.
-    pub fn next_arg(&mut self) -> Result<ArgBuilder> {
+    pub fn next_arg(&mut self) -> Result<Box<ArgBuilder>> {
         let btag = self.blk_tag().clone();
         let node = pop(&mut self.args, self.args_count, &btag)?;
         self.args_count += 1;
