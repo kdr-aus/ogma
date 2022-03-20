@@ -28,6 +28,7 @@ impl<'a> Block<'a> {
         self.args.len()
     }
 
+    /// The current definitions being compiled with.
     pub fn defs(&self) -> &'a Definitions {
         self.compiler.defs
     }
@@ -89,27 +90,9 @@ impl<'a> Block<'a> {
     /// debug builds, be sure that testing occurs of code path to avoid UB in release.
     pub fn create_var_ref(&mut self, arg: ArgNode, ty: Type) -> Result<Variable> {
         let Block {
-            node,
-            compiler:
-                Compiler {
-                    defs,
-                    ag,
-                    tg,
-                    lg,
-                    flowed_edges,
-                    compiled_ops,
-                    compiled_exprs,
-                    output_infer_opnode,
-                    callsite_params,
-                    inferrence_depth,
-                },
-            in_ty,
-            flags,
-            args,
-            args_count,
+            compiler: Compiler { ag, lg, .. },
             chgs,
-            infer_output,
-            output_ty,
+            ..
         } = self;
 
         match &ag[arg.idx()] {

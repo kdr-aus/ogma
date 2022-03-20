@@ -286,26 +286,9 @@ impl<'a> Block<'a> {
     pub fn output_ty(&mut self) -> Option<Type> {
         let Block {
             node: opnode,
-            compiler:
-                Compiler {
-                    defs,
-                    ag,
-                    tg,
-                    lg,
-                    flowed_edges,
-                    compiled_ops,
-                    compiled_exprs,
-                    output_infer_opnode,
-                    callsite_params,
-                    inferrence_depth,
-                },
-            in_ty,
-            flags,
-            args,
-            args_count,
-            chgs,
+            compiler: Compiler { ag, tg, .. },
             infer_output,
-            output_ty,
+            ..
         } = self;
 
         let ret = tg[opnode.idx()]

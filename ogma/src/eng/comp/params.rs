@@ -176,13 +176,7 @@ fn map_callsite_param(
     param: &Parameter,
     chgs: Chgs,
 ) -> Result<std::result::Result<Option<CallsiteParam>, LocalInjection>> {
-    let Compiler {
-        ag,
-        tg,
-        lg,
-        compiled_exprs,
-        ..
-    } = compiler;
+    let Compiler { ag, lg, .. } = compiler;
 
     let arg = arg::ArgBuilder::new(argnode, compiler, chgs, None);
 

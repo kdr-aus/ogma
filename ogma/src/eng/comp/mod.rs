@@ -493,9 +493,6 @@ impl<'d> Compiler<'d> {
     ) -> Result<Vec<(Variable, Argument)>> {
         let Compiler {
             ag,
-            tg,
-            lg,
-            compiled_exprs,
             callsite_params,
             ..
         } = self;
@@ -514,12 +511,8 @@ impl<'d> Compiler<'d> {
                      arg_idx,
                  }| {
                     let arg = args[*arg_idx as usize]; // indexing should be safe since it was built against the args
-                    let arg = arg::ArgBuilder::new(
-                        arg, self,
-                        chgs,
-                        Some(in_ty.clone()),
-                    )
-                    .supplied(in_ty.clone());
+                    let arg = arg::ArgBuilder::new(arg, self, chgs, Some(in_ty.clone()))
+                        .supplied(in_ty.clone());
                     let arg = match param.ty().cloned() {
                         Some(ty) => arg.and_then(|a| a.returns(ty)),
                         None => arg,

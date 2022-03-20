@@ -1,5 +1,5 @@
 use super::*;
-use graphs::{astgraph::AstGraph, locals_graph::LocalsGraph, tygraph::Knowledge, *};
+use graphs::{tygraph::Knowledge, *};
 use std::convert::TryInto;
 
 // ###### ARG BUILDER ##########################################################
@@ -173,7 +173,13 @@ impl<'a> ArgBuilder<'a> {
     fn map_astnode_into_hold(self: Box<Self>) -> Result<Hold> {
         use astgraph::AstNode::*;
 
-        let Compiler { defs, ag, tg, lg, flowed_edges, compiled_ops, compiled_exprs, output_infer_opnode, callsite_params, inferrence_depth } = self.compiler;
+        let Compiler {
+            ag,
+            tg,
+            lg,
+            compiled_exprs,
+            ..
+        } = self.compiler;
 
         match &ag[self.node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
@@ -203,17 +209,16 @@ impl<'a> ArgBuilder<'a> {
                 Ok(Hold::Expr(stack))
             }
             Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
-            Var(tag) => 
-                lg
-                .get_checked(self.node.idx(), tag.str(), tag)
-                .and_then(|local| match local {
-                    Local::Var(var) => Ok(Hold::Var(var.clone())),
-                    Local::Ptr { .. } => {
-                        unreachable!("a param argument should shadow the referencer arg node")
-                    }
-                }),
-            Expr(tag) => 
-                compiled_exprs
+            Var(tag) => {
+                lg.get_checked(self.node.idx(), tag.str(), tag)
+                    .and_then(|local| match local {
+                        Local::Var(var) => Ok(Hold::Var(var.clone())),
+                        Local::Ptr { .. } => {
+                            unreachable!("a param argument should shadow the referencer arg node")
+                        }
+                    })
+            }
+            Expr(tag) => compiled_exprs
                 .get(&self.node.index())
                 .cloned()
                 .map(Hold::Expr)
@@ -233,12 +238,11 @@ impl<'a> ArgBuilder<'a> {
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
-        let Compiler { defs, ag, tg, lg, flowed_edges, compiled_ops, compiled_exprs, output_infer_opnode, callsite_params, inferrence_depth } = self.compiler;
+        let Compiler { ag, lg, .. } = self.compiler;
 
         match &ag[self.node.idx()] {
             astgraph::AstNode::Var(tag) => {
-                lg
-                    .get(self.node.idx(), tag.str())
+                lg.get(self.node.idx(), tag.str())
                     // Ok(Some(true)) if variable exists
                     .map(|_| true)
                     // if NOT sealed, return Ok(Some(false)) -- lg should be updated
@@ -435,30 +439,23 @@ impl<'a> Block<'a> {
     /// an [`Argument`] is produced.
     pub fn next_arg(&mut self) -> Result<Box<ArgBuilder>> {
         let btag = self.blk_tag().clone();
-        let node = pop(&mut self.args, self.args_count, &btag)?;
-        self.args_count += 1;
 
         let Block {
-            compiler:
-                Compiler {
-                    ag,
-                    tg,
-                    lg,
-                    compiled_exprs,
-                    ..
-                },
             chgs,
-            in_ty: blk_in_ty,
+            in_ty,
+            args,
+            args_count,
             ..
         } = self;
 
-        let blk_in_ty = Some(blk_in_ty.clone());
+        let node = pop(args, *args_count, &btag)?;
+        *args_count += 1;
 
         Ok(ArgBuilder::new(
             node,
             self.compiler,
             chgs,
-            blk_in_ty,
+            Some(in_ty.clone()),
         ))
     }
 }

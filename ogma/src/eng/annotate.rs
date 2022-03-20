@@ -13,27 +13,8 @@ fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool)
     use AstNode::*;
 
     let Block {
-        node: _,
-        compiler:
-            Compiler {
-                defs,
-                ag,
-                tg,
-                lg,
-                flowed_edges,
-                compiled_ops,
-                compiled_exprs,
-                output_infer_opnode,
-                callsite_params,
-                inferrence_depth,
-            },
-        in_ty,
-        flags,
-        args,
-        args_count,
-        chgs,
-        infer_output,
-        output_ty,
+        compiler: Compiler { ag, tg, .. },
+        ..
     } = blk;
 
     let out_ty = tg[node].output.ty();
@@ -80,27 +61,8 @@ fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool)
 
 fn fmt_op(s: &mut String, blk: &Block, op: OpNode, v: bool) {
     let Block {
-        node,
-        compiler:
-            Compiler {
-                defs,
-                ag,
-                tg,
-                lg,
-                flowed_edges,
-                compiled_ops,
-                compiled_exprs,
-                output_infer_opnode,
-                callsite_params,
-                inferrence_depth,
-            },
-        in_ty,
-        flags,
-        args,
-        args_count,
-        chgs,
-        infer_output,
-        output_ty,
+        compiler: Compiler { ag, tg, .. },
+        ..
     } = blk;
 
     let out_ty = tg[op.idx()].output.ty();
