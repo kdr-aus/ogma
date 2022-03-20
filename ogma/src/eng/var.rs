@@ -19,14 +19,31 @@ pub struct Variable {
     env_idx: usize,
 }
 
-// TODO can this be Arc<[Value]>???
 #[derive(Debug, Clone)]
-#[allow(clippy::rc_buffer)]
-pub struct Environment(Arc<Vec<Value>>);
+pub struct Environment(Arc<[Value]>);
 
 impl Environment {
     pub fn new(lg: &graphs::locals_graph::LocalsGraph) -> Self {
-        Environment(Arc::new(vec![Value::Nil; lg.var_count()]))
+        Environment(vec![Value::Nil; lg.var_count()].into())
+    }
+
+    fn make_mut<'a>(&'a mut self) -> &'a mut [Value] {
+        let arc: &mut Arc<_> = &mut self.0;
+
+        // we can't just use get_mut since using `return` seems to not work with lifetimes
+        // instead, we check the counts outselves.
+        // we use the assumption that counts of one would be unique along this thread, and since
+        // there cannot be another Arc on another thread without having counts > 1, this arc is
+        // unique
+
+        let uniq = Arc::weak_count(arc) == 1 && Arc::strong_count(arc) == 1;
+
+        if !uniq {
+            // replace the arc with a new clone
+            *arc = arc.as_ref().to_vec().into();
+        }
+
+        Arc::get_mut(arc).expect("checked one count, or just replaced with clone")
     }
 }
 
@@ -83,7 +100,7 @@ impl Variable {
             return;
         }
 
-        *Arc::make_mut(&mut env.0)
+        *env.make_mut()
             .get_mut(self.env_idx)
             .expect("environment should have variable at location") = val;
     }

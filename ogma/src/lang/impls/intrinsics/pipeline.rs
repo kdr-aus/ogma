@@ -73,7 +73,6 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
                     .next_arg()?
                     .supplied(Type::Nil)?
                     .concrete()
-                    .map(Box::new)
                     .map(TableGetType::Default)?,
                 // use the type flag
                 _ => type_flag(&mut blk)
@@ -103,8 +102,7 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 enum TableGetType {
-    // TODO remove box once Argument size reduce
-    Default(Box<eng::Argument>),
+    Default(eng::Argument),
     Flag(Type),
 }
 
