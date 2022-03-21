@@ -691,7 +691,7 @@ dependencies = [
  "divvy",
  "fastrand",
  "fxhash",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
  "rayon",
  "serde",
  "serde_json",
