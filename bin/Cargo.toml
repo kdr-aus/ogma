@@ -2,7 +2,7 @@
 name = "bin"
 version = "0.1.0"
 authors = ["kurt <kurtlawrence92@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 path = "main.rs"
