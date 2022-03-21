@@ -1,7 +1,12 @@
-use crate::lang::{
-    help::*,
-    syntax::ast::*,
-    types::{Type, TypeDef},
+//! Error infrastructure.
+
+use crate::{
+    lang::{
+        help::*,
+        syntax::ast::*,
+        types::{Type, TypeDef},
+    },
+    prelude::*,
 };
 use ::libs::colored::*;
 use std::{
@@ -44,7 +49,7 @@ macro_rules! colourln {
 ///  |        ^^^^ short description
 /// --> help: help message
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Error {
     /// Category of error.
     pub cat: Category,
@@ -54,17 +59,31 @@ pub struct Error {
     pub traces: Vec<Trace>,
     /// Optional help message.
     pub help_msg: Option<String>,
+    /// Error should propogate immediately.
+    ///
+    /// This is a flag to the compiler that the error should be propogated through, exiting the
+    /// compiling loop early without further compilation processes.
+    /// This is usually done when a error is encountered that is unrelated to typing issues, and
+    /// will be an error even if _all_ type information was known.
+    pub hard: bool,
 }
 
+/// A single trace item for error messages.
 #[derive(Debug, PartialEq)]
 pub struct Trace {
+    /// The defined location.
     pub loc: Location,
+    /// The source code.
     pub source: String,
+    /// Description of trace.
     pub desc: Option<String>,
+    /// Starting position in `source`.
     pub start: usize,
+    /// Length of trace element.
     pub len: usize,
 }
 
+/// Represent a help message using the [`Error`] infrastructure.
 pub fn help_as_error(msg: &HelpMessage) -> Error {
     use fmt::Write;
 
@@ -104,23 +123,27 @@ pub fn help_as_error(msg: &HelpMessage) -> Error {
     Error {
         cat: Category::Help,
         desc: format!("`{}`", cmd),
-        help_msg: None,
         traces: vec![Trace {
             source,
             ..Default::default()
         }],
+        ..Error::default()
     }
 }
 
 // ###### ERROR ################################################################
-fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
+/// Create a single trace item using the tag.
+pub fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
     vec![Trace::from_tag(tag, desc)]
 }
 
 impl Error {
-    pub(crate) fn add_trace(mut self, tag: &Tag) -> Self {
-        self.traces
-            .push(Trace::from_tag(tag, "invoked here".to_string()));
+    pub(crate) fn add_trace<M>(mut self, tag: &Tag, msg: M) -> Self
+    where
+        M: Into<Option<String>>,
+    {
+        let msg = msg.into().unwrap_or_else(|| "invoked here".to_string());
+        self.traces.push(Trace::from_tag(tag, msg));
         self
     }
 
@@ -145,15 +168,24 @@ impl Error {
                 "use a different name, or try defining `{}` for a specific input type",
                 def.name
             )),
+            ..Self::default()
         }
     }
 
-    pub(crate) fn op_not_found(op: &Tag) -> Self {
+    pub(crate) fn op_not_found(op: &Tag, recursion_detected: bool) -> Self {
+        let hlp = if recursion_detected {
+            "recursion is not supported.
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>"
+        } else {
+            "view a list of definitions using `def --list`"
+        };
+
         Error {
             cat: Category::UnknownCommand,
             desc: format!("operation `{}` not defined", op),
             traces: trace(op, format!("`{}` not found", op)),
-            help_msg: Some("view a list of definitions using `def --list`".into()),
+            help_msg: Some(hlp.into()),
+            ..Self::default()
         }
     }
 
@@ -166,55 +198,99 @@ impl Error {
             ),
             traces: trace(op, format!("`{}` not implmented for `{}` input", op, in_ty)),
             help_msg: Some("view a list of definitions using `def --list`".into()),
+            ..Self::default()
         }
     }
 
-    pub(crate) fn type_not_found(ty: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("type `{}` not defined", ty),
-            traces: trace(ty, format!("`{}` not defined", ty)),
-            help_msg: Some("view a list of types using `def-ty --list`".into()),
-        }
-    }
+    pub(crate) fn insufficient_args(
+        block_tag: &Tag,
+        args_count: u8,
+        signature: Option<&DefinitionImpl>,
+    ) -> Self {
+        use std::fmt::Write;
 
-    pub(crate) fn wrong_input_type(ty: &Type, op: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("`{}` does not support `{}` input data", op, ty),
-            traces: trace(op, None),
-            help_msg: Some(format!(
-                "use `{0} --help` to view requirements. consider implementing `def {0}`",
-                op
-            )),
-        }
-    }
+        let mut help_msg = String::from("try using the `--help` flag to view requirements");
 
-    pub(crate) fn insufficient_args(block_tag: &Tag, args_count: usize) -> Self {
+        if let Some(impl_) = signature {
+            let mut params = impl_.params.iter().fold(String::new(), |mut s, param| {
+                write!(&mut s, "{}", param.ident).ok();
+                if let Some(ty) = &param.ty {
+                    write!(&mut s, ":{}", ty).ok();
+                }
+
+                s += " ";
+
+                s
+            });
+            params.pop(); // remove trailing space
+
+            writeln!(&mut help_msg, ".").ok();
+            write!(
+                &mut help_msg,
+                "          `{}` is defined to accept parameters `({})`",
+                impl_.name, params
+            )
+            .ok();
+        }
+
         Error {
             cat: Category::Semantics,
             desc: format!("expecting more than {} arguments", args_count),
             traces: trace(block_tag, "expecting additional argument(s)".to_string()),
-            help_msg: Some("try using the `--help` flag to view requirements".into()),
+            help_msg: Some(help_msg),
+            ..Self::default()
         }
     }
 
-    pub(crate) fn unused_flag(flag: &Tag) -> Self {
+    pub(crate) fn unused_flags<'a, T>(flags: T) -> Self
+    where
+        T: DoubleEndedIterator<Item = &'a Tag>,
+    {
+        let delim = ", ";
+
+        let (desc, traces) = flags.rev().fold(
+            (String::from("not expecting flags: "), Vec::new()),
+            |(desc, mut traces), flag| {
+                traces.push(Trace::from_tag(flag, "flag not supported".to_string()));
+                (desc + "`" + flag.str() + "`" + delim, traces)
+            },
+        );
+
+        let desc = desc.trim_end_matches(delim).to_string();
+
         Error {
             cat: Category::Semantics,
-            desc: format!("not expecting `{}` flag", flag),
-            traces: trace(flag, "flag not supported".to_string()),
+            desc,
+            traces,
             help_msg: Some("try using the `--help` flag to view requirements".into()),
+            hard: true, // unrecoverable
         }
     }
 
-    pub(crate) fn unused_arg(arg: &Argument) -> Self {
-        let (tag, ty) = Self::span_arg(arg);
+    pub(crate) fn unused_args<'a, T>(args: T) -> Self
+    where
+        T: ExactSizeIterator<Item = &'a Tag>,
+    {
+        let len = args.len();
+        let tag = args
+            .cloned()
+            .reduce(|mut a, b| {
+                a.make_mut().start = a.start.min(b.start);
+                a.make_mut().end = a.end.max(b.end);
+                a
+            })
+            .unwrap_or_default();
+        let msg = if len == 1 {
+            "this argument is unnecessary"
+        } else {
+            "these arguments are unnecessary"
+        };
+
         Error {
             cat: Category::Semantics,
             desc: "too many arguments supplied".into(),
-            traces: trace(tag, format!("{} argument is unnecessary", ty)),
-            help_msg: Some("the command does not require or support additional arguments".into()),
+            traces: trace(&tag, Some(msg.into())),
+            ..Self::default()
         }
     }
 
@@ -230,18 +306,7 @@ impl Error {
                 "commands may require specific argument types, use `--help` to view requirements"
                     .into(),
             ),
-        }
-    }
-
-    pub(crate) fn unexp_arg_ty(exp: &Type, found: &Type, tag: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("expecting argument with type `{}`, found `{}`", exp, found),
-            traces: trace(tag, format!("this argument returns type `{}`", found)),
-            help_msg: Some(
-                "commands may require specific argument types, use `--help` to view requirements"
-                    .into(),
-            ),
+            hard: true, // non-recoverable
         }
     }
 
@@ -253,7 +318,7 @@ impl Error {
                 Some(x) => trace(tag, format!("`{}` resolves to `{}`", tag.str(), x)),
                 None => trace(tag, None),
             },
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -262,7 +327,7 @@ impl Error {
             cat: Category::Evaluation,
             desc: format!("header `{}` not found in table", colname),
             traces: trace(tag, format!("`{}` resolves to `{}`", tag.str(), colname)),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -272,26 +337,7 @@ impl Error {
             desc: format!("row index `{}` is outside table bounds", index),
             traces: trace(tag, format!("`{}` resolves to {}", tag.str(), index)),
             help_msg: Some("use `len` command to check the size of the table".into()),
-        }
-    }
-
-    pub(crate) fn field_not_found(field: &Tag, ty: &TypeDef) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("`{}` does not contain field `{}`", ty.name(), field),
-            traces: trace(field, format!("`{}` not found", field)),
-            help_msg: None,
-        }
-    }
-
-    pub(crate) fn var_not_found(var: &Tag) -> Self {
-        Error {
-            cat: Category::Semantics,
-            desc: format!("variable `{}` does not exist", var),
-            traces: trace(var, format!("`{}` not in scope", var)),
-            help_msg: Some(
-                "variables must be in scope and can be defined using the `let` command".into(),
-            ),
+            ..Self::default()
         }
     }
 
@@ -320,7 +366,7 @@ expected `{}`, found `{}`",
             cat: Category::Semantics,
             desc: format!("special literal `{}` not supported", found),
             traces: trace(tag, format!("`{}` not supported", found)),
-            help_msg: None,
+            ..Self::default()
         }
     }
 
@@ -335,6 +381,7 @@ expected `{}`, found `{}`",
             desc: desc.into(),
             traces: trace(tag, short_desc),
             help_msg: help.into(),
+            ..Self::default()
         }
     }
 
@@ -347,6 +394,7 @@ expected `{}`, found `{}`",
         )
     }
 
+    /// This is an internal error!
     pub(crate) fn conversion_failed(exp: &Type, found: &Type) -> Self {
         Error {
             cat: Category::Evaluation,
@@ -354,8 +402,8 @@ expected `{}`, found `{}`",
                 "converting value into `{}` failed, value has type `{}`",
                 exp, found
             ),
-            traces: Vec::new(),
-            help_msg: None,
+            help_msg: Some("this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>".into()),
+                ..Self::default()
         }
     }
 
@@ -381,9 +429,11 @@ expected `{}`, found `{}`",
         // description
         {
             match self.cat {
+                Category::Internal => colour!(wtr, c, bright_red, "Internal Error"),
                 Category::Parsing => colour!(wtr, c, bright_red, "Parsing Error"),
                 Category::UnknownCommand => colour!(wtr, c, bright_red, "Unknown Command"),
                 Category::Semantics => colour!(wtr, c, bright_red, "Semantics Error"),
+                Category::Type => colour!(wtr, c, bright_red, "Typing Error"),
                 Category::Evaluation => colour!(wtr, c, bright_red, "Evaluation Error"),
                 Category::Definitions => colour!(wtr, c, bright_red, "Definition Error"),
                 Category::Help => colour!(wtr, c, bright_yellow, "Help"),
@@ -403,6 +453,211 @@ expected `{}`, found `{}`",
         }
 
         Ok(())
+    }
+}
+
+/// Syntax
+impl Error {}
+
+/// Internal
+impl Error {
+    fn internal_err_help() -> Option<String> {
+        let bt = backtrace::Backtrace::new();
+        Some(format!(
+            "this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>
+Please supply this BACKTRACE:
+{:?}",
+            bt
+        ))
+    }
+
+    pub(crate) fn incomplete_expr_compilation(expr: &Tag) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: "expression is yet to be compiled".into(),
+            traces: trace(
+                expr,
+                Some("this expression has not finished compiling".into()),
+            ),
+            help_msg: Self::internal_err_help(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn ag_init_endless_loop(loop_counter: u32, block_tag: &Tag) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: format!("AST graph reach {} loops", loop_counter),
+            traces: trace(block_tag, None),
+            help_msg: Self::internal_err_help(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn unexp_code_injection_output_ty(
+        ty: &Type,
+        exp_ty: &Type,
+        block_tag: &Tag,
+    ) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: "Internal code injection output type does not match expected output type".into(),
+            traces: trace(
+                block_tag,
+                Some(format!(
+                    "this block returns '{}', expecting '{}'",
+                    ty, exp_ty
+                )),
+            ),
+            help_msg: Self::internal_err_help(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn update_locals_graph(tag: &Tag) -> Self {
+        Error {
+            cat: Category::Internal,
+            desc: "the locals graph has been changed and needs updating".into(),
+            traces: trace(tag, None),
+            help_msg: Self::internal_err_help(),
+            ..Self::default()
+        }
+    }
+
+    /// Wrap an error coming from a `CodeInjector`.
+    pub(crate) fn wrap_code_injection(mut self, blk_tag: &Tag) -> Self {
+        self.traces.push(Trace::from_tag(
+            blk_tag,
+            Some("this block internally injects code".into()),
+        ));
+        self.cat = Category::Internal;
+        self.help_msg = Self::internal_err_help();
+        self
+    }
+}
+
+/// Type Errors
+impl Error {
+    pub(crate) fn type_not_found(ty: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("type `{}` not defined", ty),
+            traces: trace(ty, format!("`{}` not defined", ty)),
+            help_msg: Some("view a list of types using `def-ty --list`".into()),
+            hard: true, // unrecoverable
+        }
+    }
+
+    pub(crate) fn unknown_blk_output_type(blk: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer block's output type".into(),
+            traces: trace(blk, None),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn wrong_op_input_type(ty: &Type, op: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("`{}` does not support `{}` input data", op, ty),
+            traces: trace(op, None),
+            help_msg: Some(format!(
+                "use `{0} --help` to view requirements. consider implementing `def {0}`",
+                op
+            )),
+            hard: true,
+        }
+    }
+
+    pub(crate) fn unknown_arg_input_type(arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer argument's input type".into(),
+            traces: trace(arg, None),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn unknown_arg_output_type(arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: "unable to infer argument's output type".into(),
+            traces: trace(arg, None),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn unexp_arg_input_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!(
+                "expecting argument to take input type `{}`, accepts `{}`",
+                exp, found
+            ),
+            traces: trace(arg, format!("this argument accepts type `{}`", found)),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn unexp_arg_output_ty(exp: &Type, found: &Type, arg: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!(
+                "expecting argument with output type `{}`, found `{}`",
+                exp, found
+            ),
+            traces: trace(arg, format!("this argument returns type `{}`", found)),
+            help_msg: Some(
+                "commands may require specific argument types, use `--help` to view requirements"
+                    .into(),
+            ),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn field_not_found(field: &Tag, ty: &TypeDef) -> Self {
+        fn hlp(ty: &TypeDef) -> Option<String> {
+            use types::TypeVariant::*;
+
+            match ty.structure() {
+                Sum(_) => None,
+                Product(fields) => {
+                    let delim = ", ";
+                    let list = fields
+                        .iter()
+                        .fold(String::new(), |s, f| s + f.name().str() + delim);
+                    Some(format!(
+                        "`{}` has the following fields: {}",
+                        ty.name(),
+                        list.trim_end_matches(delim)
+                    ))
+                }
+            }
+        }
+
+        Error {
+            cat: Category::Semantics,
+            desc: format!("`{}` does not contain field `{}`", ty.name(), field),
+            traces: trace(field, format!("`{}` not found", field)),
+            help_msg: hlp(ty),
+            hard: true,
+        }
+    }
+}
+
+/// Variable Errors
+impl Error {
+    pub(crate) fn var_not_found(var: &Tag) -> Self {
+        Error {
+            cat: Category::Semantics,
+            desc: format!("variable `{}` does not exist", var),
+            traces: trace(var, format!("`{}` not in scope", var)),
+            help_msg: Some(
+                "variables must be in scope and can be defined using the `let` command".into(),
+            ),
+            hard: true, // unrecoverable, variable not found in locals
+        }
     }
 }
 
@@ -433,6 +688,7 @@ impl Default for Trace {
 }
 
 impl Trace {
+    /// Build the error trace from a tag.
     pub fn from_tag<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Self {
         Self {
             loc: tag.anchor.clone(),
@@ -536,14 +792,31 @@ fn trace_code_lines(code: &str, start: usize, end: usize) -> Vec<(&str, usize, u
 }
 
 // ###### STRUCTS ##############################################################
+/// Error catgories.
 #[derive(Debug, PartialEq)]
 pub enum Category {
+    /// Internal error. These should not occur.
+    Internal,
+    /// Parsing error.
     Parsing,
+    /// Command is not recognised.
     UnknownCommand,
+    /// Semantic error at comp-time.
     Semantics,
+    /// Type inference failure.
+    Type,
+    /// A run-time evaluation error.
     Evaluation,
+    /// A definition error.
     Definitions,
+    /// A help message (built atop the error infrastructure).
     Help,
+}
+
+impl Default for Category {
+    fn default() -> Self {
+        Category::Internal
+    }
 }
 
 #[cfg(test)]

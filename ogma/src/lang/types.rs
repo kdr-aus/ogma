@@ -15,13 +15,15 @@ type TrTable = ::table::Table<Value>;
 
 /// Wrapper of a table, used to specialise drop and cloning behaviour.
 #[derive(Clone, PartialEq, Debug, Default)]
-pub struct Table(pub(crate) Arc<TrTable>);
+pub struct Table(pub Arc<TrTable>);
 
 impl Table {
+    /// If this table reference is unique, get a mutable alias to it.
     pub fn get_mut(&mut self) -> Option<&mut TrTable> {
         Arc::get_mut(&mut self.0)
     }
 
+    /// Make a unique reference to this table by cloning if required.
     pub fn make_mut(&mut self) -> &mut TrTable {
         Arc::make_mut(&mut self.0)
     }
@@ -54,18 +56,29 @@ impl Drop for Table {
 }
 
 // ###### TYPE #################################################################
+/// Ogma data types.
+///
+/// Primitive types with support for ogma defined types ([`TypeDef`]).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Type {
+    /// A nil, or nothing, type.
     Nil,
+    /// A boolean type.
     Bool,
+    /// A numeric type.
     Num,
+    /// A string type.
     Str,
+    /// A table type.
     Tab,
+    /// A table row type.
     TabRow,
+    /// An ogma-defined type.
     Def(Arc<TypeDef>),
 }
 
 impl Type {
+    /// Output the help message of a type.
     pub fn help(&self) -> HelpMessage {
         use Type::*;
         let desc = match self {
@@ -81,6 +94,14 @@ impl Type {
         HelpMessage {
             desc,
             ..HelpMessage::new(self.to_string())
+        }
+    }
+
+    /// This type is a Tuple type with name `U_t1-t2-...-tN_`.
+    pub fn is_tuple(&self) -> bool {
+        match self {
+            Type::Def(n) => n.is_tuple(),
+            _ => false,
         }
     }
 }
@@ -101,7 +122,10 @@ impl fmt::Display for Type {
     }
 }
 
+// TODO constify this??
+/// This Rust type represents an ogma type.
 pub trait AsType {
+    /// The ogma type.
     fn as_type() -> Type;
 }
 
@@ -136,14 +160,14 @@ impl Value {
             Str(_) => Type::Str,
             Tab(_) => Type::Tab,
             TabRow(_) => Type::TabRow,
-            Ogma(x) => Type::Def(x.ty.clone()),
+            Ogma(x) => Type::Def(Arc::clone(x.ty())),
         }
     }
 
     /// Returns the variant index **IF** the value is a user-defined _sum_ type.
     pub fn variant_idx(&self) -> Option<usize> {
         match self {
-            Value::Ogma(x) if matches!(x.ty.ty, TypeVariant::Sum(_)) => Some(x.variant_idx),
+            Value::Ogma(x) if matches!(x.ty().ty, TypeVariant::Sum(_)) => Some(x.variant_idx()),
             _ => None,
         }
     }
@@ -208,7 +232,7 @@ impl From<$type> for Value {
 
 prim_type_impls!(bool=>Bool, Number=>Num, Str=>Str, Table=>Tab, TableRow=>TabRow);
 
-// additionals that don't fit pattern
+// ----- additionals that don't fit pattern -----
 impl AsType for () {
     fn as_type() -> Type {
         Type::Nil
@@ -234,8 +258,7 @@ impl TryFrom<Value> for OgmaData {
                     "converting value into `OgmaData` failed, value has type `{}`",
                     x.ty()
                 ),
-                traces: Vec::new(),
-                help_msg: None,
+                ..Error::default()
             }),
         }
     }
@@ -250,6 +273,7 @@ impl From<OgmaData> for Value {
         Value::Ogma(x)
     }
 }
+// ----- end -----
 
 // ###### USER TYPES ###########################################################
 #[derive(Clone)]
@@ -266,6 +290,7 @@ impl Types {
         map.insert(Str::from("Num"), Type::Num);
         map.insert(Str::from("Str"), Type::Str);
         map.insert(Str::from("Table"), Type::Tab);
+        map.insert(Str::from("TableRow"), Type::TabRow);
 
         let mut types = Self { map };
 
@@ -323,13 +348,14 @@ impl Types {
             // c. The associated init impl needs to be redone to match the new typedef signature
             let name = ty.name();
             Err(Error {
-                cat: err::Category::Semantics,
+                cat: err::Category::Definitions,
                 desc: format!("can not redefine type `{}`", name),
                 traces: vec![err::Trace::from_tag(
                     name,
                     format!("`{}` already defined", name),
                 )],
                 help_msg: Some("try defining your type with a different name".into()),
+                hard: true,
             })
         } else {
             let ty = Arc::new(ty);
@@ -357,6 +383,10 @@ impl Types {
 
     pub fn help_iter(&self) -> impl Iterator<Item = (&Str, HelpMessage)> {
         self.map.iter().map(|(n, t)| (n, t.help()))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&str, &Type)> {
+        self.map.iter().map(|(k, v)| (k.as_str(), v))
     }
 }
 
@@ -387,10 +417,12 @@ pub struct Variant {
 #[derive(Debug, Clone)]
 pub struct Field {
     name: Tag,
-    // TODO this will probably be used with generics
+    // NOTE this will probably be used with generics
+    // I also do not know what this is anymore....
+    // It looks like it is just the tag of the `ty`
     _typedef: Tag,
     ty: Type,
-    // TODO this will probably be used with generics
+    // NOTE this will probably be used with generics
     _params: Vec<Type>,
 }
 
@@ -449,6 +481,11 @@ impl TypeDef {
             desc,
             ..HelpMessage::new(cmd)
         }
+    }
+
+    /// This type is a Tuple type with name `U_t1-t2-...-tN_`.
+    pub fn is_tuple(&self) -> bool {
+        self.name.str().starts_with("U_")
     }
 }
 
@@ -523,24 +560,19 @@ impl PrimTyDef {
 }
 
 // ###### DATA #################################################################
+/// A non-primitive data structure.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OgmaData(Arc<OgmaDataInner>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct OgmaDataInner {
-    pub(crate) ty: Arc<TypeDef>,
-    pub(crate) variant_idx: usize,
-    pub(crate) data: Vec<Value>,
-}
-
-impl std::ops::Deref for OgmaData {
-    type Target = OgmaDataInner;
-    fn deref(&self) -> &OgmaDataInner {
-        &*self.0
-    }
+    pub ty: Arc<TypeDef>,
+    pub variant_idx: usize,
+    pub data: Vec<Value>,
 }
 
 impl OgmaData {
+    /// Build a new [`OgmaData`].
     pub fn new<V>(ty: Arc<TypeDef>, variant_idx: V, data: Vec<Value>) -> Self
     where
         V: Into<Option<usize>>,
@@ -552,12 +584,29 @@ impl OgmaData {
         }))
     }
 
+    /// Get a mutable reference to the inner data.
     pub fn get_mut(&mut self) -> Option<&mut OgmaDataInner> {
         Arc::get_mut(&mut self.0)
     }
 
+    /// Make a mutable reference to the inner data by clone-on-write.
     pub fn make_mut(&mut self) -> &mut OgmaDataInner {
         Arc::make_mut(&mut self.0)
+    }
+
+    /// The type definition for this type.
+    pub fn ty(&self) -> &Arc<TypeDef> {
+        &self.0.ty
+    }
+
+    /// The variant index for a Sum type.
+    pub fn variant_idx(&self) -> usize {
+        self.0.variant_idx
+    }
+
+    /// The backing data field values.
+    pub fn data(&self) -> &[Value] {
+        self.0.data.as_slice()
     }
 }
 
@@ -766,7 +815,9 @@ impl Tuple {
     }
 
     pub fn ty(args: Vec<Type>) -> TypeDef {
+        use ast::Tag_;
         use std::fmt::Write;
+
         let name = Self::name(&args);
 
         let mut i = 0;
@@ -790,14 +841,14 @@ impl Tuple {
         };
 
         // build tags
-        let t = Tag {
+        let t = Tag_ {
             anchor: Location::Ogma,
             line: Arc::from(src.as_str()),
             start: 0,
             end: 0,
         };
 
-        let name = Tag {
+        let name = Tag_ {
             end: name.len(),
             ..t.clone()
         };
@@ -807,21 +858,21 @@ impl Tuple {
             .into_iter()
             .zip(fields.into_iter())
             .map(|(arg, (name, ty))| {
-                let name = Tag {
+                let name = Tag_ {
                     start: s,
                     end: s + name.len(),
                     ..t.clone()
                 };
                 s = name.end + 1;
-                let typedef = Tag {
+                let typedef = Tag_ {
                     start: s,
                     end: s + ty.len(),
                     ..t.clone()
                 };
                 s = typedef.end + 1;
                 Field {
-                    name,
-                    _typedef: typedef,
+                    name: name.into(),
+                    _typedef: typedef.into(),
                     ty: arg,
                     _params: Vec::new(),
                 }
@@ -832,7 +883,7 @@ impl Tuple {
             loc: Location::Ogma,
             src,
             help: None,
-            name,
+            name: name.into(),
             ty: TypeVariant::Product(fields),
         }
     }

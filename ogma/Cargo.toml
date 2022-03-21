@@ -14,12 +14,18 @@ numfmt = { git = "https://github.com/kdr-aus/numfmt" }
 table = { git = "https://github.com/kdr-aus/table" }
 
 # crates.io
+backtrace = "0.3"
 comfy-table = "4"
 kserd = "0.5"
 lazy_static = "1"
 nom = "7"
 notify = "4"
 paste = "1"
+petgraph = "0.6"
 serde = { version = "1", features = ["derive"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
 encoding = "0.2"
+
+[[test]]
+name = "commands"
+path = "tests/commands/mod.rs"

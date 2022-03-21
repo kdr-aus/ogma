@@ -169,7 +169,7 @@ impl Definitions {
         );
         add_derived_impl(
             defs,
-            "def skip-hdrs Table (num:Num) { ren-with $num #i | skip $num }",
+            "def skip-hdrs Table (num:Num) { ren-with --Str $num {\\#i} | skip $num }",
             OperationCategory::Morphism,
             "skip the number of headers, setting the table headers to the top most row
 the row is assumed to be populated with strings, if not an error occurs",
@@ -196,7 +196,7 @@ the row is assumed to be populated with strings, if not an error occurs",
             let help = item.comment.take();
             process_definition(
                 item.code(),
-                Location::File(Arc::clone(&file), item.line as usize),
+                Location::File(Arc::clone(&file), item.line),
                 help,
                 self,
             )?;
@@ -290,6 +290,7 @@ pub fn process_definition<'a>(
                 ..Default::default()
             }],
             help_msg: Some("try using `def --help` or `def-ty --help` for more information".into()),
+            ..Error::default()
         })
     }
 }
@@ -424,11 +425,15 @@ fn process_ty<'a>(
 }
 
 fn assert_all_ops_defined(def: &ast::DefinitionImpl, defs: &Implementations) -> Result<()> {
+    let name = &def.name;
+
     let mut check = vec![def.expr.clone()];
     while let Some(expr) = check.pop() {
         for block in &expr.blocks {
-            if !defs.contains_op(block.op().str()) {
-                return Err(Error::op_not_found(&block.op()));
+            let op = block.op();
+
+            if !defs.contains_op(op.str()) {
+                return Err(Error::op_not_found(&op, &*op == name));
             }
             check.extend(block.terms().iter().filter_map(|term| match term {
                 ast::Term::Arg(ast::Argument::Expr(expr)) => Some(expr.clone()),
@@ -439,6 +444,7 @@ fn assert_all_ops_defined(def: &ast::DefinitionImpl, defs: &Implementations) -> 
     Ok(())
 }
 
+/// Construct a table comprising of the various definitions in `defs`.
 pub fn construct_def_table(defs: &Definitions) -> Table {
     use ::table::Entry::*;
     fn location(im: &Implementation) -> Str {

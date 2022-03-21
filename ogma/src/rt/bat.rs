@@ -12,6 +12,7 @@ use ::libs::{
 };
 use ast::Location;
 use std::{
+    convert::TryInto,
     fs, io,
     iter::*,
     path::Path,
@@ -39,7 +40,7 @@ pub struct BatchItem {
     /// The file where this item was defined (used for error reporting).
     pub file: Arc<Path>,
     /// The line where this item was defined (used for error reporting).
-    pub line: u32,
+    pub line: u16,
 
     code: String,
     ty: ItemType,
@@ -156,7 +157,10 @@ pub fn parse_str(s: &str) -> Batch {
             if line.trim().is_empty() {
                 bunches.push(std::mem::take(&mut bunch));
             } else {
-                bunch.push((idx, line));
+                bunch.push((
+                    idx.try_into().expect("only supporting 16-bit line counts"),
+                    line,
+                ));
             }
             (bunches, bunch)
         },
@@ -198,7 +202,7 @@ pub fn parse_str(s: &str) -> Batch {
             };
             BatchItem {
                 comment,
-                line: line as u32 + 1,
+                line: line + 1,
                 ..BatchItem::new(code)
             }
         })
@@ -315,7 +319,7 @@ pub fn process(
         }
 
         let instant = Instant::now();
-        let loc = Location::File(def.file.clone(), def.line as usize);
+        let loc = Location::File(def.file.clone(), def.line);
         let r =
             lang::defs::process_definition(&def.code, loc, def.comment.clone(), &mut definitions)
                 .into();
@@ -339,7 +343,7 @@ pub fn process(
             );
         }
 
-        let loc = Location::File(expr.file.clone(), expr.line as usize);
+        let loc = Location::File(expr.file.clone(), expr.line);
         let r = rt::process_expression((), expr.code.as_str(), loc, &definitions, root, wd).into();
         report_progress(prog, &reporter, idx, &r);
         sw_if_fail(&r);
@@ -382,7 +386,7 @@ pub struct BatchItemProgress {
     /// Matches [`BatchItem::file`].
     pub file: String,
     /// Matches [`BatchItem::line`].
-    pub line: u32,
+    pub line: u16,
     /// Matches [`BatchItem::ty`].
     pub ty: ItemType,
     /// The status of the item.

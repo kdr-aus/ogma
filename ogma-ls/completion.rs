@@ -298,8 +298,8 @@ impl Complete for ast::DefinitionImpl {
         if pos < self.name.start {
             // use the previous tag to the `def` command
             let mut tag = self.name.clone();
-            tag.start = 0;
-            tag.end = self.name.start.saturating_sub(1);
+            tag.make_mut().start = 0;
+            tag.make_mut().end = self.name.start.saturating_sub(1);
             return Some(Node::new(tag, NT::Command));
         }
 
@@ -313,8 +313,8 @@ impl Complete for ast::DefinitionImpl {
         buf.push(Node::new(
             {
                 let mut tag = self.name.clone();
-                tag.start = 0;
-                tag.end = self.name.start.saturating_sub(1);
+                tag.make_mut().start = 0;
+                tag.make_mut().end = self.name.start.saturating_sub(1);
                 tag
             },
             NT::Command,
@@ -341,8 +341,8 @@ impl Complete for ast::DefinitionType {
         if pos < self.name.start {
             // use the previous tag to the `def-ty` command
             let mut tag = self.name.clone();
-            tag.start = 0;
-            tag.end = self.name.start.saturating_sub(1);
+            tag.make_mut().start = 0;
+            tag.make_mut().end = self.name.start.saturating_sub(1);
             return Some(Node::new(tag, NT::Command));
         }
 
@@ -358,8 +358,8 @@ impl Complete for ast::DefinitionType {
         buf.push(Node::new(
             {
                 let mut tag = self.name.clone();
-                tag.start = 0;
-                tag.end = self.name.start.saturating_sub(1);
+                tag.make_mut().start = 0;
+                tag.make_mut().end = self.name.start.saturating_sub(1);
                 tag
             },
             NT::Command,

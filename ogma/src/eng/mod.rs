@@ -2,109 +2,121 @@
 
 use crate::prelude::*;
 
+mod annotate;
 mod arg;
+mod blk;
+mod comp;
 mod eval;
-mod hir;
-mod ty;
+mod graphs;
+mod step;
 mod var;
 
+type IndexSet = crate::HashSet<usize>;
+type IndexMap<V> = crate::HashMap<usize, V>;
+
 pub(crate) use self::{
-    eval::{DefImplEvaluator, Evaluator},
-    hir::{handle_help, Context},
-    var::{Environment, Local, Locals, Variable},
+    annotate::types as annotate_types,
+    arg::Argument,
+    eval::{CodeInjector, Context, Eval},
+    var::{Environment, Local, Variable},
 };
 
-// ###### ARGUMENT #############################################################
-/// Compiled argument.
-///
-/// TODO: reduce the size of this, possibly by boxing the Hold??
-pub struct Argument {
-    /// The argument tag.
-    pub tag: Tag,
-    in_ty: Type,
-    out_ty: Type,
-    hold: Hold,
+pub use self::comp::{compile, FullCompilation};
+
+type Chgs<'a> = &'a mut Vec<graphs::Chg>;
+
+// ###### COMPILER #############################################################
+#[derive(Clone)]
+struct Compiler<'d> {
+    defs: &'d Definitions,
+    ag: graphs::astgraph::AstGraph,
+    tg: graphs::tygraph::TypeGraph,
+    lg: graphs::locals_graph::LocalsGraph,
+    /// The edges in the `tg` that have been resolved and flowed.
+    flowed_edges: IndexSet,
+    /// A map of **Op** nodes which have succesfully compiled into a `Step`.
+    compiled_ops: IndexMap<Step>,
+    /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
+    compiled_exprs: IndexMap<eval::Stack>,
+    /// A op node which has been flag for output inferrence.
+    output_infer_opnode: Option<graphs::OpNode>,
+    /// A map of **Def** nodes which have had their call site parameters prepared as variables.
+    callsite_params: IndexMap<Vec<comp::CallsiteParam>>,
+    /// Depth limit of inference to loop down to.
+    inferrence_depth: u32,
 }
 
-enum Hold {
-    Lit(Value),
-    Var(Variable),
-    Expr(Evaluator),
-}
+/// Boxed compiler, should be used when passsing by value.
+type Compiler_<'a> = Box<Compiler<'a>>;
 
 // ###### BLOCK ################################################################
 /// A compilation unit for a single [`ast::Block`].
 ///
 /// The block is foundational to the compilation engine.
-pub struct Block<'d, 'v> {
-    in_ty: Type,
-    /// The entire block tag.
-    pub blk_tag: Tag,
-    /// The operation (command) tag.
-    pub op_tag: Tag,
-    /// Definitions,
-    pub defs: &'d Definitions,
-    /// Variables tracking.
-    vars: &'v mut Locals,
+/// It acts as the interface between the engine's internal mechanisms and the implementers,
+/// exposing an API which is ergonomic, while handling all the typing and checking behind the
+/// scenes.
+pub struct Block<'a> {
+    /// The OP node index from the compiler graphs.
+    node: graphs::OpNode,
+
+    /// A _read-only_ compiler reference.
+    compiler: &'a Compiler<'a>,
+
+    // NOTE that the input type is not referenced via the TG.
+    // This is done so that this block can be tested against differing input types for InferInput
+    /// The block's input type.
+    pub in_ty: Type,
+
+    /// The block's flags.
+    ///
     /// Must be empty upon finalisation, unused flags return error.
     ///
     /// > Stored in reverse order as a stack.
     flags: Vec<Tag>,
-    /// Does not include flags.
+    /// The blocks arguments, stored as indices into the ast graph.
+    ///
     /// Must be empty upon finalisation, unused args return error.
     ///
     /// > Stored in reverse order as a stack.
-    args: Vec<ast::Argument>,
+    args: Vec<graphs::ArgNode>,
     /// Counter of the arguments used.
-    args_count: usize,
-
-    /// A tracked type annotation code representation.
     ///
-    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
-    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
-    /// moved into that system.
-    type_annotation: String,
-}
+    /// Only 255 arguments are supported.
+    args_count: u8,
 
-impl<'d, 'v> Block<'d, 'v> {
-    fn next_arg_raw(&mut self) -> Result<ast::Argument> {
-        let arg = self
-            .args
-            .pop()
-            .ok_or_else(|| Error::insufficient_args(&self.blk_tag, self.args_count))?;
-        self.args_count += 1;
-        Ok(arg)
-    }
+    /// A list of changes to be made to the type graph.
+    ///
+    /// This is stored as a mutable reference since the block is usually passed by value to
+    /// implementors.
+    /// Any items here are actioned by the compiler to update the type graph, providing more
+    /// information to conduct the type inferencing.
+    /// This allows for block compilation to fail but the updates still be applied.
+    chgs: &'a mut Vec<graphs::Chg>,
 
-    fn finalise(&self) -> Result<()> {
-        if let Some(flag) = self.flags.last() {
-            Err(Error::unused_flag(flag))
-        } else if let Some(arg) = self.args.get(0) {
-            Err(Error::unused_arg(arg))
-        } else {
-            Ok(())
-        }
-    }
+    /// Flag that this block's output should be inferred if getting to output inferencing phase.
+    infer_output: &'a mut bool,
+
+    /// Carry information about an asserted output type.
+    /// Check this against upon finalisation to ensure it matches.
+    /// Only available and checked in debug builds.
+    #[cfg(debug_assertions)]
+    output_ty: Option<Type>,
 }
 
 // ###### STEP #################################################################
+
+/// Common function signature for evaluation, taking a `Value` and a `Context` and returning `O`.
+pub trait Func<O>: Fn(Value, Context) -> O + Send + Sync + 'static {}
+impl<T, O> Func<O> for T where T: Fn(Value, Context) -> O + Send + Sync + 'static {}
+
 /// A compiled block, ready for evaluation.
 pub struct Step {
     out_ty: Type,
-    f: Box<dyn Fn(Value, Context) -> StepR + Sync>,
-
-    /// A tracked type annotation code representation.
-    /// This comes directly off the block when transforming into a `Step`.
-    ///
-    /// TODO: This implementation is currently pretty poorly implemented, requiring this to be
-    /// tracked at all times. Once type inferencing matures more, this annotation could possibly be
-    /// moved into that system.
-    type_annotation: String,
+    f: Arc<dyn Func<StepR>>,
 }
 
 type StepR = Result<(Value, Environment)>;
-
-// ###### FUNCTIONS ############################################################
 
 // ###### testing ##############################################################
 #[cfg(test)]
@@ -115,11 +127,12 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        // TODO review this sizing, maybe it can be reduced by boxing
-        assert_eq!(size_of::<Argument>(), 232);
-        assert_eq!(size_of::<Hold>(), 136);
-
-        // Evaluator is quite large
-        assert_eq!(size_of::<Evaluator>(), 128);
+        assert_eq!(size_of::<Compiler>(), 400); // oomph!
+                                                // NOTE
+                                                // Although block sizing is large, it would not really be a hot spot, and the cost of
+                                                // refactoring somewhat outweighs any benefit, without doing any proper profiling to
+                                                // support it.
+        assert_eq!(size_of::<Block>(), 96 + size_of::<Option<Type>>()); // `output_ty` is only on debug builds
+        assert_eq!(size_of::<Step>(), 32);
     }
 }

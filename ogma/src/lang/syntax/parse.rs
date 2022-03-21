@@ -18,12 +18,13 @@ impl Line {
     fn create_tag(&self, tag: &str) -> Tag {
         let start = self.line.offset(tag);
         let end = start + tag.len();
-        Tag {
+        Tag_ {
             anchor: self.loc.clone(),
             line: self.line.clone(),
             start,
             end,
         }
+        .into()
     }
 }
 
@@ -205,7 +206,7 @@ fn convert_parse_error<'a>(
             start,
             len,
         }],
-        help_msg: None,
+        ..Error::default()
     };
 
     (err, expecting)
@@ -295,7 +296,7 @@ fn expr<'f>(
             }))
         } else {
             let mut tag = line.create_tag(input);
-            tag.end = line.line.offset(i);
+            tag.make_mut().end = line.line.offset(i);
             Ok((i, Expression { tag, blocks }))
         }
     }
@@ -330,7 +331,7 @@ fn op(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
             ident = end;
         }
 
-        ident.start = start;
+        ident.make_mut().start = start;
 
         Ok((i, ident))
     }
@@ -500,8 +501,8 @@ fn arg<'f>(
                     exp(char('}'), Expecting::Term),
                 ))(i)?;
                 // expand the tag to capture the braces!
-                e.tag.start = start;
-                e.tag.end += 1;
+                e.tag.make_mut().start = start;
+                e.tag.make_mut().end += 1;
                 Ok((i, Argument::Expr(e)))
             }
         } else if breakon_s(i) {
@@ -509,7 +510,7 @@ fn arg<'f>(
         } else if i.starts_with('$') {
             map(var(line), Argument::Var)(i)
         } else if let Some(s) = i.strip_prefix('#') {
-            let (ii, c) = cut(exp(op_ident(line), Expecting::SpecLiteral))(s)?;
+            let (ii, mut c) = cut(exp(op_ident(line), Expecting::SpecLiteral))(s)?;
             if c.str().len() != 1 {
                 Err(nom::Err::Failure(ParsingError {
                     input: ErrIn::T(c),
@@ -518,18 +519,16 @@ fn arg<'f>(
                 }))
             } else {
                 let ch = c.str().chars().next().unwrap();
-                let t = Tag {
-                    start: c.start.saturating_sub(1),
-                    ..c
-                };
-                Ok((ii, Argument::Pound(ch, t)))
+                let mut t = c.make_mut();
+                t.start = t.start.saturating_sub(1);
+                Ok((ii, Argument::Pound(ch, c)))
             }
         } else if let Ok((j, (n, s))) = num(line)(i) {
             Ok((j, Argument::Num(n, s)))
         } else if known_op(line, defs)(i) {
             let mut tag = line.create_tag(i);
             let (i, block) = ws(block(line, defs))(i)?;
-            tag.end = line.line.offset(i);
+            tag.make_mut().end = line.line.offset(i);
             let expr = Expression {
                 tag,
                 blocks: vec![Box::new(block)],
@@ -750,12 +749,13 @@ mod tests {
     }
 
     fn tt(s: &str) -> Tag {
-        Tag {
+        Tag_ {
             anchor: Location::Shell,
             line: Arc::from(s),
             start: 0,
             end: s.len(),
         }
+        .into()
     }
 
     #[test]
@@ -806,7 +806,7 @@ mod tests {
                     start,
                     len,
                 }],
-                help_msg: None,
+                ..Default::default()
             },
             exp,
         ))

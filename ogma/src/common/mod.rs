@@ -1,1 +1,3 @@
-pub(crate) mod err;
+//! Crate common items.
+
+pub mod err;
