@@ -33,7 +33,7 @@ fn append_help_msg() {
 fn append_testing() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("append { let {get first} $f | get snd | + $f }", defs);
+    let x = process_w_table("append { let {get first --Num} $f | get snd | + $f }", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3"), o("_append1")],
         vec![n(0), n(3), o("a"), n(3)],
@@ -42,7 +42,7 @@ fn append_testing() {
     ];
     check_is_table(x, exp);
     let x = process_w_table(
-        "let $x | append { let { get first } $f | get snd | + $f } --foo { get 'Heading 3' --Str }",
+        "let $x | append { let { get --Num first } $f | get snd | + $f } --foo { get 'Heading 3' --Str }",
         defs,
     );
     let exp = vec![
@@ -647,7 +647,7 @@ fn map_testing() {
 
     // check parallelsiation doesn't wreak havoc
     let x = process_w_nil(
-        "range 1 100 | map i --Num { \\$row | let {get i} $i | get i | + $i }",
+        "range 1 100 | map i --Num { \\$row | let {get i --Num} $i | get i | + $i }",
         defs,
     );
     let mut exp = vec![vec![o("i")]];
@@ -1204,7 +1204,7 @@ fn sortby_help_msg() {
 fn sortby_testing() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("sort-by { get first }", defs);
+    let x = process_w_table("sort-by { get first --Num }", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3")],
         vec![n(-30), n(100), o("z")],
@@ -1222,7 +1222,7 @@ fn sortby_testing() {
     ];
     check_is_table(x, exp);
 
-    let x = process_w_table("sort-by { get snd | * -1 }", defs);
+    let x = process_w_table("sort-by { get snd --Num | * -1 }", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3")],
         vec![n(-30), n(100), o("z")],
@@ -1231,7 +1231,7 @@ fn sortby_testing() {
     ];
     check_is_table(x, exp);
 
-    let x = process_w_table("let $x | sort-by { get snd | * -1 }", defs);
+    let x = process_w_table("let $x | sort-by { get snd --Num | * -1 }", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3")],
         vec![n(-30), n(100), o("z")],

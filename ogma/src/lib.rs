@@ -10,8 +10,8 @@ pub mod rt;
 
 pub use common::err::Error;
 
-type HashMap<K, V> = libs::fxhash::FxHashMap<K, V>;
-type HashSet<T> = libs::fxhash::FxHashSet<T>;
+type HashMap<K, V> = libs::rustc_hash::FxHashMap<K, V>;
+type HashSet<T> = libs::rustc_hash::FxHashSet<T>;
 type Result<T> = std::result::Result<T, Error>;
 type Mutex<T> = libs::parking_lot::Mutex<T>;
 

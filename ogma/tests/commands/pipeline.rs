@@ -357,9 +357,9 @@ fn last_testing() {
     let defs = &Definitions::new();
 
     // table
-    let x = process_w_table("last {get first}", defs);
+    let x = process_w_table("last {get first --Num}", defs);
     assert_eq!(x, Ok(Value::Num((-30).into())));
-    let x = process_w_table("last {get snd}", defs);
+    let x = process_w_table("last {get snd --Num}", defs);
     assert_eq!(x, Ok(Value::Num(100.into())));
 
     // string
@@ -465,7 +465,7 @@ fn assigning() {
     assert_eq!(x, Ok(Value::Num((4 * 2 * 3).into())));
 
     let x = process_w_table(
-        "filter { let {get first} $x {get snd} $y | \\ $x | < $y }",
+        "filter { let {get first --Num} $x {get snd --Num} $y | \\ $x | < $y }",
         defs,
     );
     check_is_table(
@@ -679,9 +679,9 @@ fn nth_testing() {
     let defs = &Definitions::new();
 
     // table
-    let x = process_w_table("nth 0 {get first}", defs);
+    let x = process_w_table("nth 0 {get first --Num}", defs);
     assert_eq!(x, Ok(Value::Num(0.into())));
-    let x = process_w_table("nth 2 {get first}", defs);
+    let x = process_w_table("nth 2 {get first --Num}", defs);
     assert_eq!(x, Ok(Value::Num((-30).into())));
     let x = process_w_table("nth {\\ 1 | + 2} {get first}", defs)
         .unwrap_err()

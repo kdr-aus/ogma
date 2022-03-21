@@ -620,7 +620,7 @@ fn nested_accumulation_soundness() {
 #[test]
 fn parallelised_variable_soundness() {
     let defs = &Definitions::new();
-    let x = process_w_nil("range 1 50 | append { get i | let $x | + $x $x }", defs);
+    let x = process_w_nil("range 1 50 | append { get i --Num | let $x | + $x $x }", defs);
     let mut exp = vec![vec![o("i"), o("_append1")]];
     exp.extend((1..50).map(|i| vec![n(i), n(i * 3)]).collect::<Vec<_>>());
     check_is_table(x, exp);
