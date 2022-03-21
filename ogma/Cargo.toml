@@ -15,7 +15,7 @@ table = { git = "https://github.com/kdr-aus/table" }
 
 # crates.io
 backtrace = "0.3"
-comfy-table = "4"
+comfy-table = "5"
 lazy_static = "1"
 nom = "7"
 notify = "4"
