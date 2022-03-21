@@ -40,7 +40,9 @@ impl Environment {
 
         if !uniq {
             // replace the arc with a new clone
-            *arc = arc.as_ref().to_vec().into();
+            // NOTE: we use the FromIterator implementation on Arc since it would make one less
+            // allocation
+            *arc = arc.as_ref().iter().cloned().collect();
         }
 
         Arc::get_mut(arc).expect("checked one count, or just replaced with clone")
