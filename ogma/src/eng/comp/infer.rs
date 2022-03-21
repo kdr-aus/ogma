@@ -31,7 +31,7 @@ impl<'d> Compiler<'d> {
         let mut chgs = Vec::new();
 
         for op in infer_nodes.into_iter().map(OpNode) {
-            match input_via_block_compilation(op, &self) {
+            match input_via_block_compilation(op, self) {
                 Ok(ty) => chgs.push(InferInput(op.idx(), ty.clone())),
                 Err(e) => err = Some(e.crate_err(op.blk_tag(&self.ag))),
             }
@@ -180,7 +180,7 @@ fn input_via_block_compilation(
         }
     }
 
-    inferred.ok_or_else(|| Error::NoTypes)
+    inferred.ok_or(Error::NoTypes)
 }
 
 fn input_via_expr_compilation(
@@ -202,8 +202,8 @@ fn input_via_expr_compilation(
         compiler.inferrence_depth += 1;
 
         // recurse into compile call -- breaking when the op gets compiled
-        match compiler.compile(expr) {
-            Ok(c) => match inferred.take() {
+        if let Ok(c) = compiler.compile(expr) {
+            match inferred.take() {
                 Some((ty1, _)) => {
                     return Err((
                         compiler_outer,
@@ -214,14 +214,13 @@ fn input_via_expr_compilation(
                     ));
                 }
                 None => inferred = Some((ty.clone(), c)),
-            },
-            Err(_) => (), // continue
+            }
         }
     }
 
     inferred
         .map(|(_, c)| c)
-        .ok_or_else(|| (compiler_outer, Error::NoTypes))
+        .ok_or((compiler_outer, Error::NoTypes))
 }
 
 fn output(op: OpNode, compiler: Compiler_) -> std::result::Result<Compiler_, Compiler_> {
@@ -237,12 +236,9 @@ fn output(op: OpNode, compiler: Compiler_) -> std::result::Result<Compiler_, Com
         compiler.apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()));
 
         // recurse into compile call -- breaking when the parent expr gets compiled
-        match compiler.compile(parent) {
-            Ok(compiler) => {
-                // break early, output inferring is greedy
-                return Ok(compiler);
-            }
-            Err(_) => (), // continue
+        if let Ok(compiler) = compiler.compile(parent) {
+            // break early, output inferring is greedy
+            return Ok(compiler);
         }
     }
 
@@ -296,7 +292,7 @@ impl<'a> Block<'a> {
             .ty()
             .or_else(|| {
                 opnode
-                    .next(&ag)
+                    .next(ag)
                     .map(|next| {
                         // there is a next block
                         // return if there is a known input type

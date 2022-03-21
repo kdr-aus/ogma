@@ -796,8 +796,7 @@ impl OpNode {
         g.neighbors(self.parent(g).idx())
             .filter_map(|n| g[n].op().map(|_| OpNode(n)))
             .skip_while(|&n| n != self)
-            .skip(1) // skip self
-            .next()
+            .nth(1) // skip self
     }
 
     pub fn op_tag(self, g: &AstGraph) -> &Tag {

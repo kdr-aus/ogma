@@ -218,7 +218,7 @@ impl CodeInjector<Eval> {
         // evalulate any mapped args and set the variable
         // NOTE: this uses the outer_cx since it needs the caller's env
         for (arg, var, input2) in args {
-            let v = arg.resolve(|| input2.as_ref().unwrap_or(&input).clone(), &cx)?;
+            let v = arg.resolve(|| input2.as_ref().unwrap_or(&input).clone(), cx)?;
             var.set_data(&mut env, v);
         }
 

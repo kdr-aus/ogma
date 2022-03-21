@@ -201,7 +201,7 @@ impl File {
             .pending
             .iter()
             .position(|c| c.version >= version)
-            .unwrap_or_else(|| self.pending.len());
+            .unwrap_or(self.pending.len());
 
         self.pending.insert(i, Change { version, changes });
 

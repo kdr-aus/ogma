@@ -488,7 +488,7 @@ fn highlight_from_nodes(line: &str, mut nodes: Vec<Node>) -> String {
     // mutate variables and flags to capture the $ and -- prefixes
     for node in &mut nodes {
         match node.ty {
-            Var => node.tag.start = node.tag.start.saturating_sub(1), // $
+            Var => node.tag.make_mut().start = node.tag.start.saturating_sub(1), // $
             Flag => {
                 // --
                 // if has a quote or double quote at tag.start - 1 then have to colour that and tag.end + 1
@@ -498,8 +498,8 @@ fn highlight_from_nodes(line: &str, mut nodes: Vec<Node>) -> String {
                 } else {
                     (2, 0)
                 };
-                node.tag.start = node.tag.start.saturating_sub(s);
-                node.tag.end += e;
+                node.tag.make_mut().start = node.tag.start.saturating_sub(s);
+                node.tag.make_mut().end += e;
             }
             _ => (),
         }
