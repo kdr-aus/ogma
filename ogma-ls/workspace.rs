@@ -1,5 +1,5 @@
 use super::{completion::*, *};
-use ::libs::{fxhash::FxHashMap as HashMap, parking_lot::RwLock};
+use ::libs::{parking_lot::RwLock, rustc_hash::FxHashMap as HashMap};
 use lsp_types::{TextDocumentContentChangeEvent, Url};
 use ogma::lang::{ast::Tag, Definitions};
 use std::{collections::VecDeque, sync::Arc};

@@ -1,6 +1,6 @@
 //! A terminal interface for `ogma`.
 #![warn(missing_docs)]
-use ::libs::{colored::*, divvy::*, fxhash::FxHashMap as HashMap};
+use ::libs::{colored::*, divvy::*, rustc_hash::FxHashMap as HashMap};
 use ogma::{
     lang::{ast::Location, Value},
     rt::bat::Batch,

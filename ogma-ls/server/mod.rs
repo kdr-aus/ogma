@@ -3,8 +3,8 @@
 use super::{add_doc_body, completion::*, doc_header, linech_to_idx, File};
 use ::libs::{
     crossbeam::channel::{Receiver, Sender},
-    fxhash::FxHashMap as HashMap,
     rayon,
+    rustc_hash::FxHashMap as HashMap,
     serde::{Deserialize, Serialize},
     serde_json::{from_value, to_value, Value},
 };

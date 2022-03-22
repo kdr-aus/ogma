@@ -230,7 +230,7 @@ fn tuple_cmp_testing() {
 fn tuples_in_tables_work() {
     let defs = &Definitions::new();
     let x = process_w_table(
-        "append --foo Tuple {get first} {get snd} | map foo --U_Num-Num_ get t0",
+        "append --foo Tuple {get first --Num} {get snd --Num} | map foo --U_Num-Num_ get t0",
         defs,
     );
     check_is_table(

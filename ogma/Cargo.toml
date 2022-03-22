@@ -2,21 +2,20 @@
 name = "ogma"
 version = "0.2.0"
 authors = ["kurt <kurtlawrence92@gmail.com>"]
-# TODO -- update to 2021
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 # workspace
 libs = { path = "../libs" }
 
 # kdr-aus git
+kserd = { git = "https://github.com/kurtlawrence/kserd" }
 numfmt = { git = "https://github.com/kdr-aus/numfmt" }
 table = { git = "https://github.com/kdr-aus/table" }
 
 # crates.io
 backtrace = "0.3"
-comfy-table = "4"
-kserd = "0.5"
+comfy-table = "5"
 lazy_static = "1"
 nom = "7"
 notify = "4"

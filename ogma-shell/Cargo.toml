@@ -2,7 +2,7 @@
 name = "ogma-shell"
 version = "0.1.0"
 authors = ["kurt <kurtlawrence92@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 path = "lib.rs"
@@ -15,6 +15,6 @@ ogma-ls = { path = "../ogma-ls" }
 
 # crates.io
 cansi =	"2"
-crossterm = "0.22"
-tui = { version = "0.16", default-features = false, features = [ "crossterm" ] }
+crossterm = "0.23"
+tui = { version = "0.17", default-features = false, features = [ "crossterm" ] }
 unicode-width = "0.1"

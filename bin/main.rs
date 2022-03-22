@@ -1,37 +1,19 @@
 use ::libs::colored::*;
 use std::path::{Path, PathBuf};
 
+mod app;
+
+use crate::app::App;
+use clap::Parser;
+
 fn main() {
-    use ::clap::{App, Arg};
+    let App { quiet, def, files } = App::parse();
 
-    let matches = App::new("ogma")
-        .author("Kurt Lawrence <kurtlawrence92@gmail.com>")
-        .about("Scripting language for manipulating tabular data")
-        .arg(
-            Arg::with_name("quiet")
-                .long("quiet")
-                .short("q")
-                .takes_value(false)
-                .help("suppress progress output"),
-        )
-        .arg(
-            Arg::with_name("def")
-                .long("def")
-                .takes_value(true)
-                .number_of_values(1)
-                .multiple(true)
-                .help("include definition file. glob syntax is supported"),
-        )
-        .arg(
-            Arg::with_name("FILES")
-                .multiple(true)
-                .help("files to process. if none specified, a REPL instance is started"),
-        )
-        .get_matches();
-
-    let defs = expand_globs(matches.values_of("def"), "definition", true);
-    let files = expand_globs(matches.values_of("FILES"), "processing", true);
-    let verbose = !matches.is_present("quiet");
+    let defs = def
+        .map(|x| expand_globs(x, "definition", true))
+        .unwrap_or_default();
+    let files = expand_globs(files, "processing", true);
+    let verbose = !quiet;
 
     if files.is_empty() {
         // run the ogma-shell/REPL since no processing files were given
@@ -41,32 +23,30 @@ fn main() {
     }
 }
 
-fn expand_globs(values: Option<clap::Values>, file_ty: &str, panic_on_empty: bool) -> Vec<PathBuf> {
-    let mut defs: Vec<PathBuf> = match values {
-        Some(globs) => globs
-            .flat_map(|s| {
-                let paths = match ::glob::glob(s) {
-                    Ok(paths) => paths.map(|r| r.expect("glob path error")),
-                    Err(err) => {
-                        panic!("could not parse '{}' as a glob pattern: {}", s, err)
-                    }
+fn expand_globs(values: Vec<String>, file_ty: &str, panic_on_empty: bool) -> Vec<PathBuf> {
+    let mut paths = values
+        .into_iter()
+        .flat_map(|s| {
+            let paths = match ::glob::glob(&s) {
+                Ok(paths) => paths.map(|r| r.expect("glob path error")),
+                Err(err) => {
+                    panic!("could not parse '{}' as a glob pattern: {}", s, err)
                 }
-                .collect::<Vec<_>>();
+            }
+            .collect::<Vec<_>>();
 
-                if paths.is_empty() && panic_on_empty {
-                    panic!("could not find any {} files along path '{}'", file_ty, s)
-                }
+            if paths.is_empty() && panic_on_empty {
+                panic!("could not find any {} files along path '{}'", file_ty, s)
+            }
 
-                paths.into_iter()
-            })
-            .collect::<Vec<_>>(),
-        None => Default::default(),
-    };
+            paths.into_iter()
+        })
+        .collect::<Vec<_>>();
 
-    defs.sort();
-    defs.dedup();
+    paths.sort();
+    paths.dedup();
 
-    defs
+    paths
 }
 
 fn run_shell(defs: Vec<PathBuf>) {
