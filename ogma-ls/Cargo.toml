@@ -20,5 +20,5 @@ ogma = { path = "../ogma" }
 bitflags = "1"
 log = "0.4"
 lsp-server = "0.5"
-lsp-types = "0.91"
-simplelog = "0.10"
+lsp-types = "0.92"
+simplelog = "0.11"
