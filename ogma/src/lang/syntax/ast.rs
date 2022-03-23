@@ -259,6 +259,15 @@ impl IBlock for PrefixBlock {
 
     fn block_tag(&self) -> Tag {
         let mut tag = self.op.clone();
+
+        if let Some(t) = &self.in_ty {
+            tag.make_mut().start = t.start.saturating_sub(1); // include leading ':'
+        }
+
+        if let Some(t) = &self.out_ty {
+            tag.make_mut().end = t.end;
+        }
+
         let end = self
             .terms
             .last()
@@ -268,6 +277,7 @@ impl IBlock for PrefixBlock {
             })
             .unwrap_or(tag.end);
         tag.make_mut().end = end;
+
         tag
     }
 
@@ -333,10 +343,16 @@ impl IBlock for DotOperatorBlock {
 
     fn block_tag(&self) -> Tag {
         let mut tag = self.lhs.tag().clone();
+
         if matches!(self.lhs, Argument::Var(_)) {
             tag.make_mut().start = tag.start.saturating_sub(1);
         }
         tag.make_mut().end = self.rhs.end;
+
+        if let Some(t) = &self.out_ty {
+            tag.make_mut().end = t.end;
+        }
+
         tag
     }
 

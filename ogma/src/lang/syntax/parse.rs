@@ -262,6 +262,19 @@ where
     }
 }
 
+/// If leading with a ':', treat as a type identifier.
+fn opt_ty<'a>(line: &Line) -> impl FnMut(&str) -> IResult<&str, Option<Tag>, ParsingError> + '_ {
+    move |i| {
+        opt(preceded(
+            char(':'),
+            exp(
+                cut(context("expecting a type identifier", op_ident(line))),
+                Expecting::Type,
+            ),
+        ))(i)
+    }
+}
+
 // ------ Expression -----------------------------------------------------------
 fn expr<'f>(
     line: &'f Line,
@@ -307,19 +320,10 @@ fn block<'f>(
     defs: &'f Definitions,
 ) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, PrefixBlock, ParsingError<'a>> + 'f {
     move |i| {
-        // hard error if type parse fails
-        let mut opt_ty = opt(preceded(
-            char(':'),
-            exp(
-                cut(context("expecting a type identifier", op_ident(line))),
-                Expecting::Type,
-            ),
-        ));
-
-        let (i, in_ty) = opt_ty(i)?;
+        let (i, in_ty) = opt_ty(line)(i)?;
         // NOTE, op is not wrapped in `ws` since this would consume trailing whitespace
         let (i, op) = exp(preceded(multispace0, op(line)), Expecting::Impl)(i)?;
-        let (i, out_ty) = opt_ty(i)?;
+        let (i, out_ty) = opt_ty(line)(i)?;
         let (i, terms) = many0(ws(term(line, defs)))(i)?;
         Ok((
             i,
@@ -481,11 +485,12 @@ fn dot_infixed(
     move |i| {
         let (i, op) = tag(".")(i)?;
         let (i, rhs) = cut(infix_rhs_ident(line))(i)?;
+        let (i, out_ty) = opt_ty(line)(i)?;
         let blk = DotOperatorBlock {
             op: line.create_tag(op),
             lhs,
             rhs,
-            out_ty: None,
+            out_ty,
         };
 
         Ok((i, blk))
@@ -2399,5 +2404,72 @@ mod tests {
                 }
             ))
         );
+    }
+
+    #[test]
+    fn ty_annotation_04_dotop() {
+        let defs = &Definitions::new();
+
+        let l = line("foo $row.var:Str");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("$row.var:Str"),
+                        blocks: vec![DotOperatorBlock {
+                            lhs: Var(tt("row")),
+                            op: tt("."),
+                            rhs: tt("var"),
+                            out_ty: Some(tt("Str")),
+                        }
+                        .into()]
+                    }))],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo $row.var :Bar"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::None);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:13
+ | foo $row.var :Bar
+ |              ^^^^ expecting an identifier but found a type specifier
+"
+        );
+
+        let l = line("foo $row.:Bar var"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::None);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:9
+ | foo $row.:Bar var
+ |          ^ invalid identifier, expecting alphabetic character, found `:`
+"
+        );
+    }
+
+    #[test]
+    fn iblock_impls() {
+        let defs = &Definitions::new();
+
+        let l = line(":Num foo:Bar");
+        let (_, b) = block(&l, defs)(&l.line).unwrap();
+        assert_eq!(b.block_tag(), tt(":Num foo:Bar"));
     }
 }
