@@ -307,10 +307,29 @@ fn block<'f>(
     defs: &'f Definitions,
 ) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, PrefixBlock, ParsingError<'a>> + 'f {
     move |i| {
-        let (i, op) = exp(op(line), Expecting::Impl)(i)?;
+        // hard error if type parse fails
+        let mut opt_ty = opt(preceded(
+            char(':'),
+            exp(
+                cut(context("expecting a type identifier", op_ident(line))),
+                Expecting::Type,
+            ),
+        ));
+
+        let (i, in_ty) = opt_ty(i)?;
+        // NOTE, op is not wrapped in `ws` since this would consume trailing whitespace
+        let (i, op) = exp(preceded(multispace0, op(line)), Expecting::Impl)(i)?;
+        let (i, out_ty) = opt_ty(i)?;
         let (i, terms) = many0(ws(term(line, defs)))(i)?;
-        todo!()
-        //         Ok((i, PrefixBlock { op, terms }))
+        Ok((
+            i,
+            PrefixBlock {
+                op,
+                terms,
+                in_ty,
+                out_ty,
+            },
+        ))
     }
 }
 
@@ -462,14 +481,14 @@ fn dot_infixed(
     move |i| {
         let (i, op) = tag(".")(i)?;
         let (i, rhs) = cut(infix_rhs_ident(line))(i)?;
-        todo!()
-        //         let blk = DotOperatorBlock {
-        //             op: line.create_tag(op),
-        //             lhs,
-        //             rhs,
-        //         };
-        //
-        //         Ok((i, blk))
+        let blk = DotOperatorBlock {
+            op: line.create_tag(op),
+            lhs,
+            rhs,
+            out_ty: None,
+        };
+
+        Ok((i, blk))
     }
 }
 
@@ -550,13 +569,20 @@ fn flag(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
     move |i| preceded(tag("--"), ident(line))(i) // parse as ident (can have quotes)
 }
 
-fn ident<'a: 'f, 'f, E: ParseError<&'a str>>(
+fn ident<'a: 'f, 'f>(
     line: &'f Line,
-) -> impl Fn(&'a str) -> IResult<&'a str, Tag, E> + 'f {
+) -> impl Fn(&'a str) -> IResult<&'a str, Tag, ParsingError> + 'f {
     move |i| {
         let wrapped_str = |ch: char| delimited(char(ch), take_till(move |c| c == ch), char(ch));
 
-        let (i, ident) = if i.starts_with('\"') {
+        let (i, ident) = if i.starts_with(':') {
+            // expecting an identifier but found a type specifier
+            return Err(nom::Err::Failure(ParsingError {
+                input: ErrIn::S(i),
+                cx: "expecting an identifier but found a type specifier".into(),
+                expecting: Expecting::None,
+            }));
+        } else if i.starts_with('\"') {
             // wrapped in double quotes, don't stop on break chars
             wrapped_str('"')(i)
         } else if i.starts_with('\'') {
@@ -1107,7 +1133,7 @@ mod tests {
     fn identifiers() {
         let i = |s| {
             let line = line(s);
-            let x = ident::<ParsingError>(&line)(&line.line).unwrap().1;
+            let x = ident(&line)(&line.line).unwrap().1;
             x
         };
 
@@ -1118,7 +1144,7 @@ mod tests {
         assert_eq!(i(r#"'hello "world"'"#), tt("hello \"world\""));
         assert_eq!(i(r#""hello 'world'""#), tt(r#"hello 'world'"#));
         let x = line("'hello world");
-        let x = ident::<ParsingError>(&x)(&x.line);
+        let x = ident(&x)(&x.line);
         assert_eq!(
             x,
             Err(nom::Err::Error(ParsingError {
@@ -1747,7 +1773,6 @@ mod tests {
 
     #[test]
     fn empty_string() {
-        let ident = ident::<()>;
         let l = line("'' else");
         assert_eq!(ident(&l)(&l.line), Ok((" else", tt(""))));
         let l = line(r#""""#);
@@ -1757,7 +1782,7 @@ mod tests {
     #[test]
     fn brace_ends_arg() {
         let src = line("ident{in asdf } remaining");
-        let x = ident::<()>(&src)(&src.line);
+        let x = ident(&src)(&src.line);
         assert_eq!(x, Ok(("{in asdf } remaining", tt("ident"))));
 
         let src = line("$rhs{in asdf } remaining");
@@ -2194,7 +2219,6 @@ mod tests {
 
     #[test]
     fn backslash_str() {
-        let ident = ident::<()>;
         let l = line("foo\\bar else");
         assert_eq!(ident(&l)(&l.line), Ok((" else", tt("foo\\bar"))));
         let l = line("'foo bar\\zog' else");
@@ -2214,9 +2238,164 @@ mod tests {
                 "",
                 PrefixBlock {
                     op: tt("foo"),
-                    terms: vec![Term::Arg(Argument::Ident(tt("zog")))],
+                    terms: vec![Arg(Ident(tt("zog")))],
                     in_ty: Some(tt("Num")),
                     out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
+
+        let l = line(":Num foo zog");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Ident(tt("zog")))],
+                    in_ty: Some(tt("Num")),
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo:Bar zog");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Ident(tt("zog")))],
+                    in_ty: None,
+                    out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn ty_annotation_02_err() {
+        let defs = &Definitions::new();
+
+        let l = line(": foo:Bar zog");
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Type);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:1
+ | : foo:Bar zog
+ |  ^ expecting a type identifier
+"
+        );
+
+        let l = line(":Num foo: zog");
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Type);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:9
+ | :Num foo: zog
+ |          ^ expecting a type identifier
+"
+        );
+    }
+
+    #[test]
+    fn ty_annotation_03_nested() {
+        let defs = &Definitions::new();
+
+        let l = line(":Num foo:Bar ls");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("ls"),
+                        blocks: vec![PrefixBlock {
+                            op: tt("ls"),
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
+                        }
+                        .into()],
+                    }))],
+                    in_ty: Some(tt("Num")),
+                    out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
+
+        let l = line("foo zog ls:Bar");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![
+                        Arg(Ident(tt("zog"))),
+                        Arg(Expr(Expression {
+                            tag: tt("ls:Bar"),
+                            blocks: vec![PrefixBlock {
+                                op: tt("ls"),
+                                terms: vec![],
+                                in_ty: None,
+                                out_ty: Some(tt("Bar")),
+                            }
+                            .into(),],
+                        }))
+                    ],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo :Bar ls:Zog"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::None);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:4
+ | foo :Bar ls:Zog
+ |     ^^^^^^^^^^^ expecting an identifier but found a type specifier
+"
+        );
+
+        let l = line("foo:Num ls:Zog"); // okay!
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("ls:Zog"),
+                        blocks: vec![PrefixBlock {
+                            op: tt("ls"),
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: Some(tt("Zog")),
+                        }
+                        .into(),],
+                    }))],
+                    in_ty: None,
+                    out_ty: Some(tt("Num")),
                 }
             ))
         );

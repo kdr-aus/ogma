@@ -206,10 +206,15 @@ pub trait IBlock: std::fmt::Debug + Send + Sync {
     fn clone(&self) -> Block;
 }
 
+/// The concrete parts of a block.
 pub struct BlockParts {
+    /// The operation tag.
     pub op: Op,
+    /// The terms.
     pub terms: Terms,
+    /// Optional annotated input type.
     pub in_ty: Option<Tag>,
+    /// Optional annotated output type.
     pub out_ty: Option<Tag>,
 }
 
