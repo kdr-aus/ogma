@@ -111,7 +111,11 @@ impl AstGraph {
         let g = &mut self.0;
 
         // build the root expression node
-        let Expression { tag, blocks } = expr;
+        let Expression {
+            tag,
+            blocks,
+            out_ty,
+        } = expr;
         let root = g.add_node(AstNode::Expr(tag));
 
         // rather than building a recursive function, we'll use a queue of expressions to process,
@@ -145,7 +149,11 @@ impl AstGraph {
                         Arg(Num(val, tag)) => AstNode::Num { val, tag },
                         Arg(Pound(ch, tag)) => AstNode::Pound { ch, tag },
                         Arg(Var(x)) => AstNode::Var(x),
-                        Arg(Expr(ast::Expression { tag, blocks })) => {
+                        Arg(Expr(ast::Expression {
+                            tag,
+                            blocks,
+                            out_ty,
+                        })) => {
                             blks = Some(blocks);
                             AstNode::Expr(tag)
                         }

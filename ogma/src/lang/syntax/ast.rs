@@ -154,11 +154,14 @@ pub struct Expression {
     pub tag: Tag,
     /// The comprising blocks.
     pub blocks: Vec<Block>,
+    /// An optionally annotated output type constraint.
+    pub out_ty: Option<Tag>,
 }
 
 impl PartialEq for Expression {
     fn eq(&self, rhs: &Self) -> bool {
         self.tag == rhs.tag
+            && self.out_ty == rhs.out_ty
             && self
                 .blocks
                 .iter()
@@ -172,6 +175,7 @@ impl Clone for Expression {
         Expression {
             tag: self.tag.clone(),
             blocks: self.blocks.iter().map(|x| x.as_ref().clone()).collect(),
+            out_ty: self.out_ty.clone(),
         }
     }
 }

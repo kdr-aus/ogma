@@ -310,7 +310,14 @@ fn expr<'f>(
         } else {
             let mut tag = line.create_tag(input);
             tag.make_mut().end = line.line.offset(i);
-            Ok((i, Expression { tag, blocks }))
+            Ok((
+                i,
+                Expression {
+                    tag,
+                    blocks,
+                    out_ty: None,
+                },
+            ))
         }
     }
 }
@@ -452,6 +459,7 @@ fn maybe_infix<'a>(
             lhs = Argument::Expr(Expression {
                 tag: b.block_tag(),
                 blocks: vec![Box::new(b)],
+                out_ty: None,
             });
         }
     }
@@ -558,6 +566,7 @@ fn arg<'f>(
             let expr = Expression {
                 tag,
                 blocks: vec![Box::new(block)],
+                out_ty: None,
             };
             Ok((i, Argument::Expr(expr)))
         } else {
@@ -805,7 +814,8 @@ mod tests {
                     in_ty: None,
                     out_ty: None
                 }
-                .into()]
+                .into()],
+                out_ty: None
             })
         );
 
@@ -820,7 +830,8 @@ mod tests {
                     in_ty: None,
                     out_ty: None
                 }
-                .into()]
+                .into()],
+                out_ty: None
             })
         );
     }
@@ -1074,7 +1085,8 @@ mod tests {
                         in_ty: None,
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1106,13 +1118,15 @@ mod tests {
                                 in_ty: None,
                                 out_ty: None
                             }
-                            .into()]
+                            .into()],
+                            out_ty: None
                         }))],
                         in_ty: None,
                         out_ty: None
                     }
                     .into()
-                ]
+                ],
+                out_ty: None
             })
         );
     }
@@ -1231,7 +1245,8 @@ mod tests {
                         in_ty: None,
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1257,12 +1272,14 @@ mod tests {
                                 in_ty: None,
                                 out_ty: None
                             }
-                            .into()]
+                            .into()],
+                            out_ty: None
                         }))],
                         in_ty: None,
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1290,7 +1307,8 @@ mod tests {
                             in_ty: None,
                             out_ty: None
                         }
-                        .into()]
+                        .into()],
+                        out_ty: None
                     }))],
                     in_ty: None,
                     out_ty: None
@@ -1327,13 +1345,15 @@ mod tests {
                                     in_ty: None,
                                     out_ty: None
                                 }
-                                .into()]
+                                .into()],
+                                out_ty: None
                             }))],
                             in_ty: None,
                             out_ty: None
                         }
                         .into()
-                    ]
+                    ],
+                    out_ty: None
                 }
             ))
         );
@@ -1367,7 +1387,8 @@ mod tests {
                                     in_ty: None,
                                     out_ty: None
                                 }
-                                .into()]
+                                .into()],
+                                out_ty: None
                             }))],
                             in_ty: None,
                             out_ty: None
@@ -1380,7 +1401,8 @@ mod tests {
                             out_ty: None
                         }
                         .into()
-                    ]
+                    ],
+                    out_ty: None
                 }
             ))
         );
@@ -1519,6 +1541,7 @@ mod tests {
                     out_ty: None
                 }
                 .into()],
+                out_ty: None
             })
         );
     }
@@ -1718,6 +1741,7 @@ mod tests {
                     }
                     .into()],
                     tag: tt("in "),
+                    out_ty: None
                 }
             })
         );
@@ -1741,6 +1765,7 @@ mod tests {
                     }
                     .into()],
                     tag: tt("in "),
+                    out_ty: None
                 }
             })
         );
@@ -1818,7 +1843,8 @@ mod tests {
                         in_ty: None,
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1837,7 +1863,8 @@ mod tests {
                         in_ty: None,
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1872,7 +1899,8 @@ mod tests {
                             out_ty: None
                         }
                         .into()
-                    ]
+                    ],
+                    out_ty: None
                 }
             ))
         );
@@ -1911,7 +1939,8 @@ mod tests {
                                                 in_ty: None,
                                                 out_ty: None
                                             }
-                                            .into()]
+                                            .into()],
+                                            out_ty: None
                                         })),
                                         Arg(Expr(Expression {
                                             tag: tt("{+ 100}"),
@@ -1921,7 +1950,8 @@ mod tests {
                                                 in_ty: None,
                                                 out_ty: None
                                             }
-                                            .into()]
+                                            .into()],
+                                            out_ty: None
                                         })),
                                         Arg(Expr(Expression {
                                             tag: tt("{- 100}"),
@@ -1931,19 +1961,22 @@ mod tests {
                                                 in_ty: None,
                                                 out_ty: None
                                             }
-                                            .into()]
+                                            .into()],
+                                            out_ty: None
                                         }))
                                     ],
                                     in_ty: None,
                                     out_ty: None
                                 }
                                 .into()
-                            ]
+                            ],
+                            out_ty: None
                         }))],
                         in_ty: None,
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }
             ))
         );
@@ -2096,7 +2129,8 @@ mod tests {
                         rhs: tt("y"),
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -2119,12 +2153,14 @@ mod tests {
                                 rhs: tt("foo-bar"),
                                 out_ty: None,
                             }
-                            .into()]
+                            .into()],
+                            out_ty: None
                         }),
                         rhs: tt("foo bar/zog"),
                         out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -2334,6 +2370,7 @@ mod tests {
                             out_ty: None
                         }
                         .into()],
+                        out_ty: None
                     }))],
                     in_ty: Some(tt("Num")),
                     out_ty: Some(tt("Bar")),
@@ -2359,6 +2396,7 @@ mod tests {
                                 out_ty: Some(tt("Bar")),
                             }
                             .into(),],
+                            out_ty: None
                         }))
                     ],
                     in_ty: None,
@@ -2398,6 +2436,7 @@ mod tests {
                             out_ty: Some(tt("Zog")),
                         }
                         .into(),],
+                        out_ty: None
                     }))],
                     in_ty: None,
                     out_ty: Some(tt("Num")),
@@ -2425,7 +2464,8 @@ mod tests {
                             rhs: tt("var"),
                             out_ty: Some(tt("Str")),
                         }
-                        .into()]
+                        .into()],
+                        out_ty: None
                     }))],
                     in_ty: None,
                     out_ty: None,
@@ -2460,6 +2500,50 @@ mod tests {
 --> <ogma>:9
  | foo $row.:Bar var
  |          ^ invalid identifier, expecting alphabetic character, found `:`
+"
+        );
+    }
+
+    #[test]
+    fn ty_annotation_05_expr() {
+        let defs = &Definitions::new();
+
+        let l = line("foo {:Bar zog:Num }:Bool");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("$row.var:Str"),
+                        blocks: vec![DotOperatorBlock {
+                            lhs: Var(tt("row")),
+                            op: tt("."),
+                            rhs: tt("var"),
+                            out_ty: Some(tt("Str")),
+                        }
+                        .into()],
+                        out_ty: Some(tt("Bool")),
+                    }))],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo {:Bar zog:Num} :Bool"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::None);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:13
+ | foo $row.var :Bar
+ |              ^^^^ expecting an identifier but found a type specifier
 "
         );
     }
