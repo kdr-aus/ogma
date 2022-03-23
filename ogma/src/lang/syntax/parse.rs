@@ -529,14 +529,24 @@ fn arg<'f>(
             } else {
                 // we know that i starts with { so we grab the start tag position for later.
                 let start = line.create_tag(i).start;
+
                 let (i, mut e) = cut(delimited(
                     char('{'),
                     ws(expr(line, defs)),
                     exp(char('}'), Expecting::Term),
                 ))(i)?;
+
+                // see if there is a trailing type
+                let (i, out_ty) = opt_ty(line)(i)?;
+                e.out_ty = out_ty;
+
                 // expand the tag to capture the braces!
                 e.tag.make_mut().start = start;
                 e.tag.make_mut().end += 1;
+                if let Some(t) = &e.out_ty {
+                    e.tag.make_mut().end = t.end;
+                }
+
                 Ok((i, Argument::Expr(e)))
             }
         } else if breakon_s(i) {
@@ -2516,14 +2526,47 @@ mod tests {
                 PrefixBlock {
                     op: tt("foo"),
                     terms: vec![Arg(Expr(Expression {
-                        tag: tt("$row.var:Str"),
-                        blocks: vec![DotOperatorBlock {
-                            lhs: Var(tt("row")),
-                            op: tt("."),
-                            rhs: tt("var"),
-                            out_ty: Some(tt("Str")),
+                        tag: tt("{:Bar zog:Num }:Bool"),
+                        blocks: vec![PrefixBlock {
+                            op: tt("zog"),
+                            terms: vec![],
+                            in_ty: Some(tt("Bar")),
+                            out_ty: Some(tt("Num")),
                         }
                         .into()],
+                        out_ty: Some(tt("Bool")),
+                    }))],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo {:Bar zog:Num |:Fog hir:Str }:Bool");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("{:Bar zog:Num |:Fog hir:Str }:Bool"),
+                        blocks: vec![
+                            PrefixBlock {
+                                op: tt("zog"),
+                                terms: vec![],
+                                in_ty: Some(tt("Bar")),
+                                out_ty: Some(tt("Num")),
+                            }
+                            .into(),
+                            PrefixBlock {
+                                op: tt("hir"),
+                                terms: vec![],
+                                in_ty: Some(tt("Fog")),
+                                out_ty: Some(tt("Str")),
+                            }
+                            .into()
+                        ],
                         out_ty: Some(tt("Bool")),
                     }))],
                     in_ty: None,
@@ -2541,9 +2584,9 @@ mod tests {
         assert_eq!(
             &x,
             "Parsing Error: could not parse input line
---> <ogma>:13
- | foo $row.var :Bar
- |              ^^^^ expecting an identifier but found a type specifier
+--> <ogma>:19
+ | foo {:Bar zog:Num} :Bool
+ |                    ^^^^^ expecting an identifier but found a type specifier
 "
         );
     }

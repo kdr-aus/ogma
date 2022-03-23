@@ -31,24 +31,24 @@ fn success_02() {
     );
     assert_eq!(
         x,
-        s("filter:Table {:TableRow get:Str bar |:Str =:Bool 'foo' }:Bool")
+        s("{:Table filter:Table {:TableRow get:Str bar:Str |:Str =:Bool foo:Str }:Bool }:Table")
     );
 
     let x = process_w_num(
         "typify --verbose { + 3 |:Num max 2 | to-str |:Str len }",
         defs,
     );
-    assert_eq!(x, s(""));
+    assert_eq!(x, s("{:Num +:Num 3:Num |:Num max:Num 2:Num |:Num to-str:Str |:Str len:Num }:Num"));
 }
 
 #[test]
 fn success_03() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("append --foo Tuple {get snd} | fold 0 + $row.snd", defs);
+    let x = process_w_table("append --foo Tuple {get snd}:Num | fold 0 + $row.snd", defs);
     assert_eq!(x, Ok(Value::Num(0.into())));
 
-    let x = process_w_table("nth 1 Tuple {get snd} #i.'Heading 3':Str | get t1", defs);
+    let x = process_w_table("nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1", defs);
     assert_eq!(x, Ok(Value::Str(Str::new(""))));
 }
 
