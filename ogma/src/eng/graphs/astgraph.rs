@@ -2,8 +2,10 @@ use super::*;
 use kserd::Number;
 use petgraph::prelude::*;
 use std::ops::Deref;
+use tygraph::Chg;
 
 type Inner = StableGraph<AstNode, Relation, Directed, u32>;
+type Chgs = Vec<tygraph::Chg>;
 
 #[derive(Default, Debug, Clone)]
 pub struct AstGraph(Inner);
@@ -82,30 +84,39 @@ const LOOPLIM: u32 = 128;
 /// 1. Flattens the [`ast::Expression`],
 /// 2. Expands any _defs_,
 /// 3. Repeats at 1. if defs are found.
-pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<AstGraph> {
+///
+/// It also returns a vector of changes that should be passed to a subsequently built
+/// [`TypeGraph`]. These changes arise from annotated type constraints.
+pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<(AstGraph, Chgs)> {
     let mut graph = AstGraph(Default::default());
+    let mut chgs = Chgs::new();
 
     let expr_tag = expr.tag.clone();
 
-    graph.flatten_expr(expr)?;
+    graph.flatten_expr(expr, &mut chgs, defs)?;
 
     let recursion_detector = &mut RecursionDetection::default();
 
     let mut count = 0;
-    while graph.expand_defs(defs, recursion_detector)? {
+    while graph.expand_defs(&mut chgs, defs, recursion_detector)? {
         count += 1;
         if count > LOOPLIM {
             return Err(Error::ag_init_endless_loop(count, &expr_tag));
         }
     }
 
-    Ok(graph)
+    Ok((graph, chgs))
 }
 
 /// Initialisation functions.
 impl AstGraph {
     /// Returns the NodeIndex that the `expr` becomes.
-    fn flatten_expr(&mut self, expr: ast::Expression) -> Result<NodeIndex> {
+    fn flatten_expr(
+        &mut self,
+        expr: ast::Expression,
+        chgs: &mut Chgs,
+        defs: &Definitions,
+    ) -> Result<NodeIndex> {
         use ast::*;
 
         let g = &mut self.0;
@@ -116,15 +127,36 @@ impl AstGraph {
             blocks,
             out_ty,
         } = expr;
+
         let root = g.add_node(AstNode::Expr(tag));
 
         // rather than building a recursive function, we'll use a queue of expressions to process,
         // since expressions are the recursive element
+        struct Qi {
+            /// The expression node index.
+            root: NodeIndex,
+            blocks: Vec<ast::Block>,
+            out_ty: Option<Type>,
+        }
+
         let mut q = std::collections::VecDeque::new();
-        q.push_back((root, blocks));
+        q.push_back(Qi {
+            root,
+            blocks,
+            out_ty: map_ty_tag(out_ty, defs)?,
+        });
 
         // FIFO -- breadth-first
-        while let Some((root, blocks)) = q.pop_front() {
+        while let Some(Qi {
+            root,
+            blocks,
+            out_ty,
+        }) = q.pop_front()
+        {
+            if let Some(ty) = out_ty {
+                chgs.push(Chg::ObligeOutput(root, ty));
+            }
+
             for blk in blocks {
                 let blk_tag = blk.block_tag();
                 let BlockParts {
@@ -137,11 +169,18 @@ impl AstGraph {
                 let op = g.add_node(AstNode::Op { op, blk: blk_tag });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 
+                if let Some(t) = map_ty_tag(in_ty, defs)? {
+                    chgs.push(Chg::ObligeInput(op, t));
+                }
+                if let Some(t) = map_ty_tag(out_ty, defs)? {
+                    chgs.push(Chg::ObligeOutput(op, t));
+                }
+
                 for term in terms {
                     use ast::Argument::*;
                     use ast::Term::*;
 
-                    let mut blks = None;
+                    let mut next = None;
 
                     let node = match term {
                         Flag(f) => AstNode::Flag(f),
@@ -154,7 +193,7 @@ impl AstGraph {
                             blocks,
                             out_ty,
                         })) => {
-                            blks = Some(blocks);
+                            next = Some((blocks, out_ty));
                             AstNode::Expr(tag)
                         }
                     };
@@ -162,8 +201,12 @@ impl AstGraph {
                     let term = g.add_node(node);
                     g.add_edge(op, term, Relation::Normal); // add a directed edge from op to the term
 
-                    if let Some(blks) = blks {
-                        q.push_back((term, blks));
+                    if let Some((blocks, out_ty)) = next {
+                        q.push_back(Qi {
+                            root: term,
+                            blocks,
+                            out_ty: map_ty_tag(out_ty, defs)?,
+                        });
                     }
                 }
             }
@@ -175,6 +218,7 @@ impl AstGraph {
     /// Returns `true` if definitions were found and expanded.
     fn expand_defs(
         &mut self,
+        chgs: &mut Chgs,
         defs: &Definitions,
         recursion_detector: &mut RecursionDetection,
     ) -> Result<bool> {
@@ -192,7 +236,7 @@ impl AstGraph {
         let mut expanded = false;
 
         for op in ops {
-            let x = self.expand_def(op, defs, recursion_detector)?;
+            let x = self.expand_def(op, chgs, defs, recursion_detector)?;
             expanded |= x;
         }
 
@@ -202,6 +246,7 @@ impl AstGraph {
     fn expand_def(
         &mut self,
         opnode: OpNode,
+        chgs: &mut Chgs,
         defs: &Definitions,
         recursion_detector: &mut RecursionDetection,
     ) -> Result<bool> {
@@ -261,7 +306,7 @@ impl AstGraph {
                         expr: def.expr.tag.clone(),
                         params,
                     });
-                    let expr = self.flatten_expr(def.expr.clone())?;
+                    let expr = self.flatten_expr(def.expr.clone(), chgs, defs)?;
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
                     // add the id into the recursion detector
@@ -319,6 +364,11 @@ impl AstGraph {
         self.edges(opnode.into())
             .any(|e| matches!(e.weight(), Relation::Keyed(_)))
     }
+}
+
+fn map_ty_tag(tag: Option<Tag>, defs: &Definitions) -> Result<Option<Type>> {
+    tag.map(|t| defs.types().get_using_tag(&t).map(|x| x.clone()))
+        .transpose()
 }
 
 #[derive(Default)]

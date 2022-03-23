@@ -38,7 +38,10 @@ fn success_02() {
         "typify --verbose { + 3 |:Num max 2 | to-str |:Str len }",
         defs,
     );
-    assert_eq!(x, s("{:Num +:Num 3:Num |:Num max:Num 2:Num |:Num to-str:Str |:Str len:Num }:Num"));
+    assert_eq!(
+        x,
+        s("{:Num +:Num 3:Num |:Num max:Num 2:Num |:Num to-str:Str |:Str len:Num }:Num")
+    );
 }
 
 #[test]
@@ -48,7 +51,10 @@ fn success_03() {
     let x = process_w_table("append --foo Tuple {get snd}:Num | fold 0 + $row.snd", defs);
     assert_eq!(x, Ok(Value::Num(0.into())));
 
-    let x = process_w_table("nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1", defs);
+    let x = process_w_table(
+        "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
+        defs,
+    );
     assert_eq!(x, Ok(Value::Str(Str::new(""))));
 }
 
@@ -61,7 +67,17 @@ fn errors_01() {
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    assert_eq!(&x, "");
+    assert_eq!(
+        &x,
+        "Typing Error: Type resolution failed. Conflicting obligation type
+--> shell:0
+ | :Nil filter bar = 'foo'
+ | ^^^^^^^^^^^^^^^^^^^^^^^ this node has input type `Table`
+--> shell:5
+ | :Nil filter bar = 'foo'
+ |      ^^^^^^ but this node is obliged to use input `Nil`
+"
+    );
 
     // can't constrain literal output
     let x = process_w_table("filter bar:Str = 'foo'", defs)

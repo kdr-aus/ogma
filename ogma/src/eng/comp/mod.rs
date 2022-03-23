@@ -34,7 +34,7 @@ pub fn compile_with_seed_vars(
     input_ty: Type,
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
-    let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
+    let (ag, chgs) = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
     let lg = LocalsGraph::build(&ag);
 
@@ -52,6 +52,8 @@ pub fn compile_with_seed_vars(
     });
 
     compiler.init_tg(input_ty); // initialise TG
+                                // apply initial annotated types
+    compiler.apply_graph_chgs(chgs.into_iter().map(Into::into));
 
     compiler.lg.seed(seed_vars);
 

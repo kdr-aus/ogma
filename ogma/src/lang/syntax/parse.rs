@@ -509,6 +509,7 @@ fn dot_infixed(
 /// - starts with `{`: parse as expression
 /// - starts with `$`: parse as variable
 /// - starts with `#`: parse as boolean or special input
+/// - starts with `:`: return **Failure** -- unexpected type identifier
 /// - parses as number: return Num
 /// - first term parses as a KNOWN op: parse as BLOCK (but return as Expression)
 /// - finally parse as Ident if nothing else
@@ -549,6 +550,17 @@ fn arg<'f>(
 
                 Ok((i, Argument::Expr(e)))
             }
+        } else if i.starts_with(':') {
+            // adjust some of the error to capture just the type identifier section
+            let (_, ident) = take_till(breakon)(&i[1..])?;
+            let mut tag = line.create_tag(i);
+            tag.make_mut().end = tag.start + 1 + ident.len(); // capture :ident
+
+            Err(nom::Err::Failure(ParsingError {
+                input: ErrIn::T(tag),
+                cx: "unexpected type identifier".into(),
+                expecting: Expecting::Term,
+            }))
         } else if breakon_s(i) {
             Err(nom::Err::Error(make_error(i, ErrorKind::IsA)))
         } else if i.starts_with('$') {
@@ -637,7 +649,7 @@ fn num(line: &Line) -> impl Fn(&str) -> IResult<&str, (Number, Tag), ()> + '_ {
 }
 
 fn breakon(ch: char) -> bool {
-    ch == '|' || ch == '{' || ch == '}' || ch.is_whitespace()
+    ch == '|' || ch == '{' || ch == '}' || ch == ':' || ch.is_whitespace()
 }
 
 fn breakon_s(s: &str) -> bool {
@@ -2358,6 +2370,21 @@ mod tests {
  |          ^ expecting a type identifier
 "
         );
+
+        let l = line(":Num foo zog:Bar");
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Term);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:12
+ | :Num foo zog:Bar
+ |             ^^^^ unexpected type identifier
+"
+        );
     }
 
     #[test]
@@ -2420,13 +2447,13 @@ mod tests {
         let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
         let x = e.to_string();
         println!("{}", x);
-        assert_eq!(exp, Expecting::None);
+        assert_eq!(exp, Expecting::Term);
         assert_eq!(
             &x,
             "Parsing Error: could not parse input line
 --> <ogma>:4
  | foo :Bar ls:Zog
- |     ^^^^^^^^^^^ expecting an identifier but found a type specifier
+ |     ^^^^ unexpected type identifier
 "
         );
 
@@ -2488,13 +2515,13 @@ mod tests {
         let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
         let x = e.to_string();
         println!("{}", x);
-        assert_eq!(exp, Expecting::None);
+        assert_eq!(exp, Expecting::Term);
         assert_eq!(
             &x,
             "Parsing Error: could not parse input line
 --> <ogma>:13
  | foo $row.var :Bar
- |              ^^^^ expecting an identifier but found a type specifier
+ |              ^^^^ unexpected type identifier
 "
         );
 
@@ -2580,13 +2607,13 @@ mod tests {
         let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
         let x = e.to_string();
         println!("{}", x);
-        assert_eq!(exp, Expecting::None);
+        assert_eq!(exp, Expecting::Term);
         assert_eq!(
             &x,
             "Parsing Error: could not parse input line
 --> <ogma>:19
  | foo {:Bar zog:Num} :Bool
- |                    ^^^^^ expecting an identifier but found a type specifier
+ |                    ^^^^^ unexpected type identifier
 "
         );
     }

@@ -36,6 +36,7 @@ pub enum Flow {
 #[derive(Debug)]
 pub enum Chg {
     KnownInput(NodeIndex, Type),
+    ObligeInput(NodeIndex, Type),
     InferInput(NodeIndex, Type),
     AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
@@ -414,6 +415,9 @@ impl TypeGraph {
         match chg {
             Chg::KnownInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Known(ty)))
+            }
+            Chg::ObligeInput(node, ty) => {
+                apply(self, node, |n| set(&mut n.input, Knowledge::Obliged(ty)))
             }
             Chg::InferInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Inferred(ty)))
