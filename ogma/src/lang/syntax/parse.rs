@@ -309,7 +309,8 @@ fn block<'f>(
     move |i| {
         let (i, op) = exp(op(line), Expecting::Impl)(i)?;
         let (i, terms) = many0(ws(term(line, defs)))(i)?;
-        Ok((i, PrefixBlock { op, terms }))
+        todo!()
+        //         Ok((i, PrefixBlock { op, terms }))
     }
 }
 
@@ -461,13 +462,14 @@ fn dot_infixed(
     move |i| {
         let (i, op) = tag(".")(i)?;
         let (i, rhs) = cut(infix_rhs_ident(line))(i)?;
-        let blk = DotOperatorBlock {
-            op: line.create_tag(op),
-            lhs,
-            rhs,
-        };
-
-        Ok((i, blk))
+        todo!()
+        //         let blk = DotOperatorBlock {
+        //             op: line.create_tag(op),
+        //             lhs,
+        //             rhs,
+        //         };
+        //
+        //         Ok((i, blk))
     }
 }
 
@@ -768,7 +770,9 @@ mod tests {
                 tag: tt("in"),
                 blocks: vec![PrefixBlock {
                     op: tt("in"),
-                    terms: vec![]
+                    terms: vec![],
+                    in_ty: None,
+                    out_ty: None
                 }
                 .into()]
             })
@@ -781,7 +785,9 @@ mod tests {
                 tag: tt("in file.csv"),
                 blocks: vec![PrefixBlock {
                     op: tt("in"),
-                    terms: vec![Arg(Ident(tt("file.csv")))]
+                    terms: vec![Arg(Ident(tt("file.csv")))],
+                    in_ty: None,
+                    out_ty: None
                 }
                 .into()]
             })
@@ -1033,7 +1039,9 @@ mod tests {
                     tag: tt("{ \\ asdf }"),
                     blocks: vec![PrefixBlock {
                         op: tt("\\"),
-                        terms: vec![Arg(Ident(tt("asdf")))]
+                        terms: vec![Arg(Ident(tt("asdf")))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -1053,6 +1061,8 @@ mod tests {
                     PrefixBlock {
                         op: tt("\\"),
                         terms: vec![Arg(Ident(tt("test.csv")))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into(),
                     PrefixBlock {
@@ -1061,10 +1071,14 @@ mod tests {
                             tag: tt("{ \\ asdf }"),
                             blocks: vec![PrefixBlock {
                                 op: tt("\\"),
-                                terms: vec![Arg(Ident(tt("asdf")))]
+                                terms: vec![Arg(Ident(tt("asdf")))],
+                                in_ty: None,
+                                out_ty: None
                             }
                             .into()]
-                        }))]
+                        }))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()
                 ]
@@ -1182,7 +1196,9 @@ mod tests {
                     tag: tt("filter adsf cdx "),
                     blocks: vec![PrefixBlock {
                         op: tt("filter"),
-                        terms: vec![Arg(Ident(tt("adsf"))), Arg(Ident(tt("cdx")))]
+                        terms: vec![Arg(Ident(tt("adsf"))), Arg(Ident(tt("cdx")))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -1206,10 +1222,14 @@ mod tests {
                                 terms: vec![
                                     Arg(Ident(tt("col-name"))),
                                     Arg(Num(1.into(), tt("1")))
-                                ]
+                                ],
+                                in_ty: None,
+                                out_ty: None
                             }
                             .into()]
-                        }))]
+                        }))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -1235,10 +1255,14 @@ mod tests {
                             terms: vec![
                                 Arg(Ident(tt("col-name"))),
                                 Arg(Num(1000.into(), tt("1e3")))
-                            ]
+                            ],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()]
-                    }))]
+                    }))],
+                    in_ty: None,
+                    out_ty: None
                 }
             ))
         );
@@ -1254,7 +1278,9 @@ mod tests {
                     blocks: vec![
                         PrefixBlock {
                             op: tt("in"),
-                            terms: vec![Arg(Ident(tt("asdf")))]
+                            terms: vec![Arg(Ident(tt("asdf")))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
@@ -1266,10 +1292,14 @@ mod tests {
                                     terms: vec![
                                         Arg(Ident(tt("col-name"))),
                                         Arg(Num(1000.into(), tt("1e3")))
-                                    ]
+                                    ],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
                                 .into()]
-                            }))]
+                            }))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()
                     ]
@@ -1288,7 +1318,9 @@ mod tests {
                     blocks: vec![
                         PrefixBlock {
                             op: tt("in"),
-                            terms: vec![Arg(Ident(tt("asdf")))]
+                            terms: vec![Arg(Ident(tt("asdf")))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
@@ -1300,15 +1332,21 @@ mod tests {
                                     terms: vec![
                                         Arg(Ident(tt("col-name"))),
                                         Arg(Num(1000.into(), tt("1e3")))
-                                    ]
+                                    ],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
                                 .into()]
-                            }))]
+                            }))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
                             op: tt("ls"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()
                     ]
@@ -1445,7 +1483,9 @@ mod tests {
                 tag: tt("+ 101 "),
                 blocks: vec![PrefixBlock {
                     op: tt("+"),
-                    terms: vec![Arg(Num(101.into(), tt("101")))]
+                    terms: vec![Arg(Num(101.into(), tt("101")))],
+                    in_ty: None,
+                    out_ty: None
                 }
                 .into()],
             })
@@ -1641,7 +1681,9 @@ mod tests {
                 expr: Expression {
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![]
+                        terms: vec![],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()],
                     tag: tt("in "),
@@ -1662,7 +1704,9 @@ mod tests {
                 expr: Expression {
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![]
+                        terms: vec![],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()],
                     tag: tt("in "),
@@ -1740,7 +1784,9 @@ mod tests {
                     tag: tt("{in asdf }"),
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![Arg(Ident(tt("asdf")))]
+                        terms: vec![Arg(Ident(tt("asdf")))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -1757,7 +1803,9 @@ mod tests {
                     tag: tt("{in asdf}"),
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![Arg(Ident(tt("asdf")))]
+                        terms: vec![Arg(Ident(tt("asdf")))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -1775,17 +1823,23 @@ mod tests {
                     blocks: vec![
                         PrefixBlock {
                             op: tt("foo"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
                             op: tt("bar"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
                             op: tt("zog"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()
                     ]
@@ -1811,7 +1865,9 @@ mod tests {
                             blocks: vec![
                                 PrefixBlock {
                                     op: tt("get"),
-                                    terms: vec![Arg(Ident(tt("first")))]
+                                    terms: vec![Arg(Ident(tt("first")))],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
                                 .into(),
                                 PrefixBlock {
@@ -1822,6 +1878,8 @@ mod tests {
                                             blocks: vec![PrefixBlock {
                                                 op: tt("="),
                                                 terms: vec![Arg(Num(0.into(), tt("0")))],
+                                                in_ty: None,
+                                                out_ty: None
                                             }
                                             .into()]
                                         })),
@@ -1830,6 +1888,8 @@ mod tests {
                                             blocks: vec![PrefixBlock {
                                                 op: tt("+"),
                                                 terms: vec![Arg(Num(100.into(), tt("100")))],
+                                                in_ty: None,
+                                                out_ty: None
                                             }
                                             .into()]
                                         })),
@@ -1838,14 +1898,20 @@ mod tests {
                                             blocks: vec![PrefixBlock {
                                                 op: tt("-"),
                                                 terms: vec![Arg(Num(100.into(), tt("100")))],
+                                                in_ty: None,
+                                                out_ty: None
                                             }
                                             .into()]
                                         }))
-                                    ]
+                                    ],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
                                 .into()
                             ]
-                        }))]
+                        }))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()]
                 }
@@ -1918,7 +1984,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y")
+                    rhs: tt("y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1932,7 +1999,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y")
+                    rhs: tt("y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1958,7 +2026,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y y")
+                    rhs: tt("y y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1972,7 +2041,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y y")
+                    rhs: tt("y y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1993,7 +2063,8 @@ mod tests {
                     blocks: vec![DotOperatorBlock {
                         op: tt("."),
                         lhs: Var(tt("x")),
-                        rhs: tt("y")
+                        rhs: tt("y"),
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -2015,11 +2086,13 @@ mod tests {
                             blocks: vec![DotOperatorBlock {
                                 op: tt("."),
                                 lhs: Var(tt("x")),
-                                rhs: tt("foo-bar")
+                                rhs: tt("foo-bar"),
+                                out_ty: None,
                             }
                             .into()]
                         }),
-                        rhs: tt("foo bar/zog")
+                        rhs: tt("foo bar/zog"),
+                        out_ty: None
                     }
                     .into()]
                 }))
@@ -2097,7 +2170,9 @@ mod tests {
                 "",
                 PrefixBlock {
                     op: tt("\\"),
-                    terms: vec![Arg(Pound('t', tt("#t")))]
+                    terms: vec![Arg(Pound('t', tt("#t")))],
+                    in_ty: None,
+                    out_ty: None
                 }
             ))
         );
@@ -2109,7 +2184,9 @@ mod tests {
                 "",
                 PrefixBlock {
                     op: tt("+"),
-                    terms: vec![Arg(Pound('t', tt("#t")))]
+                    terms: vec![Arg(Pound('t', tt("#t")))],
+                    in_ty: None,
+                    out_ty: None
                 }
             ))
         );
@@ -2124,5 +2201,24 @@ mod tests {
         assert_eq!(ident(&l)(&l.line), Ok((" else", tt("foo bar\\zog"))));
         let l = line(r#""foo bar\zog""#);
         assert_eq!(ident(&l)(&l.line), Ok(("", tt("foo bar\\zog"))));
+    }
+
+    #[test]
+    fn ty_annotation_01_op() {
+        let defs = &Definitions::new();
+
+        let l = line(":Num foo:Bar zog");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Term::Arg(Argument::Ident(tt("zog")))],
+                    in_ty: Some(tt("Num")),
+                    out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
     }
 }

@@ -123,7 +123,12 @@ impl AstGraph {
         while let Some((root, blocks)) = q.pop_front() {
             for blk in blocks {
                 let blk_tag = blk.block_tag();
-                let (op, terms) = blk.parts();
+                let BlockParts {
+                    op,
+                    terms,
+                    in_ty,
+                    out_ty,
+                } = blk.parts();
 
                 let op = g.add_node(AstNode::Op { op, blk: blk_tag });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op

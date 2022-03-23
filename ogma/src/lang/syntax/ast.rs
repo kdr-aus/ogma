@@ -182,21 +182,35 @@ pub type Op = Tag;
 /// List of terms.
 pub type Terms = Vec<Term>;
 
+type CTag<'a> = Cow<'a, Tag>;
+
 /// The common aspects of a processing block.
 ///
 /// Blocks can be in different notation style, but at their core always specify a _single_ op tag,
-/// and a list of terms.
+/// a list of terms, optional input type constraint, and optional output type constraint.
 pub trait IBlock: std::fmt::Debug + Send + Sync {
     /// The operation.
-    fn op(&self) -> Cow<Tag>;
+    fn op(&self) -> CTag;
     /// The terms.
     fn terms(&self) -> Cow<[Term]>;
+    /// An optional annotated input type constraint.
+    fn in_ty(&self) -> Option<CTag>;
+    /// An optional annotated ouput type constraint.
+    fn out_ty(&self) -> Option<CTag>;
+
     /// Create a tag that extends across the whole block.
     fn block_tag(&self) -> Tag;
     /// The common aspects of a a block: the operation tag and a list of terms.
-    fn parts(self: Box<Self>) -> (Op, Terms);
+    fn parts(self: Box<Self>) -> BlockParts;
     /// Trait-object safe clone.
     fn clone(&self) -> Block;
+}
+
+pub struct BlockParts {
+    pub op: Op,
+    pub terms: Terms,
+    pub in_ty: Option<Tag>,
+    pub out_ty: Option<Tag>,
 }
 
 /// A single expression block. An expression is made of multiple blocks connected by pipes.
@@ -215,15 +229,27 @@ pub struct PrefixBlock {
     pub op: Op,
     /// The terms.
     pub terms: Terms,
+    /// An optional annotated input type constraint.
+    pub in_ty: Option<Tag>,
+    /// An optional annotated output type constraint.
+    pub out_ty: Option<Tag>,
 }
 
 impl IBlock for PrefixBlock {
-    fn op(&self) -> Cow<Tag> {
+    fn op(&self) -> CTag {
         Cow::Borrowed(&self.op)
     }
 
     fn terms(&self) -> Cow<[Term]> {
         self.terms.as_slice().into()
+    }
+
+    fn in_ty(&self) -> Option<CTag> {
+        self.in_ty.as_ref().map(Cow::Borrowed)
+    }
+
+    fn out_ty(&self) -> Option<CTag> {
+        self.out_ty.as_ref().map(Cow::Borrowed)
     }
 
     fn block_tag(&self) -> Tag {
@@ -240,8 +266,20 @@ impl IBlock for PrefixBlock {
         tag
     }
 
-    fn parts(self: Box<Self>) -> (Op, Terms) {
-        (self.op, self.terms)
+    fn parts(self: Box<Self>) -> BlockParts {
+        let PrefixBlock {
+            op,
+            terms,
+            in_ty,
+            out_ty,
+        } = *self;
+
+        BlockParts {
+            op,
+            terms,
+            in_ty,
+            out_ty,
+        }
     }
 
     fn clone(&self) -> Block {
@@ -258,6 +296,8 @@ pub struct DotOperatorBlock {
     pub lhs: Argument,
     /// For the dot infix operator, the rhs is _always_ a plain ident.
     pub rhs: Tag,
+    /// An optional annotated output type constraint.
+    pub out_ty: Option<Tag>,
 }
 
 impl DotOperatorBlock {
@@ -270,12 +310,20 @@ impl DotOperatorBlock {
 }
 
 impl IBlock for DotOperatorBlock {
-    fn op(&self) -> Cow<Tag> {
+    fn op(&self) -> CTag {
         Cow::Borrowed(&self.op)
     }
 
     fn terms(&self) -> Cow<[Term]> {
         DotOperatorBlock::terms(self).into()
+    }
+
+    fn in_ty(&self) -> Option<CTag> {
+        None
+    }
+
+    fn out_ty(&self) -> Option<CTag> {
+        self.out_ty.as_ref().map(Cow::Borrowed)
     }
 
     fn block_tag(&self) -> Tag {
@@ -287,8 +335,21 @@ impl IBlock for DotOperatorBlock {
         tag
     }
 
-    fn parts(self: Box<Self>) -> (Op, Terms) {
-        (self.op.clone(), self.terms())
+    fn parts(self: Box<Self>) -> BlockParts {
+        let terms = self.terms();
+        let DotOperatorBlock {
+            op,
+            lhs: _,
+            rhs: _,
+            out_ty,
+        } = *self;
+
+        BlockParts {
+            op,
+            terms,
+            in_ty: None,
+            out_ty,
+        }
     }
 
     fn clone(&self) -> Block {
