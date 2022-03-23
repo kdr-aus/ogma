@@ -63,7 +63,7 @@ pub fn compile_with_seed_vars(
 
     // NOTE: this can be used to investigate compilation/evaluation issues by visualising the
     // compiler state. gated by a compilation flag, it must be turned off for release modes
-    // compiler.write_debug_report("debug-compiler.md");
+    // compiler._write_debug_report("debug-compiler.md");
 
     Ok(FullCompilation {
         eval_stack: compiler.compiled_exprs.remove(&0).expect(err), // root expr stack
@@ -147,6 +147,8 @@ impl<'d> Compiler<'d> {
             if self.infer_outputs() {
                 continue;
             }
+
+            self._write_debug_report("debug-compiler.md");
 
             // if we have gotten here, unable to compile
             return Err(err);

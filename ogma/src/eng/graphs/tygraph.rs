@@ -360,6 +360,11 @@ impl TypeGraph {
                     from.output.can_flow(&to.output).map_err(reserr)?;
                     Some((Update::ToOutput, from.output.clone()))
                 }
+                // Backpropagate flow if to.input:Obliged -> from.input
+                Flow::II if matches!(to.input, Knowledge::Obliged(_)) => {
+                    to.input.can_flow(&from.input).map_err(reserr)?;
+                    Some((Update::FromInput, to.input.clone()))
+                }
                 // Backpropagate flow if to.input:Inferred -> from.input
                 Flow::II if matches!(to.input, Knowledge::Inferred(_)) => {
                     to.input.can_flow(&from.input).map_err(reserr)?;
@@ -544,12 +549,19 @@ impl Knowledge {
             // A known source can flow into itself or lower ranked items if the types match
             (Known(t1), Known(t2) | Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
 
+            // An obliged source can flow into an unknown or any dest
+            (Obliged(_), Unknown | Any) => Ok(()),
+            // An obliged source can flow into itself or lower ranked items if the types match
+            (Obliged(t1), Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
+
             // An inferred source can flow into an unknown or any dest
             (Inferred(_), Unknown | Any) => Ok(()),
             // An inferred source can flow into itself if the types match
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
+
             // An any source can flow into an Any or Unknown dest
             (Any, Any | Unknown) => Ok(()),
+
             // Cannot flow if two known unmatching types
             (Known(t1), Known(t2)) if t1 != t2 => Err(ConflictingKnown {
                 src: t1.clone(),
