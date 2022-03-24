@@ -52,6 +52,7 @@ impl Stack {
     }
 
     pub fn eval(&self, value: Value, cx: Context) -> Result<(Value, Environment)> {
+        #[cfg(debug_assertions)]
         debug_assert_eq!(
             value.ty(),
             self.in_ty,
@@ -68,6 +69,7 @@ impl Stack {
             env = new_env;
         }
 
+        #[cfg(debug_assertions)]
         debug_assert_eq!(
             input.ty(),
             self.out_ty,

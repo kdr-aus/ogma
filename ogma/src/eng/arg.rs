@@ -199,6 +199,7 @@ impl<'a> ArgBuilder<'a> {
                     .ty()
                     .cloned()
                     .expect("output type should be known");
+                #[allow(unused_mut)]
                 let mut stack = eval::Stack::new(vec![Step {
                     out_ty,
                     f: Arc::new(|input, cx| cx.done(input)),
@@ -362,6 +363,7 @@ impl Argument {
             Hold::Expr(stack) => stack.eval(input(), cx.clone()).map(|x| x.0),
         };
 
+        #[cfg(debug_assertions)]
         if let Ok(v) = &r {
             self.assert_resolved_type(v);
         }
@@ -398,6 +400,7 @@ impl Argument {
                 R::E(e) => e.eval(input, cx.clone()).map(|x| x.0),
             };
 
+            #[cfg(debug_assertions)]
             if let Ok(v) = &r {
                 self.assert_resolved_type(v);
             }

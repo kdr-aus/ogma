@@ -633,6 +633,7 @@ impl eval::Stack {
         // .neighbors() returns in reverse order added.
         steps.reverse();
 
+        #[allow(unused_mut)]
         let mut stack = Self::new(steps);
 
         #[cfg(debug_assertions)]
