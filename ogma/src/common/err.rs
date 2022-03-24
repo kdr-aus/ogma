@@ -238,7 +238,7 @@ impl Error {
             desc: format!("expecting more than {} arguments", args_count),
             traces: trace(block_tag, "expecting additional argument(s)".to_string()),
             help_msg: Some(help_msg),
-            ..Self::default()
+            hard: true, // unrecoverable?
         }
     }
 

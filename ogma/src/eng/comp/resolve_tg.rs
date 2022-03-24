@@ -156,6 +156,7 @@ impl<'d> Compiler<'d> {
         let mut err = Error {
             cat: Category::Type,
             desc: "Type application failed".into(),
+            hard: true, // unrecoverable error, will always have this conflict
             ..Default::default()
         };
 

@@ -609,7 +609,7 @@ impl Knowledge {
             // NOTE: this would need to clear _all_ Inferred type graph entries.
             // NOTE: probably do this later if it is found that unreasonable errors are being
             // returned.
-            (Known(t1), Inferred(t2)) if t1 != t2 => Err(UnmatchedInferred {
+            (Known(t1) | Inferred(t1), Inferred(t2)) if t1 != t2 => Err(UnmatchedInferred {
                 src: t1.clone(),
                 dst: t2.clone(),
             }),
