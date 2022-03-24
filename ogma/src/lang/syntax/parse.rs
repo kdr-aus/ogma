@@ -262,6 +262,19 @@ where
     }
 }
 
+/// If leading with a ':', treat as a type identifier.
+fn opt_ty(line: &Line) -> impl FnMut(&str) -> IResult<&str, Option<Tag>, ParsingError> + '_ {
+    move |i| {
+        opt(preceded(
+            char(':'),
+            exp(
+                cut(context("expecting a type identifier", op_ident(line))),
+                Expecting::Type,
+            ),
+        ))(i)
+    }
+}
+
 // ------ Expression -----------------------------------------------------------
 fn expr<'f>(
     line: &'f Line,
@@ -297,7 +310,14 @@ fn expr<'f>(
         } else {
             let mut tag = line.create_tag(input);
             tag.make_mut().end = line.line.offset(i);
-            Ok((i, Expression { tag, blocks }))
+            Ok((
+                i,
+                Expression {
+                    tag,
+                    blocks,
+                    out_ty: None,
+                },
+            ))
         }
     }
 }
@@ -307,9 +327,20 @@ fn block<'f>(
     defs: &'f Definitions,
 ) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, PrefixBlock, ParsingError<'a>> + 'f {
     move |i| {
-        let (i, op) = exp(op(line), Expecting::Impl)(i)?;
+        let (i, in_ty) = opt_ty(line)(i)?;
+        // NOTE, op is not wrapped in `ws` since this would consume trailing whitespace
+        let (i, op) = exp(preceded(multispace0, op(line)), Expecting::Impl)(i)?;
+        let (i, out_ty) = opt_ty(line)(i)?;
         let (i, terms) = many0(ws(term(line, defs)))(i)?;
-        Ok((i, PrefixBlock { op, terms }))
+        Ok((
+            i,
+            PrefixBlock {
+                op,
+                terms,
+                in_ty,
+                out_ty,
+            },
+        ))
     }
 }
 
@@ -428,6 +459,7 @@ fn maybe_infix<'a>(
             lhs = Argument::Expr(Expression {
                 tag: b.block_tag(),
                 blocks: vec![Box::new(b)],
+                out_ty: None,
             });
         }
     }
@@ -461,10 +493,12 @@ fn dot_infixed(
     move |i| {
         let (i, op) = tag(".")(i)?;
         let (i, rhs) = cut(infix_rhs_ident(line))(i)?;
+        let (i, out_ty) = opt_ty(line)(i)?;
         let blk = DotOperatorBlock {
             op: line.create_tag(op),
             lhs,
             rhs,
+            out_ty,
         };
 
         Ok((i, blk))
@@ -475,6 +509,7 @@ fn dot_infixed(
 /// - starts with `{`: parse as expression
 /// - starts with `$`: parse as variable
 /// - starts with `#`: parse as boolean or special input
+/// - starts with `:`: return **Failure** -- unexpected type identifier
 /// - parses as number: return Num
 /// - first term parses as a KNOWN op: parse as BLOCK (but return as Expression)
 /// - finally parse as Ident if nothing else
@@ -495,16 +530,37 @@ fn arg<'f>(
             } else {
                 // we know that i starts with { so we grab the start tag position for later.
                 let start = line.create_tag(i).start;
+
                 let (i, mut e) = cut(delimited(
                     char('{'),
                     ws(expr(line, defs)),
                     exp(char('}'), Expecting::Term),
                 ))(i)?;
+
+                // see if there is a trailing type
+                let (i, out_ty) = opt_ty(line)(i)?;
+                e.out_ty = out_ty;
+
                 // expand the tag to capture the braces!
                 e.tag.make_mut().start = start;
                 e.tag.make_mut().end += 1;
+                if let Some(t) = &e.out_ty {
+                    e.tag.make_mut().end = t.end;
+                }
+
                 Ok((i, Argument::Expr(e)))
             }
+        } else if let Some(stripped) = i.strip_prefix(':') {
+            // adjust some of the error to capture just the type identifier section
+            let (_, ident) = take_till(breakon)(stripped)?;
+            let mut tag = line.create_tag(i);
+            tag.make_mut().end = tag.start + 1 + ident.len(); // capture :ident
+
+            Err(nom::Err::Failure(ParsingError {
+                input: ErrIn::T(tag),
+                cx: "unexpected type identifier".into(),
+                expecting: Expecting::Term,
+            }))
         } else if breakon_s(i) {
             Err(nom::Err::Error(make_error(i, ErrorKind::IsA)))
         } else if i.starts_with('$') {
@@ -532,6 +588,7 @@ fn arg<'f>(
             let expr = Expression {
                 tag,
                 blocks: vec![Box::new(block)],
+                out_ty: None,
             };
             Ok((i, Argument::Expr(expr)))
         } else {
@@ -548,13 +605,20 @@ fn flag(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
     move |i| preceded(tag("--"), ident(line))(i) // parse as ident (can have quotes)
 }
 
-fn ident<'a: 'f, 'f, E: ParseError<&'a str>>(
+fn ident<'a: 'f, 'f>(
     line: &'f Line,
-) -> impl Fn(&'a str) -> IResult<&'a str, Tag, E> + 'f {
+) -> impl Fn(&'a str) -> IResult<&'a str, Tag, ParsingError> + 'f {
     move |i| {
         let wrapped_str = |ch: char| delimited(char(ch), take_till(move |c| c == ch), char(ch));
 
-        let (i, ident) = if i.starts_with('\"') {
+        let (i, ident) = if i.starts_with(':') {
+            // expecting an identifier but found a type specifier
+            return Err(nom::Err::Failure(ParsingError {
+                input: ErrIn::S(i),
+                cx: "expecting an identifier but found a type specifier".into(),
+                expecting: Expecting::None,
+            }));
+        } else if i.starts_with('\"') {
             // wrapped in double quotes, don't stop on break chars
             wrapped_str('"')(i)
         } else if i.starts_with('\'') {
@@ -585,7 +649,7 @@ fn num(line: &Line) -> impl Fn(&str) -> IResult<&str, (Number, Tag), ()> + '_ {
 }
 
 fn breakon(ch: char) -> bool {
-    ch == '|' || ch == '{' || ch == '}' || ch.is_whitespace()
+    ch == '|' || ch == '{' || ch == '}' || ch == ':' || ch.is_whitespace()
 }
 
 fn breakon_s(s: &str) -> bool {
@@ -768,9 +832,12 @@ mod tests {
                 tag: tt("in"),
                 blocks: vec![PrefixBlock {
                     op: tt("in"),
-                    terms: vec![]
+                    terms: vec![],
+                    in_ty: None,
+                    out_ty: None
                 }
-                .into()]
+                .into()],
+                out_ty: None
             })
         );
 
@@ -781,9 +848,12 @@ mod tests {
                 tag: tt("in file.csv"),
                 blocks: vec![PrefixBlock {
                     op: tt("in"),
-                    terms: vec![Arg(Ident(tt("file.csv")))]
+                    terms: vec![Arg(Ident(tt("file.csv")))],
+                    in_ty: None,
+                    out_ty: None
                 }
-                .into()]
+                .into()],
+                out_ty: None
             })
         );
     }
@@ -1033,9 +1103,12 @@ mod tests {
                     tag: tt("{ \\ asdf }"),
                     blocks: vec![PrefixBlock {
                         op: tt("\\"),
-                        terms: vec![Arg(Ident(tt("asdf")))]
+                        terms: vec![Arg(Ident(tt("asdf")))],
+                        in_ty: None,
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1053,6 +1126,8 @@ mod tests {
                     PrefixBlock {
                         op: tt("\\"),
                         terms: vec![Arg(Ident(tt("test.csv")))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into(),
                     PrefixBlock {
@@ -1061,13 +1136,19 @@ mod tests {
                             tag: tt("{ \\ asdf }"),
                             blocks: vec![PrefixBlock {
                                 op: tt("\\"),
-                                terms: vec![Arg(Ident(tt("asdf")))]
+                                terms: vec![Arg(Ident(tt("asdf")))],
+                                in_ty: None,
+                                out_ty: None
                             }
-                            .into()]
-                        }))]
+                            .into()],
+                            out_ty: None
+                        }))],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()
-                ]
+                ],
+                out_ty: None
             })
         );
     }
@@ -1093,7 +1174,7 @@ mod tests {
     fn identifiers() {
         let i = |s| {
             let line = line(s);
-            let x = ident::<ParsingError>(&line)(&line.line).unwrap().1;
+            let x = ident(&line)(&line.line).unwrap().1;
             x
         };
 
@@ -1104,7 +1185,7 @@ mod tests {
         assert_eq!(i(r#"'hello "world"'"#), tt("hello \"world\""));
         assert_eq!(i(r#""hello 'world'""#), tt(r#"hello 'world'"#));
         let x = line("'hello world");
-        let x = ident::<ParsingError>(&x)(&x.line);
+        let x = ident(&x)(&x.line);
         assert_eq!(
             x,
             Err(nom::Err::Error(ParsingError {
@@ -1182,9 +1263,12 @@ mod tests {
                     tag: tt("filter adsf cdx "),
                     blocks: vec![PrefixBlock {
                         op: tt("filter"),
-                        terms: vec![Arg(Ident(tt("adsf"))), Arg(Ident(tt("cdx")))]
+                        terms: vec![Arg(Ident(tt("adsf"))), Arg(Ident(tt("cdx")))],
+                        in_ty: None,
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1206,12 +1290,18 @@ mod tests {
                                 terms: vec![
                                     Arg(Ident(tt("col-name"))),
                                     Arg(Num(1.into(), tt("1")))
-                                ]
+                                ],
+                                in_ty: None,
+                                out_ty: None
                             }
-                            .into()]
-                        }))]
+                            .into()],
+                            out_ty: None
+                        }))],
+                        in_ty: None,
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1235,10 +1325,15 @@ mod tests {
                             terms: vec![
                                 Arg(Ident(tt("col-name"))),
                                 Arg(Num(1000.into(), tt("1e3")))
-                            ]
+                            ],
+                            in_ty: None,
+                            out_ty: None
                         }
-                        .into()]
-                    }))]
+                        .into()],
+                        out_ty: None
+                    }))],
+                    in_ty: None,
+                    out_ty: None
                 }
             ))
         );
@@ -1254,7 +1349,9 @@ mod tests {
                     blocks: vec![
                         PrefixBlock {
                             op: tt("in"),
-                            terms: vec![Arg(Ident(tt("asdf")))]
+                            terms: vec![Arg(Ident(tt("asdf")))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
@@ -1266,13 +1363,19 @@ mod tests {
                                     terms: vec![
                                         Arg(Ident(tt("col-name"))),
                                         Arg(Num(1000.into(), tt("1e3")))
-                                    ]
+                                    ],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
-                                .into()]
-                            }))]
+                                .into()],
+                                out_ty: None
+                            }))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()
-                    ]
+                    ],
+                    out_ty: None
                 }
             ))
         );
@@ -1288,7 +1391,9 @@ mod tests {
                     blocks: vec![
                         PrefixBlock {
                             op: tt("in"),
-                            terms: vec![Arg(Ident(tt("asdf")))]
+                            terms: vec![Arg(Ident(tt("asdf")))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
@@ -1300,18 +1405,26 @@ mod tests {
                                     terms: vec![
                                         Arg(Ident(tt("col-name"))),
                                         Arg(Num(1000.into(), tt("1e3")))
-                                    ]
+                                    ],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
-                                .into()]
-                            }))]
+                                .into()],
+                                out_ty: None
+                            }))],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
                             op: tt("ls"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()
-                    ]
+                    ],
+                    out_ty: None
                 }
             ))
         );
@@ -1445,9 +1558,12 @@ mod tests {
                 tag: tt("+ 101 "),
                 blocks: vec![PrefixBlock {
                     op: tt("+"),
-                    terms: vec![Arg(Num(101.into(), tt("101")))]
+                    terms: vec![Arg(Num(101.into(), tt("101")))],
+                    in_ty: None,
+                    out_ty: None
                 }
                 .into()],
+                out_ty: None
             })
         );
     }
@@ -1641,10 +1757,13 @@ mod tests {
                 expr: Expression {
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![]
+                        terms: vec![],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()],
                     tag: tt("in "),
+                    out_ty: None
                 }
             })
         );
@@ -1662,10 +1781,13 @@ mod tests {
                 expr: Expression {
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![]
+                        terms: vec![],
+                        in_ty: None,
+                        out_ty: None
                     }
                     .into()],
                     tag: tt("in "),
+                    out_ty: None
                 }
             })
         );
@@ -1703,7 +1825,6 @@ mod tests {
 
     #[test]
     fn empty_string() {
-        let ident = ident::<()>;
         let l = line("'' else");
         assert_eq!(ident(&l)(&l.line), Ok((" else", tt(""))));
         let l = line(r#""""#);
@@ -1713,7 +1834,7 @@ mod tests {
     #[test]
     fn brace_ends_arg() {
         let src = line("ident{in asdf } remaining");
-        let x = ident::<()>(&src)(&src.line);
+        let x = ident(&src)(&src.line);
         assert_eq!(x, Ok(("{in asdf } remaining", tt("ident"))));
 
         let src = line("$rhs{in asdf } remaining");
@@ -1740,9 +1861,12 @@ mod tests {
                     tag: tt("{in asdf }"),
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![Arg(Ident(tt("asdf")))]
+                        terms: vec![Arg(Ident(tt("asdf")))],
+                        in_ty: None,
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1757,9 +1881,12 @@ mod tests {
                     tag: tt("{in asdf}"),
                     blocks: vec![PrefixBlock {
                         op: tt("in"),
-                        terms: vec![Arg(Ident(tt("asdf")))]
+                        terms: vec![Arg(Ident(tt("asdf")))],
+                        in_ty: None,
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -1775,20 +1902,27 @@ mod tests {
                     blocks: vec![
                         PrefixBlock {
                             op: tt("foo"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
                             op: tt("bar"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into(),
                         PrefixBlock {
                             op: tt("zog"),
-                            terms: vec![]
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
                         }
                         .into()
-                    ]
+                    ],
+                    out_ty: None
                 }
             ))
         );
@@ -1811,7 +1945,9 @@ mod tests {
                             blocks: vec![
                                 PrefixBlock {
                                     op: tt("get"),
-                                    terms: vec![Arg(Ident(tt("first")))]
+                                    terms: vec![Arg(Ident(tt("first")))],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
                                 .into(),
                                 PrefixBlock {
@@ -1822,32 +1958,47 @@ mod tests {
                                             blocks: vec![PrefixBlock {
                                                 op: tt("="),
                                                 terms: vec![Arg(Num(0.into(), tt("0")))],
+                                                in_ty: None,
+                                                out_ty: None
                                             }
-                                            .into()]
+                                            .into()],
+                                            out_ty: None
                                         })),
                                         Arg(Expr(Expression {
                                             tag: tt("{+ 100}"),
                                             blocks: vec![PrefixBlock {
                                                 op: tt("+"),
                                                 terms: vec![Arg(Num(100.into(), tt("100")))],
+                                                in_ty: None,
+                                                out_ty: None
                                             }
-                                            .into()]
+                                            .into()],
+                                            out_ty: None
                                         })),
                                         Arg(Expr(Expression {
                                             tag: tt("{- 100}"),
                                             blocks: vec![PrefixBlock {
                                                 op: tt("-"),
                                                 terms: vec![Arg(Num(100.into(), tt("100")))],
+                                                in_ty: None,
+                                                out_ty: None
                                             }
-                                            .into()]
+                                            .into()],
+                                            out_ty: None
                                         }))
-                                    ]
+                                    ],
+                                    in_ty: None,
+                                    out_ty: None
                                 }
                                 .into()
-                            ]
-                        }))]
+                            ],
+                            out_ty: None
+                        }))],
+                        in_ty: None,
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }
             ))
         );
@@ -1918,7 +2069,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y")
+                    rhs: tt("y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1932,7 +2084,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y")
+                    rhs: tt("y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1958,7 +2111,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y y")
+                    rhs: tt("y y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1972,7 +2126,8 @@ mod tests {
                 DotOperatorBlock {
                     op: tt("."),
                     lhs: Ident(tt("foo")),
-                    rhs: tt("y y")
+                    rhs: tt("y y"),
+                    out_ty: None
                 }
             ))
         );
@@ -1993,9 +2148,11 @@ mod tests {
                     blocks: vec![DotOperatorBlock {
                         op: tt("."),
                         lhs: Var(tt("x")),
-                        rhs: tt("y")
+                        rhs: tt("y"),
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -2015,13 +2172,17 @@ mod tests {
                             blocks: vec![DotOperatorBlock {
                                 op: tt("."),
                                 lhs: Var(tt("x")),
-                                rhs: tt("foo-bar")
+                                rhs: tt("foo-bar"),
+                                out_ty: None,
                             }
-                            .into()]
+                            .into()],
+                            out_ty: None
                         }),
-                        rhs: tt("foo bar/zog")
+                        rhs: tt("foo bar/zog"),
+                        out_ty: None
                     }
-                    .into()]
+                    .into()],
+                    out_ty: None
                 }))
             ))
         );
@@ -2097,7 +2258,9 @@ mod tests {
                 "",
                 PrefixBlock {
                     op: tt("\\"),
-                    terms: vec![Arg(Pound('t', tt("#t")))]
+                    terms: vec![Arg(Pound('t', tt("#t")))],
+                    in_ty: None,
+                    out_ty: None
                 }
             ))
         );
@@ -2109,7 +2272,9 @@ mod tests {
                 "",
                 PrefixBlock {
                     op: tt("+"),
-                    terms: vec![Arg(Pound('t', tt("#t")))]
+                    terms: vec![Arg(Pound('t', tt("#t")))],
+                    in_ty: None,
+                    out_ty: None
                 }
             ))
         );
@@ -2117,12 +2282,348 @@ mod tests {
 
     #[test]
     fn backslash_str() {
-        let ident = ident::<()>;
         let l = line("foo\\bar else");
         assert_eq!(ident(&l)(&l.line), Ok((" else", tt("foo\\bar"))));
         let l = line("'foo bar\\zog' else");
         assert_eq!(ident(&l)(&l.line), Ok((" else", tt("foo bar\\zog"))));
         let l = line(r#""foo bar\zog""#);
         assert_eq!(ident(&l)(&l.line), Ok(("", tt("foo bar\\zog"))));
+    }
+
+    #[test]
+    fn ty_annotation_01_op() {
+        let defs = &Definitions::new();
+
+        let l = line(":Num foo:Bar zog");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Ident(tt("zog")))],
+                    in_ty: Some(tt("Num")),
+                    out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
+
+        let l = line(":Num foo zog");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Ident(tt("zog")))],
+                    in_ty: Some(tt("Num")),
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo:Bar zog");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Ident(tt("zog")))],
+                    in_ty: None,
+                    out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn ty_annotation_02_err() {
+        let defs = &Definitions::new();
+
+        let l = line(": foo:Bar zog");
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Type);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:1
+ | : foo:Bar zog
+ |  ^ expecting a type identifier
+"
+        );
+
+        let l = line(":Num foo: zog");
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Type);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:9
+ | :Num foo: zog
+ |          ^ expecting a type identifier
+"
+        );
+
+        let l = line(":Num foo zog:Bar");
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Term);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:12
+ | :Num foo zog:Bar
+ |             ^^^^ unexpected type identifier
+"
+        );
+    }
+
+    #[test]
+    fn ty_annotation_03_nested() {
+        let defs = &Definitions::new();
+
+        let l = line(":Num foo:Bar ls");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("ls"),
+                        blocks: vec![PrefixBlock {
+                            op: tt("ls"),
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: None
+                        }
+                        .into()],
+                        out_ty: None
+                    }))],
+                    in_ty: Some(tt("Num")),
+                    out_ty: Some(tt("Bar")),
+                }
+            ))
+        );
+
+        let l = line("foo zog ls:Bar");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![
+                        Arg(Ident(tt("zog"))),
+                        Arg(Expr(Expression {
+                            tag: tt("ls:Bar"),
+                            blocks: vec![PrefixBlock {
+                                op: tt("ls"),
+                                terms: vec![],
+                                in_ty: None,
+                                out_ty: Some(tt("Bar")),
+                            }
+                            .into(),],
+                            out_ty: None
+                        }))
+                    ],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo :Bar ls:Zog"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Term);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:4
+ | foo :Bar ls:Zog
+ |     ^^^^ unexpected type identifier
+"
+        );
+
+        let l = line("foo:Num ls:Zog"); // okay!
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("ls:Zog"),
+                        blocks: vec![PrefixBlock {
+                            op: tt("ls"),
+                            terms: vec![],
+                            in_ty: None,
+                            out_ty: Some(tt("Zog")),
+                        }
+                        .into(),],
+                        out_ty: None
+                    }))],
+                    in_ty: None,
+                    out_ty: Some(tt("Num")),
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn ty_annotation_04_dotop() {
+        let defs = &Definitions::new();
+
+        let l = line("foo $row.var:Str");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("$row.var:Str"),
+                        blocks: vec![DotOperatorBlock {
+                            lhs: Var(tt("row")),
+                            op: tt("."),
+                            rhs: tt("var"),
+                            out_ty: Some(tt("Str")),
+                        }
+                        .into()],
+                        out_ty: None
+                    }))],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo $row.var :Bar"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Term);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:13
+ | foo $row.var :Bar
+ |              ^^^^ unexpected type identifier
+"
+        );
+
+        let l = line("foo $row.:Bar var"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::None);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:9
+ | foo $row.:Bar var
+ |          ^ invalid identifier, expecting alphabetic character, found `:`
+"
+        );
+    }
+
+    #[test]
+    fn ty_annotation_05_expr() {
+        let defs = &Definitions::new();
+
+        let l = line("foo {:Bar zog:Num }:Bool");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("{:Bar zog:Num }:Bool"),
+                        blocks: vec![PrefixBlock {
+                            op: tt("zog"),
+                            terms: vec![],
+                            in_ty: Some(tt("Bar")),
+                            out_ty: Some(tt("Num")),
+                        }
+                        .into()],
+                        out_ty: Some(tt("Bool")),
+                    }))],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo {:Bar zog:Num |:Fog hir:Str }:Bool");
+        assert_eq!(
+            block(&l, defs)(&l.line),
+            Ok((
+                "",
+                PrefixBlock {
+                    op: tt("foo"),
+                    terms: vec![Arg(Expr(Expression {
+                        tag: tt("{:Bar zog:Num |:Fog hir:Str }:Bool"),
+                        blocks: vec![
+                            PrefixBlock {
+                                op: tt("zog"),
+                                terms: vec![],
+                                in_ty: Some(tt("Bar")),
+                                out_ty: Some(tt("Num")),
+                            }
+                            .into(),
+                            PrefixBlock {
+                                op: tt("hir"),
+                                terms: vec![],
+                                in_ty: Some(tt("Fog")),
+                                out_ty: Some(tt("Str")),
+                            }
+                            .into()
+                        ],
+                        out_ty: Some(tt("Bool")),
+                    }))],
+                    in_ty: None,
+                    out_ty: None,
+                }
+            ))
+        );
+
+        let l = line("foo {:Bar zog:Num} :Bool"); // error!
+        let x = block(&l, defs)(&l.line);
+        let (e, exp) = convert_parse_error(x.unwrap_err(), &l.line, Location::Ogma);
+        let x = e.to_string();
+        println!("{}", x);
+        assert_eq!(exp, Expecting::Term);
+        assert_eq!(
+            &x,
+            "Parsing Error: could not parse input line
+--> <ogma>:19
+ | foo {:Bar zog:Num} :Bool
+ |                    ^^^^^ unexpected type identifier
+"
+        );
+    }
+
+    #[test]
+    fn iblock_impls() {
+        let defs = &Definitions::new();
+
+        let l = line(":Num foo:Bar");
+        let (_, b) = block(&l, defs)(&l.line).unwrap();
+        assert_eq!(b.block_tag(), tt(":Num foo:Bar"));
     }
 }

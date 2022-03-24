@@ -39,7 +39,7 @@ impl<'d> Compiler<'d> {
 
         match err {
             Some(e) if chgs.is_empty() => Err(e),
-            _ => Ok(self.apply_graph_chgs(chgs.into_iter().map(Into::into))),
+            _ => self.apply_graph_chgs(chgs.into_iter().map(Into::into)),
         }
     }
 
@@ -197,12 +197,14 @@ fn input_via_expr_compilation(
     for (_name, ty) in types {
         // set the INPUT of the block to 'ty'
         let mut compiler: Compiler_ = compiler_outer.clone();
-        compiler.apply_graph_chgs(once(InferInput(expr.idx(), ty.clone()).into()));
-
         compiler.inferrence_depth += 1;
 
-        // recurse into compile call -- breaking when the op gets compiled
-        if let Ok(c) = compiler.compile(expr) {
+        let x = compiler
+            .apply_graph_chgs(once(InferInput(expr.idx(), ty.clone()).into()))
+            // recurse into compile call -- breaking when the parent expr gets compiled
+            .and_then(|_| compiler.compile(expr));
+
+        if let Ok(c) = x {
             match inferred.take() {
                 Some((ty1, _)) => {
                     return Err((
@@ -233,10 +235,13 @@ fn output(op: OpNode, compiler: Compiler_) -> std::result::Result<Compiler_, Com
     for (_name, ty) in types {
         // set the OUTPUT of the block to 'ty'
         let mut compiler: Compiler_ = compiler.clone();
-        compiler.apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()));
 
-        // recurse into compile call -- breaking when the parent expr gets compiled
-        if let Ok(compiler) = compiler.compile(parent) {
+        let x = compiler
+            .apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()))
+            // recurse into compile call -- breaking when the parent expr gets compiled
+            .and_then(|_| compiler.compile(parent));
+
+        if let Ok(compiler) = x {
             // break early, output inferring is greedy
             return Ok(compiler);
         }

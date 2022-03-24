@@ -10,6 +10,7 @@ use table::Entry::{self, Nil};
 
 type Result<T> = std::result::Result<T, ogma::Error>;
 
+mod annotation;
 mod arithmetic;
 mod cmp;
 mod definitions;

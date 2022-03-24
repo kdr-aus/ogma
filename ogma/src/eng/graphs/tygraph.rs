@@ -36,6 +36,7 @@ pub enum Flow {
 #[derive(Debug)]
 pub enum Chg {
     KnownInput(NodeIndex, Type),
+    ObligeInput(NodeIndex, Type),
     InferInput(NodeIndex, Type),
     AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
@@ -48,6 +49,26 @@ pub enum Chg {
     },
 }
 
+impl Chg {
+    pub fn node(&self) -> NodeIndex {
+        *match self {
+            Chg::KnownInput(i, _) => i,
+            Chg::ObligeInput(i, _) => i,
+            Chg::InferInput(i, _) => i,
+            Chg::AnyInput(i) => i,
+            Chg::KnownOutput(i, _) => i,
+            Chg::ObligeOutput(i, _) => i,
+            Chg::InferOutput(i, _) => i,
+            Chg::AddEdge {
+                src,
+                dst: _,
+                flow: _,
+            } => src,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum Conflict {
     /// The source is `Unknown`.
     UnknownSrc,
@@ -65,6 +86,9 @@ pub enum Conflict {
         /// Inferred.
         dst: Type,
     },
+    /// Types match, but trying to flow an inferred node into stronger garauntee nodes such as
+    /// `Known` or `Obliged`.
+    OverpoweringInferred,
 }
 
 pub struct ResolutionError {
@@ -359,9 +383,17 @@ impl TypeGraph {
                     from.output.can_flow(&to.output).map_err(reserr)?;
                     Some((Update::ToOutput, from.output.clone()))
                 }
-                // Backpropagate flow if to.input:Inferred -> from.input
-                Flow::II if matches!(to.input, Knowledge::Inferred(_)) => {
+                // Backpropagate flow if to.input:Obliged -> from.input
+                Flow::II if matches!(to.input, Knowledge::Obliged(_)) => {
                     to.input.can_flow(&from.input).map_err(reserr)?;
+                    Some((Update::FromInput, to.input.clone()))
+                }
+                // Backpropagate flow if to.input:Inferred -> from.input
+                // Only propagate if can_flow.
+                Flow::II
+                    if matches!(to.input, Knowledge::Inferred(_))
+                        && to.input.can_flow(&from.input).is_ok() =>
+                {
                     Some((Update::FromInput, to.input.clone()))
                 }
                 // Flow input -> input, allowing Any to flow through
@@ -390,30 +422,35 @@ impl TypeGraph {
 
     /// Apply the `chg` to the graph. Returns if the graph is actually altered (if the `chg` has
     /// already been applied, nothing would change).
-    pub fn apply_chg(&mut self, chg: Chg) -> bool {
-        fn set(k: &mut Knowledge, exp: Knowledge) -> bool {
-            if k == &exp {
-                false
-            } else {
-                *k = exp;
-                true
-            }
+    pub fn apply_chg(&mut self, chg: Chg) -> std::result::Result<bool, Conflict> {
+        type R = std::result::Result<bool, Conflict>;
+
+        fn set(k: &mut Knowledge, exp: Knowledge) -> R {
+            (k == &exp).then(|| Ok(false)).unwrap_or_else(|| {
+                exp.can_flow(k).map(|_| {
+                    *k = exp;
+                    true
+                })
+            })
         }
 
-        fn apply<F>(tg: &mut TypeGraph, node: NodeIndex, setfn: F) -> bool
+        fn apply<F>(tg: &mut TypeGraph, node: NodeIndex, setfn: F) -> R
         where
-            F: FnOnce(&mut Node) -> bool,
+            F: FnOnce(&mut Node) -> R,
         {
             if let Some(node) = tg.0.node_weight_mut(node) {
                 setfn(node)
             } else {
-                false
+                Ok(false)
             }
         }
 
         match chg {
             Chg::KnownInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Known(ty)))
+            }
+            Chg::ObligeInput(node, ty) => {
+                apply(self, node, |n| set(&mut n.input, Knowledge::Obliged(ty)))
             }
             Chg::InferInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Inferred(ty)))
@@ -423,7 +460,7 @@ impl TypeGraph {
                 if self[node].input.ty().is_none() {
                     apply(self, node, |n| set(&mut n.input, Knowledge::Any))
                 } else {
-                    false
+                    Ok(false)
                 }
             }
             Chg::KnownOutput(node, ty) => {
@@ -446,7 +483,7 @@ impl TypeGraph {
                 if chgd {
                     self.0.add_edge(src, dst, flow);
                 }
-                chgd
+                Ok(chgd)
             }
         }
     }
@@ -540,12 +577,19 @@ impl Knowledge {
             // A known source can flow into itself or lower ranked items if the types match
             (Known(t1), Known(t2) | Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
 
+            // An obliged source can flow into an unknown or any dest
+            (Obliged(_), Unknown | Any) => Ok(()),
+            // An obliged source can flow into itself or lower ranked items if the types match
+            (Obliged(t1), Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
+
             // An inferred source can flow into an unknown or any dest
             (Inferred(_), Unknown | Any) => Ok(()),
             // An inferred source can flow into itself if the types match
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
+
             // An any source can flow into an Any or Unknown dest
             (Any, Any | Unknown) => Ok(()),
+
             // Cannot flow if two known unmatching types
             (Known(t1), Known(t2)) if t1 != t2 => Err(ConflictingKnown {
                 src: t1.clone(),
@@ -565,10 +609,13 @@ impl Knowledge {
             // NOTE: this would need to clear _all_ Inferred type graph entries.
             // NOTE: probably do this later if it is found that unreasonable errors are being
             // returned.
-            (Known(t1), Inferred(t2)) if t1 != t2 => Err(UnmatchedInferred {
+            (Known(t1) | Inferred(t1), Inferred(t2)) if t1 != t2 => Err(UnmatchedInferred {
                 src: t1.clone(),
                 dst: t2.clone(),
             }),
+            // Cannot flow if trying to flow an Inferred into an Obliged or Known,
+            // even if the types match.
+            (Inferred(t1), Known(t2) | Obliged(t2)) if t1 == t2 => Err(OverpoweringInferred),
 
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }

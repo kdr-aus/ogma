@@ -117,7 +117,7 @@ mod tests {
     fn init_graphs_w_defs(expr: &str, defs: &Definitions) -> (AstGraph, TypeGraph) {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
-        let ag = astgraph::init(expr, defs).unwrap();
+        let (ag, _) = astgraph::init(expr, defs).unwrap();
         let tg = TypeGraph::build(&ag);
         (ag, tg)
     }

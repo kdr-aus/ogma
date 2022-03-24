@@ -34,7 +34,7 @@ pub fn compile_with_seed_vars(
     input_ty: Type,
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
-    let ag = astgraph::init(expr, defs)?; // flatten and expand expr/defs
+    let (ag, chgs) = astgraph::init(expr, defs)?; // flatten and expand expr/defs
     let tg = TypeGraph::build(&ag);
     let lg = LocalsGraph::build(&ag);
 
@@ -51,7 +51,10 @@ pub fn compile_with_seed_vars(
         inferrence_depth: 0,
     });
 
-    compiler.init_tg(input_ty); // initialise TG
+    // initialise TG
+    compiler.init_tg(input_ty);
+    // apply initial annotated types
+    compiler.apply_graph_chgs(chgs.into_iter().map(Into::into))?;
 
     compiler.lg.seed(seed_vars);
 
@@ -61,7 +64,7 @@ pub fn compile_with_seed_vars(
 
     // NOTE: this can be used to investigate compilation/evaluation issues by visualising the
     // compiler state. gated by a compilation flag, it must be turned off for release modes
-    // compiler.write_debug_report("debug-compiler.md");
+    // compiler._write_debug_report("debug-compiler.md");
 
     Ok(FullCompilation {
         eval_stack: compiler.compiled_exprs.remove(&0).expect(err), // root expr stack
@@ -116,7 +119,7 @@ impl<'d> Compiler<'d> {
                 continue;
             }
 
-            if self.assign_variable_types() {
+            if self.assign_variable_types()? {
                 continue;
             }
 
@@ -146,25 +149,13 @@ impl<'d> Compiler<'d> {
                 continue;
             }
 
+            // self._write_debug_report("debug-compiler.md");
+
             // if we have gotten here, unable to compile
             return Err(err);
         }
 
         Ok(self)
-    }
-
-    /// Returns if any of the graphs were altered when applying the changes.
-    pub fn apply_graph_chgs<C>(&mut self, chgs: C) -> bool
-    where
-        C: Iterator<Item = graphs::Chg>,
-    {
-        use graphs::Chg::*;
-
-        chgs.map(|c| match c {
-            Tg(c) => self.tg.apply_chg(c),
-            Lg(c) => self.lg.apply_chg(c),
-        })
-        .fold(false, std::ops::BitOr::bitor)
     }
 
     /// Iterates over def nodes that are deduced to be the compilation path.
@@ -238,7 +229,7 @@ impl<'d> Compiler<'d> {
     /// checking for the variable in that locals.
     ///
     /// If the TG is altered, returns `true`.
-    fn assign_variable_types(&mut self) -> bool {
+    fn assign_variable_types(&mut self) -> Result<bool> {
         use tygraph::{Chg::*, Flow};
 
         let mut chgs = Vec::new();
@@ -404,7 +395,7 @@ impl<'d> Compiler<'d> {
             }
         }
 
-        let chgd = self.apply_graph_chgs(chgs.into_iter());
+        let chgd = self.apply_graph_chgs(chgs.into_iter())?;
 
         (goto_resolve | chgd)
             .then(|| ())
