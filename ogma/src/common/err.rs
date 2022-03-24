@@ -461,7 +461,7 @@ impl Error {}
 
 /// Internal
 impl Error {
-    fn internal_err_help() -> Option<String> {
+    pub(crate) fn internal_err_help() -> Option<String> {
         let bt = backtrace::Backtrace::new();
         Some(format!(
             "this is an internal bug, please report it at <https://github.com/kdr-aus/ogma/issues>

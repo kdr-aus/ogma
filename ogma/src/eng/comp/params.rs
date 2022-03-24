@@ -58,7 +58,7 @@ impl<'d> Compiler<'d> {
             }
         }
 
-        let chgd2 = self.apply_graph_chgs(chgs.drain(..));
+        let chgd2 = self.apply_graph_chgs(chgs.drain(..))?;
         Ok(chgd || chgd2)
     }
 }

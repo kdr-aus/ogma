@@ -39,6 +39,17 @@ impl<'d> Compiler<'d> {
                     "this node's type is unknown".to_string(),
                 ));
             }
+            (_, OverpoweringInferred) => {
+                err.traces.push(Trace::from_tag(
+                    from,
+                    "this node is only inferred".to_string(),
+                ));
+                err.traces.push(Trace::from_tag(
+                    to,
+                    "but this node is has stronger type garauntees".to_string(),
+                ));
+                err.help_msg = Error::internal_err_help();
+            }
             (flow, ConflictingKnown { src, dst }) => {
                 let (from_ty, to_ty) = match flow {
                     II => ("input", "input"),
@@ -112,6 +123,85 @@ impl<'d> Compiler<'d> {
                 err.traces.push(from_trace);
                 err.traces.push(to_trace);
             }
+        }
+
+        err
+    }
+
+    /// Returns if any of the graphs were altered when applying the changes.
+    pub fn apply_graph_chgs<C>(&mut self, chgs: C) -> Result<bool>
+    where
+        C: Iterator<Item = graphs::Chg>,
+    {
+        use graphs::Chg::*;
+
+        chgs.map(|c| match c {
+            Tg(c) => {
+                let node = c.node();
+                self.tg.apply_chg(c).map_err(|e| self.conflict_err(node, e))
+            }
+            Lg(c) => Ok(self.lg.apply_chg(c)),
+        })
+        .try_fold(false, |a, b| b.map(|b| a | b))
+    }
+
+    fn conflict_err(
+        &self,
+        node: petgraph::prelude::NodeIndex,
+        conflict: tygraph::Conflict,
+    ) -> Error {
+        use crate::common::err::*;
+        use tygraph::Conflict::*;
+
+        let mut err = Error {
+            cat: Category::Type,
+            desc: "Type application failed".into(),
+            ..Default::default()
+        };
+
+        let node = self.ag[node].tag();
+
+        let appliction = match &conflict {
+            UnknownSrc => {
+                Trace::from_tag(node, "this node's type is specified as unknown".to_string())
+            }
+            OverpoweringInferred => {
+                err.help_msg = Error::internal_err_help();
+                Trace::from_tag(
+                    node,
+                    "trying to apply type inference to already known type".to_string(),
+                )
+            }
+            ConflictingKnown { src, dst: _ }
+            | UnmatchedObligation { src, dst: _ }
+            | UnmatchedInferred { src, dst: _ } => Trace::from_tag(
+                node,
+                format!("this node is trying to have a type `{}` applied to it", src),
+            ),
+        };
+
+        let exists = match conflict {
+            UnknownSrc | OverpoweringInferred => None,
+            ConflictingKnown { src: _, dst } => Some(Trace::from_tag(
+                node,
+                format!("but it is already known to use type `{}`", dst),
+            )),
+            UnmatchedObligation { src: _, dst } => {
+                err.help_msg = Some(format!("maybe remove any type annotations"));
+                Some(Trace::from_tag(
+                    node,
+                    format!("but it is already obligated to use type `{}`", dst),
+                ))
+            }
+            UnmatchedInferred { src: _, dst } => Some(Trace::from_tag(
+                node,
+                format!("but it is already inferred to use type `{}`", dst),
+            )),
+        };
+
+        err.traces.push(appliction);
+        if let Some(e) = exists {
+            err.traces.push(e);
         }
 
         err

@@ -84,21 +84,42 @@ fn errors_01() {
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    assert_eq!(&x, "");
+    assert_eq!(
+        &x,
+        "Parsing Error: could not parse input line
+--> shell:10
+ | filter bar:Str = 'foo'
+ |           ^^^^ unexpected type identifier
+"
+    );
 
     // can't constrain variable output
     let x = process_w_table("let $x | \\ $x:Table", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    assert_eq!(&x, "");
+    assert_eq!(
+        &x,
+        "Parsing Error: could not parse input line
+--> shell:13
+ | let $x | \\ $x:Table
+ |              ^^^^^^ unexpected type identifier
+"
+    );
 
     // can't constrain pound
     let x = process_w_table("\\ #t:Table", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    assert_eq!(&x, "");
+    assert_eq!(
+        &x,
+        "Parsing Error: could not parse input line
+--> shell:4
+ | \\ #t:Table
+ |     ^^^^^^ unexpected type identifier
+"
+    );
 }
 
 #[test]
