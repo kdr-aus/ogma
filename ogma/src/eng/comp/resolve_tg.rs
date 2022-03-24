@@ -188,7 +188,7 @@ impl<'d> Compiler<'d> {
                 format!("but it is already known to use type `{}`", dst),
             )),
             UnmatchedObligation { src: _, dst } => {
-                err.help_msg = Some(format!("maybe remove any type annotations"));
+                err.help_msg = Some("maybe remove any type annotations".to_string());
                 Some(Trace::from_tag(
                     node,
                     format!("but it is already obligated to use type `{}`", dst),

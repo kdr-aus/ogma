@@ -263,7 +263,7 @@ where
 }
 
 /// If leading with a ':', treat as a type identifier.
-fn opt_ty<'a>(line: &Line) -> impl FnMut(&str) -> IResult<&str, Option<Tag>, ParsingError> + '_ {
+fn opt_ty(line: &Line) -> impl FnMut(&str) -> IResult<&str, Option<Tag>, ParsingError> + '_ {
     move |i| {
         opt(preceded(
             char(':'),
@@ -550,9 +550,9 @@ fn arg<'f>(
 
                 Ok((i, Argument::Expr(e)))
             }
-        } else if i.starts_with(':') {
+        } else if let Some(stripped) = i.strip_prefix(':') {
             // adjust some of the error to capture just the type identifier section
-            let (_, ident) = take_till(breakon)(&i[1..])?;
+            let (_, ident) = take_till(breakon)(stripped)?;
             let mut tag = line.create_tag(i);
             tag.make_mut().end = tag.start + 1 + ident.len(); // capture :ident
 

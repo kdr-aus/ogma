@@ -48,15 +48,18 @@ fn success_02() {
 fn success_03() {
     let defs = &Definitions::new();
 
-    let x = process_w_table("append --foo Tuple {get snd}:Num {get:Num snd} | fold 0 + $row.snd", defs);
+    let x = process_w_table(
+        "append --foo Tuple {get snd}:Num {get:Num snd} | fold 0 + $row.snd",
+        defs,
+    );
     assert_eq!(x, Ok(Value::Num(123.into())));
 
     // TODO: once . operator uses type inference, this should be turned back on.
-//     let x = process_w_table(
-//         "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
-//         defs,
-//     );
-//     assert_eq!(x, Ok(Value::Str(Str::new(""))));
+    //     let x = process_w_table(
+    //         "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
+    //         defs,
+    //     );
+    //     assert_eq!(x, Ok(Value::Str(Str::new(""))));
 }
 
 #[test]
@@ -132,7 +135,9 @@ fn errors_02() {
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    assert_eq!(&x, "Typing Error: Type application failed
+    assert_eq!(
+        &x,
+        "Typing Error: Type application failed
 --> shell:0
  | filter:Str { get bar }
  | ^^^^^^ this node is trying to have a type `Table` applied to it
@@ -140,12 +145,15 @@ fn errors_02() {
  | filter:Str { get bar }
  | ^^^^^^ but it is already obligated to use type `String`
 --> help: maybe remove any type annotations
-");
+"
+    );
 
     // add returns a number
     let x = process_w_num("+:Str 3", defs).unwrap_err().to_string();
     println!("{}", x);
-    assert_eq!(&x, "Typing Error: Type application failed
+    assert_eq!(
+        &x,
+        "Typing Error: Type application failed
 --> shell:0
  | +:Str 3
  | ^ this node is trying to have a type `Number` applied to it
@@ -153,21 +161,25 @@ fn errors_02() {
  | +:Str 3
  | ^ but it is already obligated to use type `String`
 --> help: maybe remove any type annotations
-");
+"
+    );
 
     // conflicting input
     let x = process_w_table("filter { get:Num snd |:Str + bar | = foo }", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    assert_eq!(&x, "Typing Error: Type resolution failed. Conflicting obligation type
+    assert_eq!(
+        &x,
+        "Typing Error: Type resolution failed. Conflicting obligation type
 --> shell:9
  | filter { get:Num snd |:Str + bar | = foo }
  |          ^^^ this node returns a `Number`
 --> shell:27
  | filter { get:Num snd |:Str + bar | = foo }
  |                            ^ but this node is obliged to return `String`
-");
+"
+    );
 
     // runtime error, expecting num
     let x = process_w_table("nth 1 Tuple #i.snd:Str #i.snd:Num", defs)
@@ -176,7 +188,9 @@ fn errors_02() {
     println!("{}", x);
     // NOTE: This will change once the dot operator switches to using type inference rather than
     // default to a number
-    assert_eq!(&x, "Typing Error: Type application failed
+    assert_eq!(
+        &x,
+        "Typing Error: Type application failed
 --> shell:14
  | nth 1 Tuple #i.snd:Str #i.snd:Num
  |               ^ this node is trying to have a type `Number` applied to it
@@ -184,5 +198,6 @@ fn errors_02() {
  | nth 1 Tuple #i.snd:Str #i.snd:Num
  |               ^ but it is already obligated to use type `String`
 --> help: maybe remove any type annotations
-");
+"
+    );
 }
