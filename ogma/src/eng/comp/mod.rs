@@ -48,7 +48,7 @@ pub fn compile_with_seed_vars(
         compiled_exprs: Default::default(),
         output_infer_opnode: None,
         callsite_params: Default::default(),
-        inferrence_depth: 0,
+        inference_depth: 0,
     });
 
     // initialise TG
@@ -115,6 +115,9 @@ impl<'d> Compiler<'d> {
         {
             self.resolve_tg()?;
 
+            // NOTE turn on for debugging.
+            // self._write_debug_report("debug-compiler.md");
+
             if self.populate_compiled_expressions() {
                 continue;
             }
@@ -148,8 +151,6 @@ impl<'d> Compiler<'d> {
             if self.infer_outputs() {
                 continue;
             }
-
-            // self._write_debug_report("debug-compiler.md");
 
             // if we have gotten here, unable to compile
             return Err(err);
@@ -524,7 +525,7 @@ impl<'a> Compiler<'a> {
 
         writeln!(&mut report, "## AST Graph Nodes").unwrap();
         writeln!(&mut report, "---").unwrap();
-        self.ag.debug_write_table_of_nodes(&mut report);
+        self.ag.debug_write_table_of_nodes(&self.tg, &mut report);
 
         writeln!(&mut report, "## AST Graph Chart").unwrap();
         writeln!(&mut report, "---").unwrap();

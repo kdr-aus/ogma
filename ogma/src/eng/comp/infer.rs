@@ -44,8 +44,8 @@ impl<'d> Compiler<'d> {
     }
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
-        if self.inferrence_depth > 5 {
-            panic!("reached inferrence depth");
+        if self.inference_depth > 5 {
+             panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
         }
 
         // we get _shallowest_ expr nodes that:
@@ -140,7 +140,7 @@ fn take<'a>(this: &mut Compiler_<'a>) -> Compiler_<'a> {
             flowed_edges: Default::default(),
             callsite_params: Default::default(),
             defs: this.defs,
-            inferrence_depth: 0,
+            inference_depth: 0,
         }),
     )
 }
@@ -197,7 +197,7 @@ fn input_via_expr_compilation(
     for (_name, ty) in types {
         // set the INPUT of the block to 'ty'
         let mut compiler: Compiler_ = compiler_outer.clone();
-        compiler.inferrence_depth += 1;
+        compiler.inference_depth += 1;
 
         let x = compiler
             .apply_graph_chgs(once(InferInput(expr.idx(), ty.clone()).into()))

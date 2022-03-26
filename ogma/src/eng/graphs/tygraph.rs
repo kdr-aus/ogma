@@ -351,8 +351,8 @@ impl TypeGraph {
                 .expect("edge would exist in graph");
             let from = &self[from_idx];
             let to = &self.0[to_idx];
-            let known_out = from.output.known().is_some();
-            let known_in = from.input.known().is_some();
+            let known_out = from.output.ty().is_some();
+            let known_in = from.input.ty().is_some();
             let any_in = from.input.is_any();
 
             let reserr = |conflict| ResolutionError {
@@ -602,7 +602,7 @@ impl Knowledge {
             }),
             // Cannot flow if already inferred and does not match
             // NOTE: This might not be correct, the error might be right, but the handling might
-            // need to be changed. For instance, if an inferrence does not match a known flow, then
+            // need to be changed. For instance, if an inference does not match a known flow, then
             // we could _reset_ the compiler's compiled stack/steps and locals, but **keep the type
             // graph**. This way the information of the type graph remains, and it can 'reset' it's
             // flow.
