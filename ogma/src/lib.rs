@@ -35,7 +35,7 @@ mod prelude {
 
     /// Use `format_args!` as parameter.
     #[cfg(debug_assertions)]
-    pub(crate) fn counts_line(args: std::fmt::Arguments) {
+    pub(crate) fn _counts_line(args: std::fmt::Arguments) {
         use std::io::Write;
 
         let mut file = std::fs::File::options()

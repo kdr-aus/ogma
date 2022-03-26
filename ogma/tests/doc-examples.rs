@@ -39,7 +39,7 @@ fn s(s: &str) -> Entry<Value> {
 #[test]
 fn _2_2_fizzbuzz_01() {
     let x = process(
-        r#"range 1 101 | map i { let $e |
+        r#"range 1 21 | map i { let $e |
     if { \$e | mod 3 | = 0 } 'Fizz' '' |
     + if { \$e | mod 5 | = 0 } 'Buzz' '' |
     if {empty} { \$e | to-str } #i
@@ -48,7 +48,29 @@ fn _2_2_fizzbuzz_01() {
         &Definitions::new(),
     );
 
-    let exp = vec![vec![s("i")]];
+    let exp = vec![
+        vec![s("i")],
+        vec![s("1.0")],
+        vec![s("2.0")],
+        vec![s("Fizz")],
+        vec![s("4.0")],
+        vec![s("Buzz")],
+        vec![s("Fizz")],
+        vec![s("7.0")],
+        vec![s("8.0")],
+        vec![s("Fizz")],
+        vec![s("Buzz")],
+        vec![s("11.0")],
+        vec![s("Fizz")],
+        vec![s("13.0")],
+        vec![s("14.0")],
+        vec![s("FizzBuzz")],
+        vec![s("16.0")],
+        vec![s("17.0")],
+        vec![s("Fizz")],
+        vec![s("19.0")],
+        vec![s("Buzz")],
+    ];
 
     check_is_table(x, exp);
 }

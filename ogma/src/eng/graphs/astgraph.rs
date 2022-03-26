@@ -621,7 +621,15 @@ impl AstGraph {
             let node = &self[i];
             let input = &tg[i].input;
             let output = &tg[i].output;
-            writeln!(buf, "    [{},\"{}\",\"{}\",\"{}\"]", i.index(), node, input, output).unwrap();
+            writeln!(
+                buf,
+                "    [{},\"{}\",\"{}\",\"{}\"]",
+                i.index(),
+                node,
+                input,
+                output
+            )
+            .unwrap();
         }
 
         writeln!(buf, "]").unwrap();

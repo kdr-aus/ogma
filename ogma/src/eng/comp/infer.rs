@@ -45,7 +45,7 @@ impl<'d> Compiler<'d> {
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
         if self.inference_depth > 5 {
-             panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
+            panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
         }
 
         // we get _shallowest_ expr nodes that:

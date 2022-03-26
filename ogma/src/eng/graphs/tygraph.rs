@@ -596,10 +596,11 @@ impl Knowledge {
                 dst: t2.clone(),
             }),
             // Cannot flow if obliged types does not match
-            (Known(t1), Obliged(t2)) if t1 != t2 => Err(UnmatchedObligation {
+            (Known(t1) | Obliged(t1), Obliged(t2)) if t1 != t2 => Err(UnmatchedObligation {
                 src: t1.clone(),
                 dst: t2.clone(),
             }),
+
             // Cannot flow if already inferred and does not match
             // NOTE: This might not be correct, the error might be right, but the handling might
             // need to be changed. For instance, if an inference does not match a known flow, then
