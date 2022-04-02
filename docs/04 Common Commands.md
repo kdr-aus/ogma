@@ -83,7 +83,8 @@ Help: `=`
 Notice how `=` is defined in terms of `eq`. The same goes for `!=`. This is done to facilitate
 user-defined types being able to leverage `eq` and `cmp` with minimal implementations.
 Below is a `Point` type defined, along with an implementation of `eq`. By implementing `eq`, the
-commands `=` and `!=` extend to work with `Point`. User defined types is documented later on.
+commands `=` and `!=` extend to work with `Point`.
+User defined types are documented later on.
 ```plaintext
 def-ty Point { x:Num y:Num }
 def eq Point (rhs) { and {get x | = $rhs.x} {get y | = $rhs.y} }
@@ -101,8 +102,9 @@ This is commonly on inputs of `TableRow`, `Tuple`, or a user defined type.
 **`get` must know the return _type_.** For tuples and user defined types this is well specified,
 but for table rows the type of a value in a given row/column is unknown until the value is fetched.
 This means that the `get` command must _specify_ the **expected** type when working on `TableRow`
-input. The expected type is specified using a flag, for example `--Str` to expect a string type.
-If no flag is specified, `Num` type is assumed.
+input.
+Use type annotations to specify the output type of the command: `get:<Type>` for example,
+`get:Str foo` would expect to return a string.
 
 ```plaintext
 Tuple 1 2 | get t0 --> returns 1
