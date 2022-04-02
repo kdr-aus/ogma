@@ -125,8 +125,16 @@ fn _4_0_common_cmds_01() {
     let x = process("Tuple 1 2 | get t1", defs);
     assert_eq!(x, Ok(Value::Num(2u8.into())));
 
-    let x = process("open tests/diamonds.csv | last get color", defs).unwrap_err().to_string();
+    let x = process("open tests/diamonds.csv | last get color", defs)
+        .unwrap_err()
+        .to_string();
     println!("{}", x);
-    assert_eq!(x, "");
+    assert_eq!(x, "Semantics Error: ambiguous inference. more than one output type can compile op
+--> shell:31
+ | open tests/diamonds.csv | last get color
+ |                                ^^^ this op can be compiled with `Nil` and `TableRow` as output types
+--> shell:31
+ | open tests/diamonds.csv | last get color
+ |                                ^^^ try annotating output type: `get:<type> ...`
+");
 }
-

@@ -1,4 +1,5 @@
 use super::*;
+use petgraph::prelude::NodeIndex;
 use std::iter::once;
 use tygraph::Chg::*;
 
@@ -33,7 +34,7 @@ impl<'d> Compiler<'d> {
         for op in infer_nodes.into_iter().map(OpNode) {
             match input_via_block_compilation(op, self) {
                 Ok(ty) => chgs.push(InferInput(op.idx(), ty.clone())),
-                Err(e) => err = Some(e.crate_err(op.blk_tag(&self.ag))),
+                Err(e) => err = Some(e.input_op(op.blk_tag(self.ag()))),
             }
         }
 
@@ -78,10 +79,8 @@ impl<'d> Compiler<'d> {
         let mut err = None;
 
         for expr in infer_nodes {
-            // replace a dummy compiler value
-            let this = take(self);
             // infer input
-            let x = input_via_expr_compilation(expr, this);
+            let x = input_via_expr_compilation(expr, &self);
 
             match x {
                 // success!
@@ -91,10 +90,7 @@ impl<'d> Compiler<'d> {
                     break; // return early
                 }
                 // else, bring back compiler, and set err
-                Err((c, e)) => {
-                    err = Some(e.crate_err(expr.tag(&c.ag)));
-                    *self = c; // overwrite dummy self
-                }
+                Err(e) => err = Some(e.input_expr(expr.tag(self.ag()))),
             }
         }
 
@@ -108,41 +104,23 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    pub fn infer_outputs(self: &mut Box<Self>) -> bool {
+    pub fn infer_outputs(self: &mut Box<Self>) -> Result<bool> {
         if let Some(opnode) = self.output_infer_opnode.take() {
-            // replace a dummy compiler value
-            let this = take(self);
             // infer output
-            let x = output(opnode, this);
-            // store if we were successful
-            let success = x.is_ok();
-            // bring back the compiler to self, throw out the dummy
-            *self = x.unwrap_or_else(|c| c);
-            // return the inferring result
-            success
+            let x = output(opnode, self);
+
+            match x {
+                Ok(c) => {
+                    // bring back the compiler to self
+                    *self = c;
+                    Ok(true) // success
+                }
+                Err(e) => Err(e.output(opnode.op_tag(self.ag()))),
+            }
         } else {
-            false
+            Ok(false)
         }
     }
-}
-
-// take a clone of this compiler, replacing it with a dummy
-fn take<'a>(this: &mut Compiler_<'a>) -> Compiler_<'a> {
-    std::mem::replace(
-        this,
-        Box::new(Compiler {
-            ag: Default::default(),
-            tg: Default::default(),
-            lg: Default::default(),
-            compiled_ops: Default::default(),
-            compiled_exprs: Default::default(),
-            output_infer_opnode: Default::default(),
-            flowed_edges: Default::default(),
-            callsite_params: Default::default(),
-            defs: this.defs,
-            inference_depth: 0,
-        }),
-    )
 }
 
 enum Error {
@@ -168,110 +146,173 @@ fn input_via_block_compilation(
             .compile_block(op, ty.clone(), _sink1, _sink2)
             .is_ok();
 
-        match (compiled, inferred.take()) {
-            (true, Some(ty1)) => {
-                return Err(Error::Ambiguous {
-                    ty1,
-                    ty2: ty.clone(),
-                });
+        if compiled {
+            match inferred.take() {
+                Some(ty1) => {
+                    return Err(Error::Ambiguous {
+                        ty1,
+                        ty2: ty.clone(),
+                    });
+                }
+                None => inferred = Some(ty.clone()),
             }
-            (true, None) => inferred = Some(ty.clone()),
-            (false, x) => inferred = x,
         }
     }
 
     inferred.ok_or(Error::NoTypes)
 }
 
-fn input_via_expr_compilation(
+fn input_via_expr_compilation<'a>(
     expr: ExprNode,
-    compiler: Compiler_,
-) -> std::result::Result<Compiler_, (Compiler_, Error)> {
+    compiler: &Compiler_<'a>,
+) -> std::result::Result<Compiler_<'a>, Error> {
+    //     let parent = expr.parent(compiler.ag());
+
+    // NOTE: I believe this should break on success compilation of parent expr, not itself??
+    // seem to be passing tests with this so keep it so...
+    test_compile_types(compiler, expr.idx(), expr, false)
+}
+
+fn output<'a>(op: OpNode, compiler: &Compiler_<'a>) -> std::result::Result<Compiler_<'a>, Error> {
+    test_compile_types(compiler, op.idx(), op.parent(compiler.ag()), true)
+}
+
+fn test_compile_types<'a>(
+    compiler: &Compiler_<'a>,
+    node: NodeIndex,
+    breakon: ExprNode,
+    output: bool,
+) -> std::result::Result<Compiler_<'a>, Error> {
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
-    let compiler_outer = compiler;
-    let types = compiler_outer.defs.types().iter();
+    let types = compiler.defs.types().iter();
 
     let mut inferred = None;
 
     for (_name, ty) in types {
-        // set the INPUT of the block to 'ty'
-        let mut compiler: Compiler_ = compiler_outer.clone();
+        let mut compiler: Compiler_ = compiler.clone();
         compiler.inference_depth += 1;
 
+        let chg = if output {
+            InferOutput(node, ty.clone())
+        } else {
+            InferInput(node, ty.clone())
+        };
+
         let x = compiler
-            .apply_graph_chgs(once(InferInput(expr.idx(), ty.clone()).into()))
-            // recurse into compile call -- breaking when the parent expr gets compiled
-            .and_then(|_| compiler.compile(expr));
+            .apply_graph_chgs(once(chg.into()))
+            .and_then(|_| compiler.compile(breakon));
 
         if let Ok(c) = x {
             match inferred.take() {
                 Some((ty1, _)) => {
-                    return Err((
-                        compiler_outer,
-                        Error::Ambiguous {
-                            ty1,
-                            ty2: ty.clone(),
-                        },
-                    ));
+                    return Err(Error::Ambiguous {
+                        ty1,
+                        ty2: ty.clone(),
+                    });
                 }
                 None => inferred = Some((ty.clone(), c)),
             }
         }
     }
 
-    inferred
-        .map(|(_, c)| c)
-        .ok_or((compiler_outer, Error::NoTypes))
-}
-
-fn output(op: OpNode, compiler: Compiler_) -> std::result::Result<Compiler_, Compiler_> {
-    // NOTE - the types are returned in arbitary order
-    // if we wanted to make this deterministic we could sort on name
-    let types = compiler.defs.types().iter();
-
-    let parent = op.parent(compiler.ag());
-
-    for (_name, ty) in types {
-        // set the OUTPUT of the block to 'ty'
-        let mut compiler: Compiler_ = compiler.clone();
-
-        let x = compiler
-            .apply_graph_chgs(once(InferOutput(op.idx(), ty.clone()).into()))
-            // recurse into compile call -- breaking when the parent expr gets compiled
-            .and_then(|_| compiler.compile(parent));
-
-        if let Ok(compiler) = x {
-            // break early, output inferring is greedy
-            return Ok(compiler);
-        }
-    }
-
-    Err(compiler) // no luck, return the unaltered compiler
+    inferred.map(|(_, c)| c).ok_or(Error::NoTypes)
 }
 
 impl Error {
-    pub fn crate_err(&self, blk: &Tag) -> crate::Error {
+    pub fn output(&self, op: &Tag) -> crate::Error {
         use crate::common::err::*;
+
+        let x = format!("try annotating output type: `{}:<type> ...`", op);
 
         match self {
             Self::NoTypes => crate::Error {
                 cat: Category::Semantics,
-                desc: "op does not compile with any known types".into(),
-                traces: trace(blk, None),
-                help_msg: Some("try specifying input type to the block".into()),
+                desc: "no output types suit compiling this op".into(),
+                traces: trace(op, x),
                 ..Default::default()
             },
             // TODO make this error better,
             // give a code example of type annotation
             Self::Ambiguous { ty1, ty2 } => crate::Error {
                 cat: Category::Semantics,
+                desc: "ambiguous inference. more than one output type can compile op".into(),
+                traces: vec![
+                    Trace::from_tag(
+                        op,
+                        format!(
+                            "this op can be compiled with `{}` and `{}` as output types",
+                            ty1, ty2
+                        ),
+                    ),
+                    Trace::from_tag(op, x),
+                ],
+                ..Default::default()
+            },
+        }
+    }
+
+    pub fn input_op(&self, op: &Tag) -> crate::Error {
+        use crate::common::err::*;
+
+        let x = format!("try annotating input type: `{{:<type> {} ... }}`", op);
+
+        match self {
+            Self::NoTypes => crate::Error {
+                cat: Category::Semantics,
+                desc: "no input types suit compiling this op".into(),
+                traces: trace(op, x),
+                ..Default::default()
+            },
+            Self::Ambiguous { ty1, ty2 } => crate::Error {
+                cat: Category::Semantics,
                 desc: "ambiguous inference. more than one input type can compile op".into(),
-                traces: trace(
-                    blk,
-                    format!("this can be compiled with `{}` and `{}`", ty1, ty2),
-                ),
-                help_msg: Some("try specifying input type to the block".into()),
+                traces: vec![
+                    Trace::from_tag(
+                        op,
+                        format!(
+                            "this op can be compiled with `{}` and `{}` as input types",
+                            ty1, ty2
+                        ),
+                    ),
+                    Trace::from_tag(op, x),
+                ],
+                ..Default::default()
+            },
+        }
+    }
+
+    pub fn input_expr(&self, expr: &Tag) -> crate::Error {
+        use crate::common::err::*;
+
+        let x = {
+            let t = expr.to_string();
+            match t.strip_prefix('{') {
+                Some(s) => format!("{{:<type> {}", s),
+                None => format!("{{:<type> {} }}", t),
+            }
+        };
+
+        match self {
+            Self::NoTypes => crate::Error {
+                cat: Category::Semantics,
+                desc: "no input types suit compiling this expression".into(),
+                traces: trace(expr, x),
+                ..Default::default()
+            },
+            Self::Ambiguous { ty1, ty2 } => crate::Error {
+                cat: Category::Semantics,
+                desc: "ambiguous inference. more than one input type can compile expression".into(),
+                traces: vec![
+                    Trace::from_tag(
+                        expr,
+                        format!(
+                            "this expression can be compiled with `{}` and `{}` as input types",
+                            ty1, ty2
+                        ),
+                    ),
+                    Trace::from_tag(expr, x),
+                ],
                 ..Default::default()
             },
         }

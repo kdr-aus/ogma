@@ -148,7 +148,8 @@ impl<'d> Compiler<'d> {
                 _ => (),
             }
 
-            if self.infer_outputs() {
+            // return the output inference error here
+            if self.infer_outputs()? {
                 continue;
             }
 
