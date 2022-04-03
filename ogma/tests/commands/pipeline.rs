@@ -683,7 +683,7 @@ fn nth_testing() {
     assert_eq!(x, Ok(Value::Num(0.into())));
     let x = process_w_table("nth 2 {get first --Num}", defs);
     assert_eq!(x, Ok(Value::Num((-30).into())));
-    let x = process_w_table("nth {\\ 1 | + 2} {get first}", defs)
+    let x = process_w_table("nth {\\ 1 | + 2} {get:Num first}", defs)
         .unwrap_err()
         .to_string();
     println!("{}", x);
@@ -691,7 +691,7 @@ fn nth_testing() {
         &x,
         r#"Evaluation Error: index is outside table bounds
 --> shell:4
- | nth {\ 1 | + 2} {get first}
+ | nth {\ 1 | + 2} {get:Num first}
  |     ^^^^^^^^^^^ this resolves to `3`
 "#
     );

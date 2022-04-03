@@ -610,15 +610,26 @@ impl AstGraph {
 
 #[cfg(debug_assertions)]
 impl AstGraph {
-    pub fn debug_write_table_of_nodes(&self, buf: &mut String) {
+    pub fn debug_write_table_of_nodes(&self, tg: &tygraph::TypeGraph, buf: &mut String) {
         use std::fmt::Write;
 
         writeln!(buf, "```kserd").unwrap();
-        writeln!(buf, r#"header = ["Index","AST Node"]"#).unwrap();
+        writeln!(buf, r#"header = ["Index","AST Node","Input","Output"]"#).unwrap();
         writeln!(buf, "data = [").unwrap();
 
-        for (idx, node) in self.node_indices().map(|i| (i, &self[i])) {
-            writeln!(buf, "    [{},\"{}\"]", idx.index(), node).unwrap();
+        for i in self.node_indices() {
+            let node = &self[i];
+            let input = &tg[i].input;
+            let output = &tg[i].output;
+            writeln!(
+                buf,
+                "    [{},\"{}\",\"{}\",\"{}\"]",
+                i.index(),
+                node,
+                input,
+                output
+            )
+            .unwrap();
         }
 
         writeln!(buf, "]").unwrap();

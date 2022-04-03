@@ -19,7 +19,7 @@ carats are fetched and set to `$carat`, then the divide command is called with t
 
 ```plaintext
 open diamonds.csv | append --'Price per Carat' {
-let {get price} $price {get carat} $ct | / $price $ct }
+let {get:Num price} $price {get:Num carat} $ct | \$price | / $ct }
 ```
 
 ![](./assets/variables-1.png?raw=true)

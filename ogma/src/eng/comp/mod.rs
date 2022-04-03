@@ -48,7 +48,7 @@ pub fn compile_with_seed_vars(
         compiled_exprs: Default::default(),
         output_infer_opnode: None,
         callsite_params: Default::default(),
-        inferrence_depth: 0,
+        inference_depth: 0,
     });
 
     // initialise TG
@@ -115,6 +115,9 @@ impl<'d> Compiler<'d> {
         {
             self.resolve_tg()?;
 
+            // NOTE turn on for debugging.
+            // self._write_debug_report("debug-compiler.md");
+
             if self.populate_compiled_expressions() {
                 continue;
             }
@@ -139,17 +142,24 @@ impl<'d> Compiler<'d> {
                 Err(e) => e,
             };
 
-            match self.infer_inputs() {
+            match self.infer_inputs_block() {
                 Ok(true) => continue,
                 Err(e) => err = e, // TODO; maybe the error should not be updated here? instead use compiler error?
                 _ => (),
             }
 
-            if self.infer_outputs() {
-                continue;
+            // return the output inference error here
+            match self.infer_outputs() {
+                Ok(true) => continue,
+                Err(e) => err = e,
+                _ => (),
             }
 
-            // self._write_debug_report("debug-compiler.md");
+            match self.infer_inputs_expr() {
+                Ok(true) => continue,
+                Err(e) => err = e,
+                _ => (),
+            }
 
             // if we have gotten here, unable to compile
             return Err(err);
@@ -369,7 +379,13 @@ impl<'d> Compiler<'d> {
                     self.lg.seal_node(node.idx(), &self.ag);
                 }
                 Err(mut e) => {
+                    // only set the infer output if tygraph is showing unknown
                     if infer_output {
+                        let unknown = self.tg[node.idx()].output.is_unknown();
+                        debug_assert!(
+                            unknown,
+                            "if inferring the output node, expecting the TG output to be unknown"
+                        );
                         self.output_infer_opnode = Some(node);
                     }
 
@@ -524,7 +540,7 @@ impl<'a> Compiler<'a> {
 
         writeln!(&mut report, "## AST Graph Nodes").unwrap();
         writeln!(&mut report, "---").unwrap();
-        self.ag.debug_write_table_of_nodes(&mut report);
+        self.ag.debug_write_table_of_nodes(&self.tg, &mut report);
 
         writeln!(&mut report, "## AST Graph Chart").unwrap();
         writeln!(&mut report, "---").unwrap();
@@ -894,5 +910,12 @@ mod tests {
  |                 ^ this argument is unnecessary
 "#
         );
+    }
+
+    #[test]
+    fn compilation_test_17() {
+        // tests that output inference does not enter endless loop
+        let x = compile("Table | append { get foo | + 'bar' } { get zog | + 1 }");
+        assert!(x.is_ok());
     }
 }

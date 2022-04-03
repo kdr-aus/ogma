@@ -32,4 +32,17 @@ mod prelude {
     pub(crate) use ::libs::divvy::Str;
     pub(crate) use ::table::Entry;
     pub(crate) use std::sync::Arc;
+
+    /// Use `format_args!` as parameter.
+    #[cfg(debug_assertions)]
+    pub(crate) fn _counts_line(args: std::fmt::Arguments) {
+        use std::io::Write;
+
+        let mut file = std::fs::File::options()
+            .create(true)
+            .append(true)
+            .open("./counts.entries")
+            .unwrap();
+        writeln!(&mut file, "{}", args).unwrap();
+    }
 }
