@@ -259,17 +259,20 @@ fn _11_0_no_recursion_02() {
 fn _11_0_no_recursion_03() {
     let defs = &mut Definitions::new();
 
-    process_def(r#"def gcd (a b) { range 0 {\$a|abs|min {\$b|abs}} |
+    process_def(
+        r#"def gcd (a b) { range 0 {\$a|abs|min {\$b|abs}} |
     fold-while { if {\$a|< $b} {Tuple $b $a} {Tuple $a $b} }
         { get t1 | != 0 }
         { let $acc | get t0 | mod $acc.t1 | Tuple $acc.t1 #i }
     | get t0
-}"#, defs);
+}"#,
+        defs,
+    );
 
-let x = process("gcd 10 4", defs);
-assert_eq!(x, Ok(Value::Num(2u8.into())));
-let x = process("gcd 100 80", defs);
-assert_eq!(x, Ok(Value::Num(20u8.into())));
-let x = process("gcd 255 25", defs);
-assert_eq!(x, Ok(Value::Num(5u8.into())));
+    let x = process("gcd 10 4", defs);
+    assert_eq!(x, Ok(Value::Num(2u8.into())));
+    let x = process("gcd 100 80", defs);
+    assert_eq!(x, Ok(Value::Num(20u8.into())));
+    let x = process("gcd 255 25", defs);
+    assert_eq!(x, Ok(Value::Num(5u8.into())));
 }
