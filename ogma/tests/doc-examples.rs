@@ -181,3 +181,25 @@ fn _4_0_common_cmds_04() {
     );
     assert_eq!(x, Ok(Value::Num(5.01f64.into())));
 }
+
+// #### 6.0 Command Commands ###################################################
+
+#[test]
+fn _6_0_variables_01() {
+    let defs = &Definitions::new();
+
+    let a = process(
+        r#"open tests/diamonds.csv | append --'Price per Carat' {
+let {get:Num price} $price {get:Num carat} $ct | \$price | / $ct }"#,
+        defs,
+    )
+    .unwrap();
+
+    let b = process(
+        r#"open tests/diamonds.csv | append --'Price per Carat' / #i.price #i.carat"#,
+        defs,
+    )
+    .unwrap();
+
+    assert_eq!(a, b);
+}
