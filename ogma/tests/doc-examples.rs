@@ -163,3 +163,21 @@ fn _4_0_common_cmds_02() {
 
     check_is_table(x, exp);
 }
+
+#[test]
+fn _4_0_common_cmds_03() {
+    let x = process(
+        r#"open tests/diamonds.csv | fold 0 + $row.price"#,
+        &Definitions::new(),
+    );
+    assert_eq!(x, Ok(Value::Num(212135217.into())));
+}
+
+#[test]
+fn _4_0_common_cmds_04() {
+    let x = process(
+        r#"open tests/diamonds.csv | fold -inf max $row.carat"#,
+        &Definitions::new(),
+    );
+    assert_eq!(x, Ok(Value::Num(5.01f64.into())));
+}
