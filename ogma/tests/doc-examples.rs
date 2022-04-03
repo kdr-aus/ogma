@@ -137,4 +137,29 @@ fn _4_0_common_cmds_01() {
  | open tests/diamonds.csv | last get color
  |                                ^^^ try annotating output type: `get:<type> ...`
 ");
+
+    let x = process("open tests/diamonds.csv | last get:Str color", defs);
+    assert_eq!(x, Ok(Value::Str(Str::from("D"))));
+}
+
+#[test]
+fn _4_0_common_cmds_02() {
+    let x = process(
+        r#"open tests/diamonds.csv | grp cut | append
+--'Max Price' {get value | fold 0 max $row.price}
+--'Total Carats' {get value | fold 0 + $row.carat}
+| filter --cols != value"#,
+        &Definitions::new(),
+    );
+
+    let exp = vec![
+        vec![s("key"), s("Max Price"), s("Total Carats")],
+        vec![s("Fair"), n(18574), n(1684.2800000000038)],
+        vec![s("Good"), n(18788), n(4166.100000000046)],
+        vec![s("Ideal"), n(18806), n(15146.83999999912)],
+        vec![s("Premium"), n(18823), n(12300.949999999846)],
+        vec![s("Very Good"), n(18818), n(9742.700000000264)],
+    ];
+
+    check_is_table(x, exp);
 }

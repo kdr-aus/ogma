@@ -4,13 +4,17 @@ use std::iter::once;
 use tygraph::Chg::*;
 
 impl<'d> Compiler<'d> {
-    pub fn infer_inputs(self: &mut Box<Self>) -> Result<bool> {
-        // use the targeted ops inferring method
-        let success = self.infer_inputs_tgt_ops();
-        if success.is_ok() {
-            return success;
-        }
+    /// Infer inputs into _blocks_.
+    ///
+    /// This is generally faster and is NOT recursive.
+    pub fn infer_inputs_block(self: &mut Box<Self>) -> Result<bool> {
+        self.infer_inputs_tgt_ops()
+    }
 
+    /// Infer inputs into _expressions_.
+    ///
+    /// This is slow and recurses, which could be problematic.
+    pub fn infer_inputs_expr(self: &mut Box<Self>) -> Result<bool> {
         self.infer_inputs_tgt_shallow_expr()
     }
 
@@ -45,9 +49,7 @@ impl<'d> Compiler<'d> {
     }
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
-        if self.inference_depth > 5 {
-            panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
-        }
+        self.assert_inference_depth();
 
         // we get _shallowest_ expr nodes that:
         // 1. are not compiled,
@@ -80,7 +82,7 @@ impl<'d> Compiler<'d> {
 
         for expr in infer_nodes {
             // infer input
-            let x = input_via_expr_compilation(expr, &self);
+            let x = input_via_expr_compilation(expr, self);
 
             match x {
                 // success!
@@ -105,7 +107,15 @@ impl<'d> Compiler<'d> {
     }
 
     pub fn infer_outputs(self: &mut Box<Self>) -> Result<bool> {
-        if let Some(opnode) = self.output_infer_opnode.take() {
+        self.assert_inference_depth();
+
+        if let Some(opnode) = self
+            .output_infer_opnode
+            // TAKE the infer node, since we are processing it.
+            .take()
+            // BUT do not process if the output is NOT unknown
+            .filter(|n| self.tg[n.idx()].output.is_unknown())
+        {
             // infer output
             let x = output(opnode, self);
 
@@ -119,6 +129,12 @@ impl<'d> Compiler<'d> {
             }
         } else {
             Ok(false)
+        }
+    }
+
+    fn assert_inference_depth(&self) {
+        if self.inference_depth > 5 {
+            panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
         }
     }
 }

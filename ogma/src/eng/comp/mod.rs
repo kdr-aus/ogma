@@ -142,15 +142,23 @@ impl<'d> Compiler<'d> {
                 Err(e) => e,
             };
 
-            match self.infer_inputs() {
+            match self.infer_inputs_block() {
                 Ok(true) => continue,
                 Err(e) => err = e, // TODO; maybe the error should not be updated here? instead use compiler error?
                 _ => (),
             }
 
             // return the output inference error here
-            if self.infer_outputs()? {
-                continue;
+            match self.infer_outputs() {
+                Ok(true) => continue,
+                Err(e) => err = e,
+                _ => (),
+            }
+
+            match self.infer_inputs_expr() {
+                Ok(true) => continue,
+                Err(e) => err = e,
+                _ => (),
             }
 
             // if we have gotten here, unable to compile
@@ -371,7 +379,13 @@ impl<'d> Compiler<'d> {
                     self.lg.seal_node(node.idx(), &self.ag);
                 }
                 Err(mut e) => {
+                    // only set the infer output if tygraph is showing unknown
                     if infer_output {
+                        let unknown = self.tg[node.idx()].output.is_unknown();
+                        debug_assert!(
+                            unknown,
+                            "if inferring the output node, expecting the TG output to be unknown"
+                        );
                         self.output_infer_opnode = Some(node);
                     }
 
@@ -896,5 +910,12 @@ mod tests {
  |                 ^ this argument is unnecessary
 "#
         );
+    }
+
+    #[test]
+    fn compilation_test_17() {
+        // tests that output inference does not enter endless loop
+        let x = compile("Table | append { get foo | + 'bar' } { get zog | + 1 }");
+        assert!(x.is_ok());
     }
 }
