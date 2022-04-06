@@ -21,7 +21,7 @@ all been an influence, while the _syntax_ is derived primarily from terminal she
 smatterings from other languages). Some major characteristics of ogma are:
 - small language with few keywords and opting for a **prefix** notation,
 - uses **pipelines** to _chain_ together commands, composing their effects,
-- it is **strictly typed**,
+- it is **strongly typed**,
 - can be extended with **user-defined** implementations _and_ types.
 
 ## Project Philosophy
