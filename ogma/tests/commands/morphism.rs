@@ -400,8 +400,16 @@ fn column_filtering() {
 fn string_filtering() {
     let defs = &Definitions::new();
 
-    let x = process_w_str("filter != ' '", defs);
-    assert_eq!(x, Ok(Value::Str("Helloworld!".into())));
+    let x = process_w_str("filter = l", defs);
+    assert_eq!(x, Ok(Value::Str("ll".into())));
+    let x = process_w_str("filter != l", defs);
+    assert_eq!(x, Ok(Value::Str("Heo".into())));
+    let x = process_w_str("filter #f", defs);
+    assert_eq!(x, Ok(Value::Str("".into())));
+    let x = process_w_str("filter #t", defs);
+    assert_eq!(x, Ok(Value::Str("Hello".into())));
+    let x = process_w_str("filter or {= H} {= o}", defs);
+    assert_eq!(x, Ok(Value::Str("Ho".into())));
 }
 
 // ------ Folding --------------------------------------------------------------
