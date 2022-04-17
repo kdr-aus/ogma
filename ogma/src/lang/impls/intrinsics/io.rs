@@ -314,6 +314,7 @@ fn save_intrinsic(mut blk: Block) -> Result<Step> {
             }
         }
         .and_then(|_| mkdirs(&p).and_then(|_| std::fs::File::create(p)))
+        .map(std::io::BufWriter::new)
         .and_then(|mut file| write_file(&mut file, val.clone()))
         .map_err(|e| Error::io(&blktag, e))?;
         cx.done(val)

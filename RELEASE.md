@@ -4,5 +4,7 @@
     (https://github.com/kdr-aus/ogma/pull/76)
 
 **🐛 Bug Fixes**
+- Use a `BufWriter` around a `File` to improve `save` performance.
+    (https://github.com/kdr-aus/ogma/pull/77)
 
 **✨ Other Updates**
