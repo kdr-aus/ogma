@@ -376,7 +376,8 @@ fn write_file<W: Write>(file: &mut W, value: Value) -> io::Result<()> {
             write!(file, "{}", x)?;
         }
     }
-    Ok(())
+
+    file.flush()
 }
 
 #[cfg(test)]
