@@ -251,7 +251,8 @@ fn filter_help() -> HelpMessage {
     HelpMessage {
         desc: "filter incoming data using a predicate
 filter can be used with a column header and a type flag
-filtering columns is achievable with the --cols flag"
+filtering columns is achievable with the --cols flag
+filtering on a string supplies one character at a time"
             .into(),
         params: vec![
             HelpParameter::Optional("col-name".into()),
@@ -284,23 +285,29 @@ filtering columns is achievable with the --cols flag"
                 desc: "filter table columns",
                 code: "\\ table.csv | filter --cols or { = 'foo' } { = bar }",
             },
+            HelpExample {
+                desc: "filtering a string",
+                code: "\\ 'Hello, world!' | filter != ' '",
+            },
         ],
         ..HelpMessage::new("filter")
     }
 }
 
 fn filter_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+    match blk.in_ty() {
+        Ty::Str => filter_string(blk),
+        Ty::Tab => {
+            blk.assert_output(Ty::Tab); // filtering Table -> Table
 
-    blk.assert_output(Type::Tab); // filtering Table -> Table
-
-    let cols = blk.get_flag("cols").is_some();
-    if cols {
-        filter_table_columns(blk)
-    } else {
-        FilterTable::filter(blk)
+            let cols = blk.get_flag("cols").is_some();
+            if cols {
+                filter_table_columns(blk)
+            } else {
+                FilterTable::filter(blk)
+            }
+        }
+        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
     }
 }
 
@@ -456,6 +463,38 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
         }
 
         cx.done_o(table)
+    })
+}
+
+fn filter_string(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Type::Str);
+
+    let predicate = blk
+        .next_arg()?
+        .supplied(Ty::Str)?
+        .returns(Ty::Bool)?
+        .concrete()?;
+
+    blk.eval_o(move |input, cx| {
+        let mut string = Str::try_from(input)?;
+        let s = string.to_mut();
+        let r = predicate.resolver_sync(&cx);
+        let mut e = None;
+        s.retain(|c| {
+            r(Value::Str(c.into()))
+                .and_then(bool::try_from)
+                .unwrap_or_else(|err| {
+                    e = Some(err);
+                    true
+                })
+        });
+
+        drop(r);
+
+        match e {
+            Some(e) => Err(e),
+            None => cx.done_o(string),
+        }
     })
 }
 
