@@ -172,6 +172,7 @@ impl<'a> ArgBuilder<'a> {
 
     fn map_astnode_into_hold(self) -> Result<Hold> {
         use astgraph::AstNode::*;
+        use astgraph::PoundTy as Pt;
 
         let Compiler {
             ag,
@@ -188,10 +189,26 @@ impl<'a> ArgBuilder<'a> {
             Def { .. } => unreachable!("an argument cannot be a Def variant"),
             Ident(s) => Ok(Hold::Lit(Str::new(s.str()).into())),
             Num { val, tag: _ } => Ok(Hold::Lit((*val).into())),
-            Pound { ch: 'n', tag: _ } => Ok(Hold::Lit(Value::Nil)),
-            Pound { ch: 't', tag: _ } => Ok(Hold::Lit(true.into())),
-            Pound { ch: 'f', tag: _ } => Ok(Hold::Lit(false.into())),
-            Pound { ch: 'i', tag: _ } => {
+            Pound {
+                ty: Pt::Nil,
+                tag: _,
+            } => Ok(Hold::Lit(Value::Nil)),
+            Pound {
+                ty: Pt::True,
+                tag: _,
+            } => Ok(Hold::Lit(true.into())),
+            Pound {
+                ty: Pt::False,
+                tag: _,
+            } => Ok(Hold::Lit(false.into())),
+            Pound {
+                ty: Pt::Newline,
+                tag: _,
+            } => Ok(Hold::Lit(Value::Str(Str::from("\n")))),
+            Pound {
+                ty: Pt::Input,
+                tag: _,
+            } => {
                 // The input literal is a single step which takes the input and passes it straight
                 // through
                 let out_ty = tg[self.node.idx()]
@@ -209,7 +226,6 @@ impl<'a> ArgBuilder<'a> {
 
                 Ok(Hold::Expr(stack))
             }
-            Pound { ch, tag } => Err(Error::unknown_spec_literal(*ch, tag)),
             Var(tag) => {
                 lg.get_checked(self.node.idx(), tag.str(), tag)
                     .and_then(|local| match local {

@@ -63,6 +63,16 @@ fn nil_test() {
     assert_eq!(x, Ok(Value::Bool(true)));
 }
 
+// ------ New line -------------------------------------------------------------
+#[test]
+fn newline_test() {
+    let defs = &Definitions::new();
+    let x = process_w_nil("\\ #b", defs);
+    assert_eq!(x, Ok(Value::Str("\n".into())));
+    let x = process_w_nil("\\ 'Hello' | + #b world", defs);
+    assert_eq!(x, Ok(Value::Str("Hello\nworld".into())));
+}
+
 // ------ Table ctor -----------------------------------------------------------
 #[test]
 fn table_help_msg() {

@@ -366,6 +366,7 @@ expected `{}`, found `{}`",
             cat: Category::Semantics,
             desc: format!("special literal `{}` not supported", found),
             traces: trace(tag, format!("`{}` not supported", found)),
+            hard: true,
             ..Self::default()
         }
     }
