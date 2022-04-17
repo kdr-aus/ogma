@@ -249,6 +249,7 @@ fn filtering_help_msg() {
  | filter incoming data using a predicate
  | filter can be used with a column header and a type flag
  | filtering columns is achievable with the --cols flag
+ | filtering on a string supplies one character at a time
  | 
  | Usage:
  |  => filter [col-name] <predicate>
@@ -269,6 +270,9 @@ fn filtering_help_msg() {
  | 
  |  filter table columns
  |  => \\ table.csv | filter --cols or { = 'foo' } { = bar }
+ | 
+ |  filtering a string
+ |  => \\ 'Hello, world!' | filter != ' '
 "
     );
 }
@@ -390,6 +394,14 @@ fn column_filtering() {
         vec![n(-30), o("z")],
     ];
     check_is_table(x, exp.clone());
+}
+
+#[test]
+fn string_filtering() {
+    let defs = &Definitions::new();
+
+    let x = process_w_str("filter != ' '", defs);
+    assert_eq!(x, Ok(Value::Str("Helloworld!".into())));
 }
 
 // ------ Folding --------------------------------------------------------------
