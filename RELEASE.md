@@ -6,5 +6,6 @@
 **🐛 Bug Fixes**
 - Use a `BufWriter` around a `File` to improve `save` performance.
     (https://github.com/kdr-aus/ogma/pull/77)
+- Flush `Write`r once finished writing. (https://github.com/kdr-aus/ogma/pull/78)
 
 **✨ Other Updates**
