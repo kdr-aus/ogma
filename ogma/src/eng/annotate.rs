@@ -37,8 +37,8 @@ fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool)
                 fmt_ty(s, out_ty)
             }
         }
-        Pound { ch, tag: _ } => {
-            write!(s, "#{}", ch).unwrap();
+        Pound { ty: _, tag } => {
+            write!(s, "{}", tag).unwrap();
             fmt_ty(s, out_ty)
         }
         Var(t) => {

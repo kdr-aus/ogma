@@ -137,9 +137,7 @@ impl TypeGraph {
                 Op { .. } | Flag(_) | Intrinsic { .. } | Def { .. } => None,
                 Ident(_) => Some(Type::Str),
                 Num { .. } => Some(Type::Num),
-                Pound { ch: 'n', .. } => Some(Type::Nil),
-                Pound { ch: 't', .. } | Pound { ch: 'f', .. } => Some(Type::Bool),
-                Pound { .. } => None,
+                Pound { ty, tag: _ } => ty.ty(),
                 Var(_) => None,
                 Expr(_) => None,
             };
@@ -226,7 +224,10 @@ impl TypeGraph {
 
         // #i input/output is fed by it's op's input
         for poundi in ag.node_indices().filter_map(|n| match &ag[n] {
-            AstNode::Pound { ch: 'i', tag: _ } => Some(ArgNode(n)),
+            AstNode::Pound {
+                ty: PoundTy::Input,
+                tag: _,
+            } => Some(ArgNode(n)),
             _ => None,
         }) {
             let op = poundi.op(ag);

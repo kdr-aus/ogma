@@ -39,11 +39,25 @@ pub enum AstNode {
         tag: Tag,
     },
     Pound {
-        ch: char,
+        ty: PoundTy,
         tag: Tag,
     },
     Var(Tag),
     Expr(Tag),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum PoundTy {
+    /// `#n`
+    Nil,
+    /// `#t`
+    True,
+    /// `#f`
+    False,
+    /// `#i`
+    Input,
+    /// `#b`
+    Newline,
 }
 
 // NOTE that this is a mechanism for allowing transitive flags through the defs
@@ -179,22 +193,32 @@ impl AstGraph {
                 for term in terms {
                     use ast::Argument::*;
                     use ast::Term::*;
+                    use AstNode as An;
+                    use PoundTy as Pt;
 
                     let mut next = None;
 
                     let node = match term {
-                        Flag(f) => AstNode::Flag(f),
-                        Arg(Ident(x)) => AstNode::Ident(x),
-                        Arg(Num(val, tag)) => AstNode::Num { val, tag },
-                        Arg(Pound(ch, tag)) => AstNode::Pound { ch, tag },
-                        Arg(Var(x)) => AstNode::Var(x),
+                        Flag(f) => An::Flag(f),
+                        Arg(Ident(x)) => An::Ident(x),
+                        Arg(Num(val, tag)) => An::Num { val, tag },
+                        Arg(Pound('n', tag)) => An::Pound { ty: Pt::Nil, tag },
+                        Arg(Pound('t', tag)) => An::Pound { ty: Pt::True, tag },
+                        Arg(Pound('f', tag)) => An::Pound { ty: Pt::False, tag },
+                        Arg(Pound('b', tag)) => An::Pound {
+                            ty: Pt::Newline,
+                            tag,
+                        },
+                        Arg(Pound('i', tag)) => An::Pound { ty: Pt::Input, tag },
+                        Arg(Pound(ch, tag)) => return Err(Error::unknown_spec_literal(ch, &tag)),
+                        Arg(Var(x)) => An::Var(x),
                         Arg(Expr(ast::Expression {
                             tag,
                             blocks,
                             out_ty,
                         })) => {
                             next = Some((blocks, out_ty));
-                            AstNode::Expr(tag)
+                            An::Expr(tag)
                         }
                     };
 
@@ -712,7 +736,7 @@ impl AstNode {
             Flag(f) => f,
             Ident(s) => s,
             Num { val: _, tag } => tag,
-            Pound { ch: _, tag } => tag,
+            Pound { ty: _, tag } => tag,
             Var(v) => v,
             Expr(e) => e,
         }
@@ -733,7 +757,7 @@ impl fmt::Display for AstNode {
             Flag(t) => write!(f, "Flag(--{})", t.str()),
             Ident(x) => write!(f, "Ident({})", x.str()),
             Num { val, tag: _ } => write!(f, "Num({})", val),
-            Pound { ch, tag: _ } => write!(f, "Pound(#{})", ch),
+            Pound { ty: _, tag } => write!(f, "Pound({})", tag),
             Var(t) => write!(f, "Var(${})", t.str()),
             Expr(t) => write!(f, "Expr({})", t.str()),
         }
@@ -743,6 +767,17 @@ impl fmt::Display for AstNode {
 impl fmt::Debug for AstNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl PoundTy {
+    pub fn ty(&self) -> Option<Type> {
+        match self {
+            PoundTy::Nil => Some(Type::Nil),
+            PoundTy::True | PoundTy::False => Some(Type::Bool),
+            PoundTy::Newline => Some(Type::Str),
+            PoundTy::Input => None,
+        }
     }
 }
 

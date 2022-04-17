@@ -702,3 +702,20 @@ fn def_argument_resolving_soundness2() {
         ],
     );
 }
+
+#[test]
+fn unrecognised_literal() {
+    let x = process_w_nil("\\ #z", &Definitions::new())
+        .unwrap_err()
+        .to_string();
+    println!("{}", x);
+
+    assert_eq!(
+        &x,
+        "Semantics Error: special literal `z` not supported
+--> shell:2
+ | \\ #z
+ |   ^^ `z` not supported
+"
+    );
+}
