@@ -892,7 +892,11 @@ fn to_str_help_msg() {
  | convert the input into a string
  | 
  | Usage:
- |  => to-str
+ |  => to-str [fmt]
+ | 
+ | Examples:
+ |  format a number as a percentage
+ |  => \\ 0.4123 | to-str '[.2%]'
 "
     );
 }
@@ -912,4 +916,21 @@ fn to_str_testing() {
 
     let x = process_w_nil("\\ #t | to-str", defs);
     assert_eq!(x, Ok(Value::Str("true".into())));
+
+    // with formatter
+    let x = process_w_nil("\\ 1.234e6 | to-str ''", defs);
+    assert_eq!(x, Ok(Value::Str("1.234 M".into())));
+
+    let x = process_w_nil("\\ 1.234e6 | to-str 'yo [.0n] da'", defs);
+    assert_eq!(x, Ok(Value::Str("yo 1,234,000 da".into())));
+
+    let x = process_w_nil("\\ 1.234e6 | to-str '[.0n da'", defs).unwrap_err().to_string();
+    println!("{}", x);
+    assert_eq!(&x, "Parsing Error: invalid format string: unexpected character. expected a ., ~, %, s, m, b, n, /, ] but found ' '
+--> shell:20
+ | \\ 1.234e6 | to-str '[.0n da'
+ |                     ^^^^^^^ invalid format string
+--> help: Number formatting syntax can be found at
+<https://daedalus.report/d/docs/ogma.book/05%20syntax%20and%20semantics/5.4%20number%20formatting.md?pwd-raw=docs>
+");
 }
