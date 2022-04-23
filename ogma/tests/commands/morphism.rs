@@ -932,10 +932,10 @@ fn ren_with_testing() {
         defs,
     );
     let exp = vec![
-        vec![o("0"), o("3.0"), o("a")],
-        vec![o("0"), o("3.0"), o("a")],
-        vec![o("1.0"), o("20.0"), o("b")],
-        vec![o("-30.0"), o("100.0"), o("z")],
+        vec![o("0"), o("3"), o("a")],
+        vec![o("0"), o("3"), o("a")],
+        vec![o("1"), o("20"), o("b")],
+        vec![o("-30"), o("100"), o("z")],
     ];
     check_is_table(x, exp);
 
@@ -945,8 +945,8 @@ fn ren_with_testing() {
         defs,
     );
     let exp = vec![
-        vec![o("1.0"), o("20.0"), o("b")],
-        vec![o("-30.0"), o("100.0"), o("z")],
+        vec![o("1"), o("20"), o("b")],
+        vec![o("-30"), o("100"), o("z")],
     ];
     check_is_table(x, exp);
 }
