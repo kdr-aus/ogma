@@ -395,3 +395,32 @@ fn passing_invalid_arg_to_def() {
 "#
     );
 }
+
+#[test]
+fn not_defined_err_msg() {
+    let defs = &mut Definitions::new();
+    process_definition(
+        "def foo Table () { \\ #t }",
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+
+    let x = process_w_nil("foo", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{}", x);
+    assert_eq!(
+        &x,
+        r#"Semantics Error: expecting argument with output type `Number`, found `String`
+--> shell:35
+ | def test-expr-err (rhs) { \ 5 | + $rhs }
+ |                                    ^^^ this argument returns type `String`
+--> shell:0
+ | test-expr-err 'hello'
+ | ^^^^^^^^^^^^^^^^^^^^ invoked here
+--> help: commands may require specific argument types, use `--help` to view requirements
+"#
+    );
+}

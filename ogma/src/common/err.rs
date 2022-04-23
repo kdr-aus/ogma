@@ -172,7 +172,9 @@ impl Error {
         }
     }
 
-    pub(crate) fn op_not_found(op: &Tag, recursion_detected: bool) -> Self {
+    pub(crate) fn op_not_found(op: &Tag, recursion_detected: bool, impls: &Implementations) -> Self {
+        let ty = impls.iter().filter(|x| x.0 == op.str()).collect::<Vec<_>>();
+
         let hlp = if recursion_detected {
             "recursion is not supported.
           for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>"

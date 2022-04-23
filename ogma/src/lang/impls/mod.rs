@@ -92,6 +92,7 @@ impl Implementations {
 
     pub fn get_impl(&self, op: &Tag, ty: &Type) -> Result<&Implementation> {
         if !self.contains_op(op.str()) {
+            todo!();
             return Err(Error::op_not_found(op, false));
         }
 

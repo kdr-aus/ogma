@@ -428,7 +428,11 @@ impl<'d> Compiler<'d> {
         let cmd_node = self
             .ag
             .get_impl(opnode, &in_ty)
-            .ok_or_else(|| Error::op_not_found(self.ag[opnode.idx()].tag(), false))?;
+            .ok_or_else(|| {
+                todo!();
+                // TODO better errors here
+                Error::op_not_found(self.ag[opnode.idx()].tag(), false)
+            })?;
 
         match &self.ag[cmd_node.idx()] {
             AstNode::Intrinsic { op: _, intrinsic } => {
