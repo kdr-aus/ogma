@@ -12,5 +12,6 @@
     (https://github.com/kdr-aus/ogma/pull/77)
 - Flush `Write`r once finished writing. (https://github.com/kdr-aus/ogma/pull/78)
 - Fixes (https://github.com/kdr-aus/ogma/issues/15) with new compilation engine.
+- Output better error messages for unmatched commands (https://github.com/kdr-aus/ogma/pull/86)
 
 **✨ Other Updates**
