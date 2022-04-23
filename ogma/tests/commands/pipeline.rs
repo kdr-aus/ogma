@@ -9,7 +9,7 @@ fn dotop_help_msg() {
         &x,
         "Help: `.`
 --> shell:0
- | extract a value out of a structure using infix operator
+ | extract a value out of a structure using an infix operator
  | 
  | Usage:
  |  => . => $foo.bar
@@ -20,6 +20,9 @@ fn dotop_help_msg() {
  | 
  |  get the value of a column entry in a TableRow
  |  => $table-row.col-name
+ | 
+ |  explicitly constrain output type of a column
+ |  => $table-row.col-name:Str
 "
     );
 }
@@ -375,7 +378,7 @@ fn using_pound_i() {
 fn using_pound_i_table_row() {
     let d = &Definitions::new();
 
-    let x = process_w_table("append { \\ #i.snd | + 1 }", d);
+    let x = process_w_table("append { \\ #i.snd:Num | + 1 }", d);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3"), o("_append1")],
         vec![n(0), n(3), o("a"), n(4)],
@@ -530,7 +533,7 @@ fn let_tablerow() {
     ];
     let x = process_w_table("filter { let $x | get snd | > 10 }", defs);
     check_is_table(x, exp.clone());
-    let x = process_w_table("filter { let $x | \\$x.snd | > 10 }", defs);
+    let x = process_w_table("filter { let $x | \\$x.snd:Num | > 10 }", defs);
     check_is_table(x, exp);
 }
 

@@ -200,6 +200,10 @@ impl ast::DotOperatorBlock {
                     desc: "get the value of a column entry in a TableRow",
                     code: "$table-row.col-name",
                 },
+                HelpExample {
+                    desc: "explicitly constrain output type of a column",
+                    code: "$table-row.col-name:Str",
+                },
             ],
             ..HelpMessage::new(".")
         }

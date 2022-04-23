@@ -481,7 +481,7 @@ fn fold_while_test() {
     assert_eq!(x, Ok(Value::Num(36.into())));
     let x = process_w_num("range 1 20 | fold-while 1 {< 1e6} * $row.i", defs);
     assert_eq!(x, Ok(Value::Num((3628800).into())));
-    let x = process_w_num("range 1 20 | fold-while {Tuple 0 0} {get t0 | < 20} { let {get t0} $t0 | get t1 | + $t0 | Tuple #i $row.i } | get t0", defs);
+    let x = process_w_num("range 1 20 | fold-while {Tuple 0 0} {get t0 | < 20} { let {get t0} $t0 | get t1 | + $t0 | Tuple #i $row.i:Num } | get t0", defs);
     assert_eq!(x, Ok(Value::Num((21).into())));
 }
 
@@ -635,7 +635,7 @@ fn map_testing() {
         vec![n(-29), n(100), o("z")],
     ];
     check_is_table(x, exp);
-    let x = process_w_table("map 'Heading 3' --Str { \\$row.first | + 1 }", defs);
+    let x = process_w_table("map 'Heading 3' --Str { \\$row.first:Num | + 1 }", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3")],
         vec![n(0), n(3), n(1)],
@@ -645,7 +645,10 @@ fn map_testing() {
     check_is_table(x, exp);
 
     // check we can use variables/exprs in column heading
-    let x = process_w_table("map { \\ 'Heading 3' } --Str { \\$row.first | + 1 }", defs);
+    let x = process_w_table(
+        "map { \\ 'Heading 3' } --Str { \\$row.first:Num | + 1 }",
+        defs,
+    );
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3")],
         vec![n(0), n(3), n(1)],
@@ -654,7 +657,7 @@ fn map_testing() {
     ];
     check_is_table(x, exp);
     let x = process_w_table(
-        "let {\\ 'Heading 3'} $x | map $x --Str { \\$row.first | + 1 }",
+        "let {\\ 'Heading 3'} $x | map $x --Str { \\$row.first:Num | + 1 }",
         defs,
     );
     let exp = vec![
@@ -675,7 +678,7 @@ fn map_testing() {
     check_is_table(x, exp);
 
     // check ignore flag
-    let x = process_w_table("map 'Heading 3' --force $row.first", defs);
+    let x = process_w_table("map 'Heading 3' --force $row.first:Num", defs);
     let exp = vec![
         vec![o("first"), o("snd"), o("Heading 3")],
         vec![n(0), n(3), n(0)],
