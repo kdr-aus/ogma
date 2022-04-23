@@ -187,6 +187,47 @@ fn dotop_err_test() {
     );
 }
 
+#[test]
+fn dotop_infers_output() {
+    let defs = &Definitions::new();
+
+    let x = process_w_table("fold 0 + $row.first", defs);
+    assert_eq!(x, Ok(Value::Num((-29.0).into())));
+
+    let x = process_w_table("fold 'foo' + $row.'Heading 3'", defs);
+    assert_eq!(x, Ok(Value::Str("fooabz".into())));
+
+    let x = process_w_table("fold 1 + $row.'Heading 3'", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{}", x);
+    assert_eq!(
+        &x,
+        "Evaluation Error: table entry for [row:1,col:'Heading 3'] did not have expected type
+expected `Number`, found `String`
+--> shell:15
+ | fold 1 + $row.'Heading 3'
+ |                ^^^^^^^^^
+--> help: column entries must have a matching type
+"
+    );
+
+    let x = process_w_table("fold 'foo' + $row.first", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{}", x);
+    assert_eq!(
+        &x,
+        "Evaluation Error: table entry for [row:1,col:'first'] did not have expected type
+expected `String`, found `Number`
+--> shell:18
+ | fold 'foo' + $row.first
+ |                   ^^^^^
+--> help: column entries must have a matching type
+"
+    );
+}
+
 // ------ Get ------------------------------------------------------------------
 #[test]
 fn get_help_msg() {
