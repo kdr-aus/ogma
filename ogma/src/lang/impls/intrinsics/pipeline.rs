@@ -696,7 +696,11 @@ fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
             let fmt = if blk.args_len() == 0 {
                 None
             } else {
-                let f = blk.next_arg()?.supplied(None)?.returns(Ty::Str)?.concrete()?;
+                let f = blk
+                    .next_arg()?
+                    .supplied(None)?
+                    .returns(Ty::Str)?
+                    .concrete()?;
                 Some(f.extract_literal::<Str>()?.parse::<numfmt::Formatter>().map_err(|e| {
                     Error {
                         cat: err::Category::Parsing,
@@ -710,7 +714,11 @@ fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
 
             blk.eval_o(move |v, cx| {
                 let n = Number::try_from(v)?;
-                let s = fmt.clone().as_mut().map(|f| f.fmt(n.as_f64()).to_string()).unwrap_or_else(|| n.to_string());
+                let s = fmt
+                    .clone()
+                    .as_mut()
+                    .map(|f| f.fmt(n.as_f64()).to_string())
+                    .unwrap_or_else(|| n.to_string());
                 cx.done_o(Str::from(s))
             })
         }

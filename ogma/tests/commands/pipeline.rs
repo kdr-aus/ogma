@@ -924,7 +924,9 @@ fn to_str_testing() {
     let x = process_w_nil("\\ 1.234e6 | to-str 'yo [.0n] da'", defs);
     assert_eq!(x, Ok(Value::Str("yo 1,234,000 da".into())));
 
-    let x = process_w_nil("\\ 1.234e6 | to-str '[.0n da'", defs).unwrap_err().to_string();
+    let x = process_w_nil("\\ 1.234e6 | to-str '[.0n da'", defs)
+        .unwrap_err()
+        .to_string();
     println!("{}", x);
     assert_eq!(&x, "Parsing Error: invalid format string: unexpected character. expected a ., ~, %, s, m, b, n, /, ] but found ' '
 --> shell:20
