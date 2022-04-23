@@ -172,21 +172,38 @@ impl Error {
         }
     }
 
-    pub(crate) fn op_not_found(op: &Tag, recursion_detected: bool, impls: &Implementations) -> Self {
+    pub(crate) fn op_not_found(
+        op: &Tag,
+        inty: Option<&Type>,
+        recursion_detected: bool,
+        impls: &Implementations,
+    ) -> Self {
+        fn tystr(x: Option<&Type>) -> String {
+            x.map(|x| x.to_string()).unwrap_or_else(|| "<any>".into())
+        }
+
         let ty = impls.iter().filter(|x| x.0 == op.str()).collect::<Vec<_>>();
 
         let hlp = if recursion_detected {
             "recursion is not supported.
-          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>"
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>".into()
+        } else if ty.is_empty() {
+            "view a list of definitions using `def --list`".into()
         } else {
-            "view a list of definitions using `def --list`"
+            ty.into_iter().fold(
+                format!("`{}` is implemented for the following input types:", op),
+                |s, t| s + " " + &tystr(t.1),
+            )
         };
 
         Error {
             cat: Category::UnknownCommand,
             desc: format!("operation `{}` not defined", op),
-            traces: trace(op, format!("`{}` not found", op)),
-            help_msg: Some(hlp.into()),
+            traces: trace(
+                op,
+                format!("`{}` not defined for input `{}`", op, tystr(inty)),
+            ),
+            help_msg: Some(hlp),
             ..Self::default()
         }
     }

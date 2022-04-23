@@ -433,7 +433,7 @@ fn assert_all_ops_defined(def: &ast::DefinitionImpl, defs: &Implementations) -> 
             let op = block.op();
 
             if !defs.contains_op(op.str()) {
-                return Err(Error::op_not_found(&op, &*op == name));
+                return Err(Error::op_not_found(&op, None, &*op == name, defs));
             }
             check.extend(block.terms().iter().filter_map(|term| match term {
                 ast::Term::Arg(ast::Argument::Expr(expr)) => Some(expr.clone()),

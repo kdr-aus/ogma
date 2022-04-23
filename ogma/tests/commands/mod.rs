@@ -394,7 +394,7 @@ fn unused_arg_test() {
         r#"Unknown Command: operation `testing` not defined
 --> shell:6
  | \ 5 { testing 2 { foo  bar } }
- |       ^^^^^^^ `testing` not found
+ |       ^^^^^^^ `testing` not defined for input `<any>`
 --> help: view a list of definitions using `def --list`
 "#
     );
@@ -454,7 +454,7 @@ fn no_cmd_defined() {
         "Unknown Command: operation `undefined` not defined
 --> shell:0
  | undefined
- | ^^^^^^^^^ `undefined` not found
+ | ^^^^^^^^^ `undefined` not defined for input `<any>`
 --> help: view a list of definitions using `def --list`
 "
     );
@@ -468,7 +468,7 @@ fn no_cmd_defined() {
         r#"Unknown Command: operation `undefined` not defined
 --> shell:13
  | \ file.csv | undefined
- |              ^^^^^^^^^ `undefined` not found
+ |              ^^^^^^^^^ `undefined` not defined for input `<any>`
 --> help: view a list of definitions using `def --list`
 "#
     );
@@ -511,7 +511,7 @@ fn forbid_recursion() {
         "Unknown Command: operation `test-recursion` not defined
 --> shell:24
  | def test-recursion () { test-recursion }
- |                         ^^^^^^^^^^^^^^ `test-recursion` not found
+ |                         ^^^^^^^^^^^^^^ `test-recursion` not defined for input `<any>`
 --> help: recursion is not supported.
           for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>
 "

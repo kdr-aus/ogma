@@ -933,6 +933,6 @@ fn to_str_testing() {
  | \\ 1.234e6 | to-str '[.0n da'
  |                     ^^^^^^^ invalid format string
 --> help: Number formatting syntax can be found at
-<https://daedalus.report/d/docs/ogma.book/05%20syntax%20and%20semantics/5.4%20number%20formatting.md?pwd-raw=docs>
+          <https://daedalus.report/d/docs/ogma.book/05%20syntax%20and%20semantics/5.4%20number%20formatting.md?pwd-raw=docs>
 ");
 }

@@ -425,14 +425,14 @@ impl<'d> Compiler<'d> {
         chgs: Chgs,
         infer_output: &mut bool,
     ) -> Result<Step> {
-        let cmd_node = self
-            .ag
-            .get_impl(opnode, &in_ty)
-            .ok_or_else(|| {
-                todo!();
-                // TODO better errors here
-                Error::op_not_found(self.ag[opnode.idx()].tag(), false)
-            })?;
+        let cmd_node = self.ag.get_impl(opnode, &in_ty).ok_or_else(|| {
+            Error::op_not_found(
+                self.ag[opnode.idx()].tag(),
+                Some(&in_ty),
+                false,
+                self.defs.impls(),
+            )
+        })?;
 
         match &self.ag[cmd_node.idx()] {
             AstNode::Intrinsic { op: _, intrinsic } => {
