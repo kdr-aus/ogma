@@ -680,8 +680,8 @@ fn to_str_help() -> HelpMessage {
         desc: "convert the input into a string".into(),
         params: vec![HelpParameter::Optional("fmt".into())],
         examples: vec![HelpExample {
-            desc: "format a number as a percentage".into(),
-            code: "\\ 0.4123 | to-str '[.2%]'".into(),
+            desc: "format a number as a percentage",
+            code: "\\ 0.4123 | to-str '[.2%]'",
         }],
         ..HelpMessage::new("to-str")
     }
