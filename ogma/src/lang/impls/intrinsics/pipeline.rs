@@ -706,7 +706,8 @@ fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
                         cat: err::Category::Parsing,
                         desc: format!("invalid format string: {}", e),
                         traces: vec![err::Trace::from_tag(&f.tag, Some("invalid format string".into()))],
-                        help_msg: Some("Number formatting syntax can be found at\n<https://daedalus.report/d/docs/ogma.book/05%20syntax%20and%20semantics/5.4%20number%20formatting.md?pwd-raw=docs>".into()),
+                        help_msg: Some("Number formatting syntax can be found at
+          <https://daedalus.report/d/docs/ogma.book/05%20syntax%20and%20semantics/5.4%20number%20formatting.md?pwd-raw=docs>".into()),
                         hard: true,
                     }
                 })?)

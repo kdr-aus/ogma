@@ -395,3 +395,22 @@ fn passing_invalid_arg_to_def() {
 "#
     );
 }
+
+#[test]
+fn not_defined_err_msg() {
+    let defs = &mut Definitions::new();
+    process_definition("def foo Table () { \\ #t }", Location::Shell, None, defs).unwrap();
+    process_definition("def foo Num () { \\ #t }", Location::Shell, None, defs).unwrap();
+
+    let x = process_w_nil("foo", defs).unwrap_err().to_string();
+    println!("{}", x);
+    assert_eq!(
+        &x,
+        "Unknown Command: operation `foo` not defined
+--> shell:0
+ | foo
+ | ^^^ `foo` not defined for input `Nil`
+--> help: `foo` is implemented for the following input types: Table Number
+"
+    );
+}
