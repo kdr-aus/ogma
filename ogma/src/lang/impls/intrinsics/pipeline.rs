@@ -678,17 +678,58 @@ fn table_intrinsic(mut blk: Block) -> Result<Step> {
 fn to_str_help() -> HelpMessage {
     HelpMessage {
         desc: "convert the input into a string".into(),
+        params: vec![HelpParameter::Optional("fmt".into())],
+        examples: vec![HelpExample {
+            desc: "format a number as a percentage",
+            code: "\\ 0.4123 | to-str '[.2%]'",
+        }],
         ..HelpMessage::new("to-str")
     }
 }
 
-fn to_str_intrinsic(blk: Block) -> Result<Step> {
-    blk.eval_o(|v, cx| {
-        cx.done_o(print::fmt_cell(
-            &Entry::from(v),
-            &mut numfmt::Formatter::default(),
-        ))
-    })
+fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Str);
+
+    match blk.in_ty() {
+        Ty::Bool => blk.eval_o(|v, c| c.done_o(Str::from(bool::try_from(v)?.to_string()))),
+        Ty::Num => {
+            let fmt = if blk.args_len() == 0 {
+                None
+            } else {
+                let f = blk
+                    .next_arg()?
+                    .supplied(None)?
+                    .returns(Ty::Str)?
+                    .concrete()?;
+                Some(f.extract_literal::<Str>()?.parse::<numfmt::Formatter>().map_err(|e| {
+                    Error {
+                        cat: err::Category::Parsing,
+                        desc: format!("invalid format string: {}", e),
+                        traces: vec![err::Trace::from_tag(&f.tag, Some("invalid format string".into()))],
+                        help_msg: Some("Number formatting syntax can be found at\n<https://daedalus.report/d/docs/ogma.book/05%20syntax%20and%20semantics/5.4%20number%20formatting.md?pwd-raw=docs>".into()),
+                        hard: true,
+                    }
+                })?)
+            };
+
+            blk.eval_o(move |v, cx| {
+                let n = Number::try_from(v)?;
+                let s = fmt
+                    .clone()
+                    .as_mut()
+                    .map(|f| f.fmt(n.as_f64()).to_string())
+                    .unwrap_or_else(|| n.to_string());
+                cx.done_o(Str::from(s))
+            })
+        }
+        Ty::Str => blk.eval_o(|v, c| c.done_o(Str::try_from(v)?)),
+        _ => blk.eval_o(|v, cx| {
+            cx.done_o(print::fmt_cell(
+                &Entry::from(v),
+                &mut numfmt::Formatter::default(),
+            ))
+        }),
+    }
 }
 
 // ------ Tuple ----------------------------------------------------------------

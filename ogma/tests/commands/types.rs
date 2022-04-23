@@ -109,7 +109,7 @@ fn table_testing() {
     let exp = vec![vec![o("Foo"), o("Bar"), o("Heading 3")]];
     check_is_table(x, exp);
     let x = process_w_num("Table {+ 1 | to-str} {+ 2 | to-str}", defs);
-    let exp = vec![vec![o("4.0"), o("5.0")]];
+    let exp = vec![vec![o("4"), o("5")]];
     check_is_table(x, exp);
 }
 
