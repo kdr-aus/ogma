@@ -682,13 +682,20 @@ fn to_str_help() -> HelpMessage {
     }
 }
 
-fn to_str_intrinsic(blk: Block) -> Result<Step> {
-    blk.eval_o(|v, cx| {
-        cx.done_o(print::fmt_cell(
-            &Entry::from(v),
-            &mut numfmt::Formatter::default(),
-        ))
-    })
+fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Str);
+
+    match blk.in_ty() {
+        Ty::Bool => blk.eval_o(|v, c| c.done_o(Str::from(bool::try_from(v)?.to_string()))),
+        Ty::Num => blk.eval_o(|v, cx| cx.done_o(Str::from(Number::try_from(v)?.to_string()))),
+        Ty::Str => blk.eval_o(|v, c| c.done_o(Str::try_from(v)?)),
+        _ => blk.eval_o(|v, cx| {
+            cx.done_o(print::fmt_cell(
+                &Entry::from(v),
+                &mut numfmt::Formatter::default(),
+            ))
+        }),
+    }
 }
 
 // ------ Tuple ----------------------------------------------------------------

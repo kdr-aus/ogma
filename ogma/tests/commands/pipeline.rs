@@ -900,6 +900,16 @@ fn to_str_help_msg() {
 #[test]
 fn to_str_testing() {
     let defs = &Definitions::new();
+
     let x = process_w_num("to-str", defs);
-    assert_eq!(x, Ok(Value::Str("3.0".into())));
+    assert_eq!(x, Ok(Value::Str("3".into())));
+
+    let x = process_w_nil("\\ 1.234e6 | to-str", defs);
+    assert_eq!(x, Ok(Value::Str("1234000".into())));
+
+    let x = process_w_nil("\\ 'hello, World!' | to-str", defs);
+    assert_eq!(x, Ok(Value::Str("hello, World!".into())));
+
+    let x = process_w_nil("\\ #t | to-str", defs);
+    assert_eq!(x, Ok(Value::Str("true".into())));
 }
