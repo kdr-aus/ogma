@@ -186,18 +186,14 @@ fn errors_02() {
         .unwrap_err()
         .to_string();
     println!("{}", x);
-    // NOTE: This will change once the dot operator switches to using type inference rather than
-    // default to a number
     assert_eq!(
         &x,
-        "Typing Error: Type application failed
---> shell:14
+        "Evaluation Error: table entry for [row:2,col:'snd'] did not have expected type
+expected `String`, found `Number`
+--> shell:15
  | nth 1 Tuple #i.snd:Str #i.snd:Num
- |               ^ this node is trying to have a type `Number` applied to it
---> shell:14
- | nth 1 Tuple #i.snd:Str #i.snd:Num
- |               ^ but it is already obligated to use type `String`
---> help: maybe remove any type annotations
+ |                ^^^
+--> help: column entries must have a matching type
 "
     );
 }

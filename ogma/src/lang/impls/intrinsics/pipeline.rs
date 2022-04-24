@@ -189,7 +189,7 @@ impl FieldAccessor {
 impl ast::DotOperatorBlock {
     fn help() -> HelpMessage {
         HelpMessage {
-            desc: "extract a value out of a structure using infix operator".into(),
+            desc: "extract a value out of a structure using an infix operator".into(),
             params: vec![HelpParameter::Required("=> $foo.bar".into())],
             examples: vec![
                 HelpExample {
@@ -199,6 +199,10 @@ impl ast::DotOperatorBlock {
                 HelpExample {
                     desc: "get the value of a column entry in a TableRow",
                     code: "$table-row.col-name",
+                },
+                HelpExample {
+                    desc: "explicitly constrain output type of a column",
+                    code: "$table-row.col-name:Str",
                 },
             ],
             ..HelpMessage::new(".")
@@ -213,8 +217,11 @@ impl ast::DotOperatorBlock {
         match input.out_ty() {
             Ty::TabRow => {
                 let colarg = field.returns(Ty::Str)?.concrete()?;
-                // TODO remove type flag and use type infererence
-                let ty = TableGetType::Flag(Type::Num); // '.' does not support flags
+                let ty = blk
+                    .output_ty()
+                    .ok_or_else(|| Error::unknown_blk_output_type(blk.blk_tag()))?;
+                let ty = TableGetType::Flag(ty);
+
                 blk.eval(ty.ty().clone(), move |lhs_input, cx| {
                     let trow: TableRow = input.resolve(|| lhs_input, &cx)?.try_into()?;
                     table_row_get(&trow, &colarg, &ty, cx)
