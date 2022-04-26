@@ -355,8 +355,6 @@ fn div_help_msg() {
 #[test]
 fn div_testing() {
     let defs = &Definitions::new();
-    let x = process_w_nil("/ 5", defs);
-    assert_eq!(x, Ok(Value::Num((5).into())));
     let x = process_w_num("/ 6", defs);
     assert_eq!(x, Ok(Value::Num((0.5).into())));
     let x = process_w_num("let $x | \\ 30 | ÷ -5 $x", defs);
@@ -544,7 +542,7 @@ fn sub_testing() {
     let defs = &Definitions::new();
     let x = process_w_num("- 5", defs);
     assert_eq!(x, Ok(Value::Num((-2).into())));
-    let x = process_w_nil("- -2 -1", defs);
+    let x = process_w_nil("\\ -2 | - -1", defs);
     assert_eq!(x, Ok(Value::Num((-1).into())));
     let x = process_w_num("let $x | \\ 1 | - 1 2 $x", defs);
     assert_eq!(x, Ok(Value::Num((-5).into()))); // 1 - 1 - 2 - 3

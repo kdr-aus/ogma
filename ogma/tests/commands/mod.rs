@@ -164,7 +164,7 @@ fn multiline_expr() {
 
     let x = process_w_nil(
         "
-* 3 4 |
+\\ 3 | * 4 |
 if {= 36}
     #f
     #t
@@ -239,7 +239,7 @@ fn multiline_errs() {
     let d = &Definitions::new();
 
     let x = process_w_nil(
-        "* 3 4 |
+        "\\ 3 | * 4 |
     * 'foo'",
         d,
     )

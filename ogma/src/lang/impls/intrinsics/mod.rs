@@ -63,7 +63,9 @@ type InnerTable = ::table::Table<Value>;
 ///
 /// The `aggfn` takes the `(prev, next)` and returns the aggregate, along with a flag to exit early
 /// if known (for example, short circuiting an `or` or `and`).
-fn variadic_intrinsic<T, F>(mut blk: Block, aggfn: F) -> Result<Step>
+///
+/// This intrinsic uses the input type as the seed.
+fn variadic_intrinsic_in_constrained<T, F>(mut blk: Block, aggfn: F) -> Result<Step>
 where
     T: AsType + Into<Value> + 'static,
     T: TryFrom<Value, Error = Error>,
@@ -102,6 +104,58 @@ where
         let mut prev: T = input.clone().try_into()?;
 
         for arg in &args {
+            let next: T = arg.resolve(|| input.clone(), &cx)?.try_into()?;
+            let (x, exit) = aggfn(prev, next);
+            prev = x;
+            if exit {
+                break;
+            }
+        }
+
+        Ok((prev, cx.env))
+    })
+}
+
+/// Same as [`variadic_intrinsic_in_constrained`] but does not use the input as the first previous value.
+///
+/// This makes it input agnostic.
+fn variadic_intrinsic_in_agnostic<T, F>(mut blk: Block, aggfn: F) -> Result<Step>
+where
+    T: AsType + Into<Value> + 'static,
+    T: TryFrom<Value, Error = Error>,
+    F: Fn(T, T) -> (T, bool) + Send + Sync + 'static,
+{
+    let ty = T::as_type();
+    blk.assert_output(ty.clone());
+
+    let len = blk.args_len();
+
+    if len == 0 {
+        let err_tag = blk.blk_tag().clone();
+        return Err(Error::insufficient_args(&err_tag, 0, None));
+    }
+
+    let args = {
+        let mut a = Vec::with_capacity(len);
+        for _ in 0..len {
+            // use blocks input type
+            let arg = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(ty.clone())?
+                .concrete()?;
+            a.push(arg);
+        }
+        a
+    };
+
+
+    blk.eval_o(move |input, cx| {
+        // we know arg.len() > 0
+        let mut prev: T = args[0].resolve(|| input.clone(), &cx)?.try_into()?;
+
+        // skip the first one -- already computed
+        for arg in &args[1..] {
             let next: T = arg.resolve(|| input.clone(), &cx)?.try_into()?;
             let (x, exit) = aggfn(prev, next);
             prev = x;
