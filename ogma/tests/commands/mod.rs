@@ -719,3 +719,18 @@ fn unrecognised_literal() {
 "
     );
 }
+
+#[test]
+fn get_output_inference_be_smarter() {
+    let x = process_w_table("append { get first | * 2 }", &Definitions::new());
+
+    check_is_table(
+        x,
+        vec![
+            vec![o("first"), o("snd"), o("Heading 3"), o("_append1")],
+            vec![n(0), n(3), o("a"), n(0)],
+            vec![n(1), n(20), o("b"), n(2)],
+            vec![n(-30), n(100), o("z"), n(-60)],
+        ],
+    );
+}

@@ -21,10 +21,7 @@ where
     F: Fn(f64, f64) -> f64 + Send + Sync + 'static,
 {
     variadic_intrinsic::<Number, _>(blk, move |prev, next| {
-        let x = prev
-            .map(|prev| f(prev.as_f64(), next.as_f64()))
-            .map(Into::into)
-            .unwrap_or(next);
+        let x = f(prev.as_f64(), next.as_f64()).into();
         (x, false)
     })
 }
@@ -70,15 +67,9 @@ if input is a Table, concat or join additional tables
 fn add_intrinsic(blk: Block) -> Result<Step> {
     match blk.in_ty() {
         Ty::Num => variadic_intrinsic_num(blk, std::ops::Add::add),
-        Ty::Str => variadic_intrinsic::<Str, _>(blk, |prev, next| {
-            (
-                prev.map(|mut s| {
-                    s.to_mut().push_str(&next);
-                    s
-                })
-                .unwrap_or(next),
-                false,
-            )
+        Ty::Str => variadic_intrinsic::<Str, _>(blk, |mut prev, next| {
+            prev.to_mut().push_str(&next);
+            (prev, false)
         }),
         Ty::Tab => add_table(blk),
         x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
@@ -90,9 +81,8 @@ fn add_table(mut blk: Block) -> Result<Step> {
     let byrow = !f("cols");
     let intersect = !f("union") && f("intersect");
 
-    variadic_intrinsic(blk, move |prev, next| match prev {
-        Some(prev) => (add_table2(prev, next, byrow, intersect), false),
-        None => (next, false),
+    variadic_intrinsic(blk, move |prev, next| {
+        (add_table2(prev, next, byrow, intersect), false)
     })
 }
 

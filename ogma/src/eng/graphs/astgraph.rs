@@ -1014,16 +1014,34 @@ impl ExprNode {
         g[self.idx()].tag()
     }
 
-    /// Fetches the first block's op for this expression.
-    pub fn first_op(self, g: &AstGraph) -> OpNode {
+    #[inline(always)]
+    fn debug_assert_is_expr_node(self, g: &AstGraph) {
         debug_assert!(
             matches!(g[self.idx()], AstNode::Expr(_)),
             "expecting an expression node"
         );
+    }
+
+    /// Fetches the first block's op for this expression.
+    pub fn first_op(self, g: &AstGraph) -> OpNode {
+        self.debug_assert_is_expr_node(g);
 
         g.neighbors(self.idx())
             .filter_map(|n| g[n].op().map(|_| OpNode(n)))
             .last()
             .expect("all expressions have at least one block op node")
+    }
+
+    /// Find the parent op node, if there is one.
+    pub fn parent(self, g: &AstGraph) -> Option<OpNode> {
+        self.debug_assert_is_expr_node(g);
+
+        g.neighbors_directed(self.idx(), Direction::Incoming)
+            .next()
+            .map(|x| match &g[x] {
+                AstNode::Op { .. } => OpNode(x),
+                AstNode::Def { .. } => DefNode(x).parent(g),
+                _ => unreachable!(),
+            })
     }
 }

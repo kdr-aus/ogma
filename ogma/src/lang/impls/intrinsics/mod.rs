@@ -61,23 +61,29 @@ type InnerTable = ::table::Table<Value>;
 /// same operation across them. For example, the 'add' intrinsic (`+`) can add more than one
 /// argument at a time.
 ///
-/// The behaviour is to INCLUDE the input if it fits the type expected of the arguments (so that the
-/// expr `\\ 5 | + 1 2` returns an expected 8 (if it were ignore for arguments > 1 it would return
-/// 3).
-///
-/// A special case is provided for TableRow inputs which cannot follow the normal cloning
-/// techniques for values.
-///
 /// The `aggfn` takes the `(prev, next)` and returns the aggregate, along with a flag to exit early
 /// if known (for example, short circuiting an `or` or `and`).
 fn variadic_intrinsic<T, F>(mut blk: Block, aggfn: F) -> Result<Step>
 where
     T: AsType + Into<Value> + 'static,
     T: TryFrom<Value, Error = Error>,
-    F: Fn(Option<T>, T) -> (T, bool) + Send + Sync + 'static,
+    F: Fn(T, T) -> (T, bool) + Send + Sync + 'static,
 {
-    let len = blk.args_len();
     let ty = T::as_type();
+
+    if blk.in_ty() != &ty {
+        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
+    }
+
+    blk.assert_output(ty.clone());
+
+    let len = blk.args_len();
+
+    if len == 0 {
+        let err_tag = blk.blk_tag().clone();
+        return Err(Error::insufficient_args(&err_tag, 0, None));
+    }
+
     let args = {
         let mut a = Vec::with_capacity(len);
         for _ in 0..len {
@@ -91,33 +97,20 @@ where
         }
         a
     };
-    let err_tag = blk.blk_tag().clone();
-
-    // we have an interesting position here.
-    // given blk.in_ty() == ty we can assert that input: T
-    // this way we can blk.eval with a known input: T
-    // HOWEVER we would be duplicating the business logic if we went down this path. instead we use
-    // .eval_value and _cast_ to T in the eval loop (should work!)
-    let use_input = blk.in_ty() == &ty;
 
     blk.eval_o(move |input, cx| {
-        let mut prev: Option<T> = if use_input {
-            Some(input.clone().try_into()?)
-        } else {
-            None
-        };
+        let mut prev: T = input.clone().try_into()?;
 
         for arg in &args {
             let next: T = arg.resolve(|| input.clone(), &cx)?.try_into()?;
             let (x, exit) = aggfn(prev, next);
-            prev = Some(x);
+            prev = x;
             if exit {
                 break;
             }
         }
 
-        prev.ok_or_else(|| Error::insufficient_args(&err_tag, 0, None))
-            .map(|x| (x, cx.env))
+        Ok((prev, cx.env))
     })
 }
 
