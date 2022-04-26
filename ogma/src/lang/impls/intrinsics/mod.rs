@@ -149,7 +149,6 @@ where
         a
     };
 
-
     blk.eval_o(move |input, cx| {
         // we know arg.len() > 0
         let mut prev: T = args[0].resolve(|| input.clone(), &cx)?.try_into()?;
