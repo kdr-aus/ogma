@@ -719,3 +719,11 @@ fn unrecognised_literal() {
 "
     );
 }
+
+#[test]
+fn locals_graph_change_bug() {
+    let x = process_w_table("skip 1 | append --value { get:Num first | * 1e6 | let $n | \\ 'mkt-cap ' | + $v }", &Definitions::new()).unwrap_err().to_string();
+    println!("{}", x);
+
+    assert_eq!(&x, "");
+}
