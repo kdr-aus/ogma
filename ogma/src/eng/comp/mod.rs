@@ -827,7 +827,8 @@ mod tests {
 --> shell:3
  | \\ $x
  |    ^ `x` not in scope
---> help: variables must be in scope and can be defined using the `let` command
+--> help: variables must be in scope
+          variables can be defined using the `let` command
 "
         );
     }

@@ -323,9 +323,23 @@ impl LocalsGraph {
         let mut wlkr = self.graph.neighbors(node).detach();
         while let Some(n) = wlkr.next_node(&self.graph) {
             self.graph[n].sealed = true; // seal flow targets
+
+            // if flow target is an expression, seal the expr's first op as well
             if let Some(e) = ag[n].expr().map(|_| ExprNode(n)) {
-                // if flow target is an expression, seal the expr's first op as well
                 self.graph[e.first_op(ag).idx()].sealed = true;
+            }
+
+            // if the flow target is an Op (ie next block), seal the **argument** nodes
+            // NOTE: this is done since an Op should not have variable definition power that would
+            // influence the op's arguments...
+            if ag[n].op().is_some() {
+                let mut wlkr = self.graph.neighbors(n).detach();
+                while let Some(n) = wlkr
+                    .next_node(&self.graph)
+                    .filter(|&n| ag[n].op().is_none())
+                {
+                    self.graph[n].sealed = true;
+                }
             }
         }
     }
