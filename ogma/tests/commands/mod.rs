@@ -732,7 +732,7 @@ fn get_output_inference_be_smarter() {
             vec![n(1), n(20), o("b"), n(2)],
             vec![n(-30), n(100), o("z"), n(-60)],
         ],
-  );
+    );
 }
 
 #[test]
