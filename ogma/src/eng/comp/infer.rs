@@ -190,7 +190,11 @@ fn input_via_expr_compilation<'a>(
 }
 
 fn output<'a>(op: OpNode, compiler: &Compiler_<'a>) -> std::result::Result<Compiler_<'a>, Error> {
-    test_compile_types(compiler, op.idx(), op.parent(compiler.ag()), true)
+    let ag = compiler.ag();
+    let brk = op.parent(ag);
+    //     let brk = brk.parent(ag).map(|x| x.parent(ag)).unwrap_or(brk);
+
+    test_compile_types(compiler, op.idx(), brk, true)
 }
 
 fn test_compile_types<'a>(

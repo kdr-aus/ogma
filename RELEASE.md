@@ -1,6 +1,9 @@
 **🛑 Breaking Changes**
 - [`to-str` now defaults to full number formatting with optional formatting string
     (https://github.com/kdr-aus/ogma/pull/85)
+- Output inference is somewhat smarter for variadic cmds.
+    (https://github.com/kdr-aus/ogma/pull/101)
+    It does place stricter typing constraints on `+ - * / min max`.
 
 **🔬 New Features**
 - `#b` -- Newline constant (b for _break_) (https://github.com/kdr-aus/ogma/pull/75)

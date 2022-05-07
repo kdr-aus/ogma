@@ -500,7 +500,7 @@ fn assigning() {
     assert_eq!(x, Ok(Value::Bool(true)));
 
     let x = process_w_num(
-        "let {+ 1} $x {- 1} $y {= 3} $z | \\ $x | / $y | and {= 2} $z",
+        "let {+ 1} $x {- 1} $y {= 3} $z | \\ $x | / $y | = 2 | and $z",
         defs,
     );
     assert_eq!(x, Ok(Value::Bool(true)));

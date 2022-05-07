@@ -300,10 +300,9 @@ fn max_help() -> HelpMessage {
     )
 }
 
-fn max_intrinsic(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Ty::Num);
-    variadic_intrinsic::<Number, _>(blk, |prev, next| {
-        let x = prev.map(|prev| std::cmp::max(prev, next)).unwrap_or(next);
+fn max_intrinsic(blk: Block) -> Result<Step> {
+    variadic_intrinsic_in_constrained::<Number, _>(blk, |prev, next| {
+        let x = std::cmp::max(prev, next);
         (x, false)
     })
 }
@@ -326,10 +325,9 @@ fn min_help() -> HelpMessage {
     )
 }
 
-fn min_intrinsic(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Ty::Num);
-    variadic_intrinsic::<Number, _>(blk, |prev, next| {
-        let x = prev.map(|prev| std::cmp::min(prev, next)).unwrap_or(next);
+fn min_intrinsic(blk: Block) -> Result<Step> {
+    variadic_intrinsic_in_constrained::<Number, _>(blk, |prev, next| {
+        let x = std::cmp::min(prev, next);
         (x, false)
     })
 }

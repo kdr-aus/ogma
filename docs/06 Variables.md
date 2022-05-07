@@ -24,10 +24,10 @@ let {get:Num price} $price {get:Num carat} $ct | \$price | / $ct }
 
 ![](./assets/variables-1.png?raw=true)
 
-A more idiomatic way of achieving the same result without the use of variables is to use the dot
+A more idiomatic way of achieving the same result is to use the dot
 (`.`) operator:
 ```plaintext
-open diamonds.csv | append --'Price per Carat' / #i.price #i.carat
+open diamonds.csv | append --'Price per Carat' { let $i | get price | / $i.carat }
 ```
 
 ![](./assets/variables-2.gif?raw=true)

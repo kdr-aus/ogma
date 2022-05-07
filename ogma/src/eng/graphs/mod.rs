@@ -668,4 +668,33 @@ mod tests {
         assert_eq!(f(19), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18, 19]));
         assert_eq!(f(20), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18, 19, 20]));
     }
+
+    #[test]
+    fn node_accessors() {
+        let (ag, _tg) = init_graphs("let $a | + { > 3 } | + - + 3");
+
+        assert_eq!(ag.node_count(), 32);
+
+        //         let s = &mut String::new();
+        //         ag.debug_write_flowchart(&_tg, s);
+        //         std::fs::write("foo", s).unwrap();
+
+        let g = &ag;
+
+        // OpNode
+        assert_eq!(OpNode(1.into()).next(g), Some(OpNode(3.into())));
+        assert_eq!(OpNode(3.into()).next(g), Some(OpNode(5.into())));
+        assert_eq!(OpNode(5.into()).next(g), None);
+        assert_eq!(OpNode(5.into()).prev(g), Some(OpNode(3.into())));
+        assert_eq!(OpNode(3.into()).prev(g), Some(OpNode(1.into())));
+        assert_eq!(OpNode(1.into()).prev(g), None);
+        assert_eq!(OpNode(3.into()).parent(g), ExprNode(0.into()));
+
+        // ExprNode
+        assert_eq!(ExprNode(0.into()).first_op(g), OpNode(1.into()));
+        assert_eq!(ExprNode(0.into()).parent(g), None);
+        assert_eq!(ExprNode(6.into()).parent(g), Some(OpNode(5.into())));
+        assert_eq!(ExprNode(17.into()).parent(g), Some(OpNode(7.into())));
+        assert_eq!(ExprNode(21.into()).parent(g), Some(OpNode(20.into())));
+    }
 }

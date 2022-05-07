@@ -196,7 +196,7 @@ let {get:Num price} $price {get:Num carat} $ct | \$price | / $ct }"#,
     .unwrap();
 
     let b = process(
-        r#"open tests/diamonds.csv | append --'Price per Carat' / #i.price #i.carat"#,
+        r#"open tests/diamonds.csv | append --'Price per Carat' { let $i | get price | / $i.carat }"#,
         defs,
     )
     .unwrap();
