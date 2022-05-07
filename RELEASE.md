@@ -18,5 +18,7 @@
 - Output better error messages for unmatched commands (https://github.com/kdr-aus/ogma/pull/86)
 - Dot operator now _infers_ output type when used with `TableRow`s.
     (https://github.com/kdr-aus/ogma/pull/87)
+- Unscoped variables do not return a internal compiler error
+    (https://github.com/kdr-aus/ogma/pull/102)
 
 **✨ Other Updates**

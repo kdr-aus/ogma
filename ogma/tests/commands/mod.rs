@@ -732,5 +732,27 @@ fn get_output_inference_be_smarter() {
             vec![n(1), n(20), o("b"), n(2)],
             vec![n(-30), n(100), o("z"), n(-60)],
         ],
+  );
+}
+
+#[test]
+fn locals_graph_change_bug() {
+    let x = process_w_table(
+        "skip 1 | append --value { get:Num first | * 1e6 | let $n | \\ 'mkt-cap ' | + $v }",
+        &Definitions::new(),
+    )
+    .unwrap_err()
+    .to_string();
+    println!("{}", x);
+
+    assert_eq!(
+        &x,
+        "Semantics Error: variable `v` does not exist
+--> shell:77
+ | skip 1 | append --value { get:Num first | * 1e6 | let $n | \\ 'mkt-cap ' | + $v }
+ |                                                                              ^ `v` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"
     );
 }

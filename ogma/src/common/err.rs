@@ -674,7 +674,9 @@ impl Error {
             desc: format!("variable `{}` does not exist", var),
             traces: trace(var, format!("`{}` not in scope", var)),
             help_msg: Some(
-                "variables must be in scope and can be defined using the `let` command".into(),
+                "variables must be in scope
+          variables can be defined using the `let` command"
+                    .into(),
             ),
             hard: true, // unrecoverable, variable not found in locals
         }

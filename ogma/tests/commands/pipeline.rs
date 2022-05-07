@@ -571,7 +571,8 @@ fn variable_not_existing() {
 --> shell:9
  | \ 5 | > $x
  |          ^ `x` not in scope
---> help: variables must be in scope and can be defined using the `let` command
+--> help: variables must be in scope
+          variables can be defined using the `let` command
 "#
     );
     let x = process_w_table("filter { \\ 5 | let $x | \\ 1 | > 0 } | \\ 5 | > $x", defs)
@@ -584,7 +585,8 @@ fn variable_not_existing() {
 --> shell:47
  | filter { \ 5 | let $x | \ 1 | > 0 } | \ 5 | > $x
  |                                                ^ `x` not in scope
---> help: variables must be in scope and can be defined using the `let` command
+--> help: variables must be in scope
+          variables can be defined using the `let` command
 "#
     );
 }
@@ -636,7 +638,8 @@ fn variables_respect_scope() {
 --> shell:0
  | test-var-scope
  | ^^^^^^^^^^^^^^ invoked here
---> help: variables must be in scope and can be defined using the `let` command
+--> help: variables must be in scope
+          variables can be defined using the `let` command
 "#
     );
     let x = process_w_num("let $x | test-var-scope", defs)
@@ -652,7 +655,8 @@ fn variables_respect_scope() {
 --> shell:9
  | let $x | test-var-scope
  |          ^^^^^^^^^^^^^^ invoked here
---> help: variables must be in scope and can be defined using the `let` command
+--> help: variables must be in scope
+          variables can be defined using the `let` command
 "#
     );
     let x = process_w_num("test-var-scope2 | + $x", defs)
@@ -665,7 +669,8 @@ fn variables_respect_scope() {
 --> shell:21
  | test-var-scope2 | + $x
  |                      ^ `x` not in scope
---> help: variables must be in scope and can be defined using the `let` command
+--> help: variables must be in scope
+          variables can be defined using the `let` command
 "
     );
 }
