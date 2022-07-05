@@ -756,3 +756,39 @@ fn locals_graph_change_bug() {
 "
     );
 }
+
+#[test]
+fn def_locals_not_type_resolving() {
+    let defs = &mut Definitions::new();
+
+    process_definition(
+        "def foo (n:Num) { \\ $n | + 2 }",
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+
+    let x = process_w_nil("\\ 3 | let $n | foo $n", defs);
+    assert_eq!(x, Ok(Value::Num(5.into())));
+
+    let x = process_w_nil("\\ 'a' | let $n | foo $n", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        "Semantics Error: expecting argument with output type `Number`, found `String`
+--> shell:22
+ | \\ 'a' | let $n | foo $n
+ |                       ^ this argument returns type `String`
+--> help: commands may require specific argument types, use `--help` to view requirements
+"
+    );
+
+    // Check bug #80
+    process_definition("def foo (bar:Str) { \\ #t }", Location::Shell, None, defs).unwrap();
+
+    let x = process_w_nil("foo { \\ 'foo' | + 'zog' }", defs);
+    assert_eq!(x, Ok(Value::Bool(true)));
+}

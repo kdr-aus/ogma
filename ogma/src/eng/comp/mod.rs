@@ -208,8 +208,7 @@ impl<'d> Compiler<'d> {
     fn populate_compiled_expressions(&mut self) -> bool {
         let exprs = self
             .ag
-            .node_indices()
-            .filter_map(|n| self.ag[n].expr().map(|_| ExprNode(n)))
+            .expr_nodes()
             .filter(|n| !self.compiled_exprs.contains_key(&n.index()))
             .filter(|n| self.tg[n.idx()].has_types())
             .collect::<Vec<_>>();
@@ -332,16 +331,12 @@ impl<'d> Compiler<'d> {
         // get indices which have known input types
         let nodes = self
             .ag
-            .node_indices()
-            .filter(|&idx| {
+            .op_nodes()
+            .filter(|op| {
                 // not already compiled
-                !self.compiled_ops.contains_key(&idx.index())
+                !self.compiled_ops.contains_key(&op.index())
             // and the input has a type
-            && !self.tg[idx].input.is_unknown()
-            })
-            .filter_map(|idx| {
-                // and is a Op variant
-                self.ag[idx].op().map(|_| OpNode(idx))
+            && !self.tg[op.0].input.is_unknown()
             })
             .collect::<Vec<_>>();
 
@@ -435,7 +430,7 @@ impl<'d> Compiler<'d> {
         })?;
 
         match &self.ag[cmd_node.idx()] {
-            AstNode::Intrinsic { op: _, intrinsic } => {
+            AstNode::Intrinsic { op: _op, intrinsic } => {
                 let block = Block::construct(self, cmd_node, in_ty, chgs, infer_output);
                 intrinsic(block)
             }
