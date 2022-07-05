@@ -1,6 +1,7 @@
 use super::*;
 
 impl<'d> Compiler<'d> {
+    /// Resolve the type graph.
     pub fn resolve_tg(&mut self) -> Result<()> {
         loop {
             match self.tg.flow_types(&mut self.flowed_edges) {

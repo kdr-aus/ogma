@@ -96,6 +96,7 @@ impl BreakOn for OpNode {
 
 /// Common.
 impl<'d> Compiler<'d> {
+    /// A [`AstGraph`] reference.
     pub fn ag(&self) -> &AstGraph {
         &self.ag
     }
@@ -418,6 +419,7 @@ impl<'d> Compiler<'d> {
             .ok_or_else(|| err.expect("error should be some if unsuccesful"))
     }
 
+    /// Try to compile `opnode` into an evaluation [`Step`] given the input type (`in_ty`).
     pub fn compile_block(
         &self,
         opnode: OpNode,
@@ -536,6 +538,7 @@ impl<'d> Compiler<'d> {
 
 #[cfg(debug_assertions)]
 impl<'a> Compiler<'a> {
+    /// Debug compiler state.
     pub fn _write_debug_report<F: AsRef<std::path::Path>>(&self, file: F) {
         use std::fmt::Write;
         let mut report = String::new();
