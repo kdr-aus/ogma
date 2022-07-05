@@ -756,3 +756,13 @@ fn locals_graph_change_bug() {
 "
     );
 }
+
+#[test]
+fn def_locals_not_type_resolving() {
+    let defs = &mut Definitions::new();
+
+    process_definition("def foo (n:Num) { \\ $n | + 2 }", Location::Shell, None, defs).unwrap();
+
+    let x = process_w_nil("\\ 3 | let $n | foo $n", defs);
+    assert_eq!(x, Ok(Value::Num(5.into())));
+}
