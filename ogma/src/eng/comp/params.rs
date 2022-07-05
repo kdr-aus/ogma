@@ -181,8 +181,12 @@ fn map_callsite_param(
     let arg = arg::ArgBuilder::new(argnode, compiler, chgs, None);
 
     let arg = match param.ty() {
-        // point of failure
-        Some(ty) => arg.returns(ty.clone())?,
+        // If there is a specified parameter type, constrain the arg to return that
+        Some(ty) => match arg.returns(ty.clone()) {
+            Ok(x) => x,
+            // return type does not match
+            Err(_) => return Ok(Err(LocalInjection::UnknownReturnTy(argnode))),
+        },
         None => arg,
     };
 

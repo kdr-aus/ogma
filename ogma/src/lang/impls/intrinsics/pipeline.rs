@@ -261,6 +261,7 @@ fn in_help() -> HelpMessage {
 
 fn in_intrinsic(mut blk: Block) -> Result<Step> {
     let arg = blk.next_arg()?.supplied(None)?.concrete()?;
+    blk.assert_output(arg.out_ty().clone());
     blk.eval(arg.out_ty().clone(), move |val, cx| {
         arg.resolve(|| val, &cx).and_then(|x| cx.done(x))
     })
