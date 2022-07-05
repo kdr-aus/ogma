@@ -19,6 +19,7 @@ use super::*;
 use astgraph::Parameter;
 
 impl<'d> Compiler<'d> {
+    /// Insert the locals for a definition into the `callsite_params`.
     pub fn insert_available_def_locals(&mut self) -> Result<bool> {
         // only map defs where we know it will take that path.
         // the reason is two fold;

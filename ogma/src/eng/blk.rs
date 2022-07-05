@@ -33,6 +33,11 @@ impl<'a> Block<'a> {
         self.compiler.defs
     }
 
+    /// A [`Compiler`] reference.
+    pub fn compiler(&self) -> &'a Compiler {
+        self.compiler
+    }
+
     /// Assert that this block will return the given type.
     ///
     /// Asserting an output type gives the type inferer knowledge about this block's output.
@@ -76,6 +81,11 @@ impl<'a> Block<'a> {
     /// See if there is a next argument node, without popping off the stack.
     pub fn peek_next_arg_node(&self) -> Option<graphs::ArgNode> {
         self.args.last().copied()
+    }
+
+    /// See if there is a final argument node, without popping off the stack.
+    pub fn peek_last_arg_node(&self) -> Option<graphs::ArgNode> {
+        self.args.get(0).copied()
     }
 
     /// Assert this argument is a variable and construct a reference to it.

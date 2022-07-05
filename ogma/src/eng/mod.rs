@@ -26,8 +26,9 @@ pub use self::comp::{compile, FullCompilation};
 type Chgs<'a> = &'a mut Vec<graphs::Chg>;
 
 // ###### COMPILER #############################################################
+/// Ogma expression compiler.
 #[derive(Clone)]
-struct Compiler<'d> {
+pub struct Compiler<'d> {
     defs: &'d Definitions,
     ag: graphs::astgraph::AstGraph,
     tg: graphs::tygraph::TypeGraph,

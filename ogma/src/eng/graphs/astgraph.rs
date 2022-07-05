@@ -948,6 +948,10 @@ impl ArgNode {
     pub fn child_op(self, g: &AstGraph) -> Option<OpNode> {
         g[self.idx()].expr().map(|_| ExprNode(self.0).first_op(g))
     }
+
+    pub fn is_expr(self, g: &AstGraph) -> bool {
+        self.child_op(g).is_some()
+    }
 }
 
 impl CmdNode {

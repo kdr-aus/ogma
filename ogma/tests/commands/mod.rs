@@ -15,6 +15,7 @@ mod arithmetic;
 mod cmp;
 mod definitions;
 mod diagnostics;
+mod errs;
 mod io;
 mod logic;
 mod morphism;
@@ -358,26 +359,6 @@ fn too_many_flags() {
  | \ 5 --foo --bar
  |             ^^^ flag not supported
 --> help: try using the `--help` flag to view requirements
-"#
-    );
-}
-
-#[test]
-fn err_wrong_return_type() {
-    let def = &Definitions::new();
-    let x = process_w_table("filter { \\ 5 }", def)
-        .unwrap_err()
-        .to_string();
-    println!("{}", x);
-    assert_eq!(
-        &x,
-        r#"Typing Error: Type resolution failed. Conflicting obligation type
---> shell:9
- | filter { \ 5 }
- |          ^ this node returns a `Number`
---> shell:7
- | filter { \ 5 }
- |        ^^^^^^^ but this node is obliged to return `Bool`
 "#
     );
 }

@@ -354,14 +354,43 @@ variables are scoped to within the expression they are defined"
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
     type Binding = (eng::Variable, eng::Argument);
-    let mut bindings = Vec::with_capacity(blk.args_len() / 2);
 
-    while blk.args_len() > 1 {
-        let e = blk.next_arg()?.supplied(None)?.concrete()?;
-        let argnode = blk.next_arg()?.node();
-        let v = blk.create_var_ref(argnode, e.out_ty().clone())?;
-        bindings.push((v, e));
+    // detect if the trailing argument is a command (expr) node
+    // this could be because of a forgotten pipe
+    let forgotten_pipe = blk
+        .peek_last_arg_node()
+        .filter(|n| n.is_expr(blk.compiler().ag()))
+        .map(|n| {
+            let g = blk.compiler().ag();
+            let etag = n.tag(g);
+            let ptag = n.op(g).blk_tag(g);
+            format!(
+                "maybe you forgot a pipe: `{}| {}`?",
+                &ptag.line[ptag.start..etag.start],
+                etag
+            )
+        });
+
+    fn build_bindings(blk: &mut Block) -> Result<Vec<Binding>> {
+        let mut bindings = Vec::with_capacity(blk.args_len() / 2);
+        while blk.args_len() > 1 {
+            let e = blk.next_arg()?.supplied(None)?.concrete()?;
+            let argnode = blk.next_arg()?.node();
+            let v = blk.create_var_ref(argnode, e.out_ty().clone())?;
+            bindings.push((v, e));
+        }
+        Ok(bindings)
     }
+
+    let bindings = build_bindings(&mut blk).map_err(|mut e| {
+        let h = match (e.help_msg.take(), forgotten_pipe) {
+            (Some(a), Some(b)) => Some(a + "\n    help: " + &b),
+            (Some(a), None) => Some(a),
+            (None, b) => b,
+        };
+        e.help_msg = h;
+        e
+    })?;
 
     // if there is a trailing binding, the input is bound to that variable, and passed through the
     // block as the output. if not, `let` returns the input type!

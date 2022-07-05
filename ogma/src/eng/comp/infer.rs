@@ -106,6 +106,7 @@ impl<'d> Compiler<'d> {
         }
     }
 
+    /// Infer the outputs with the current compiler state.
     pub fn infer_outputs(self: &mut Box<Self>) -> Result<bool> {
         self.assert_inference_depth();
 
