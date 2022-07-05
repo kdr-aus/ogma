@@ -785,4 +785,16 @@ fn def_locals_not_type_resolving() {
 --> help: commands may require specific argument types, use `--help` to view requirements
 "
     );
+
+    // Check bug #80
+    process_definition(
+        "def foo (bar:Str) { \\ #t }",
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+
+    let x = process_w_nil("foo { \\ 'foo' | + 'zog' }", defs);
+    assert_eq!(x, Ok(Value::Bool(true)));
 }
