@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write;
 
 impl<'d> Compiler<'d> {
     pub fn resolve_tg(&mut self) -> Result<()> {
@@ -77,10 +78,11 @@ impl<'d> Compiler<'d> {
                     ),
                 };
 
-                err.desc += &format!(
-                    ". Conflicting source {} into destination {}",
-                    from_ty, to_ty
-                );
+                write!(
+                    &mut err.desc,
+                    ". Conflicting source {from_ty} into destination {to_ty}"
+                )
+                .ok();
                 err.traces.push(from_trace);
                 err.traces.push(to_trace);
             }
