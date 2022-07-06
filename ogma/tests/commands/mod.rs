@@ -773,3 +773,15 @@ fn def_locals_not_type_resolving() {
     let x = process_w_nil("foo { \\ 'foo' | + 'zog' }", defs);
     assert_eq!(x, Ok(Value::Bool(true)));
 }
+
+#[test]
+fn type_resolution_failure() {
+    let x = process_w_nil(
+        "ls | let {nth 0 get:Num size} $start {last get:Num size} $end | \\ #t",
+        &Definitions::new(),
+    );
+    if let Err(e) = &x {
+        println!("{e}");
+    }
+    assert_eq!(x, Ok(Value::Bool(true)));
+}

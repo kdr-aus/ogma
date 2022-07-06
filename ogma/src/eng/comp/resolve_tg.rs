@@ -48,7 +48,7 @@ impl<'d> Compiler<'d> {
                 ));
                 err.traces.push(Trace::from_tag(
                     to,
-                    "but this node is has stronger type garauntees".to_string(),
+                    "but this node has stronger type guarantees".to_string(),
                 ));
                 err.help_msg = Error::internal_err_help();
             }

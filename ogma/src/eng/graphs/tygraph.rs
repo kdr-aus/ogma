@@ -384,8 +384,8 @@ impl TypeGraph {
                     from.output.can_flow(&to.output).map_err(reserr)?;
                     Some((Update::ToOutput, from.output.clone()))
                 }
-                // Backpropagate flow if to.input:Obliged -> from.input
-                Flow::II if matches!(to.input, Knowledge::Obliged(_)) => {
+                // Backpropagate flow if to.input:Obliged | Known -> from.input
+                Flow::II if matches!(to.input, Knowledge::Obliged(_) | Knowledge::Known(_)) => {
                     to.input.can_flow(&from.input).map_err(reserr)?;
                     Some((Update::FromInput, to.input.clone()))
                 }
@@ -556,7 +556,7 @@ impl Knowledge {
     /// Checks that the this knowledge can 'flow' into the knowledged at `into`.
     ///
     /// Flow is driven by two aspects:
-    /// 1. The ranking of the knowledge (`Known` is the strongest garauntee),
+    /// 1. The ranking of the knowledge (`Known` is the strongest guarantee),
     /// 2. The types match.
     ///
     /// If there is a conflict between the two pieces of knowledge, a `Err(Conflict)` is returned.

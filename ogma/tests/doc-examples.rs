@@ -2,7 +2,7 @@ use libs::divvy::Str;
 use ogma::lang::ast::Location;
 use ogma::lang::{Definitions, Value};
 use std::path::Path;
-use table::Entry::{self, Nil};
+use table::Entry;
 
 type Result<T> = std::result::Result<T, ogma::Error>;
 
