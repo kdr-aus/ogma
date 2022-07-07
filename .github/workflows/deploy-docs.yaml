@@ -20,7 +20,10 @@ jobs:
         override: true
 
     - name: Build Documentation
-      run: cargo doc --workspace --no-deps
+      run: cargo doc -p ogma --no-deps
+      
+    - name: Link landing page
+      run: echo "<meta http-equiv=\"refresh\" content=\"0; url=ogma\">" > target/doc/index.html
 
     - name: Deploy Docs
       uses: peaceiris/actions-gh-pages@v3
