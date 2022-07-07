@@ -1,0 +1,31 @@
+name: deploy-docs
+on:
+  push:
+   branches:
+   - main
+
+jobs:
+  rustdoc:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Build Documentation
+      run: cargo doc --workspace --no-deps
+
+    - name: Deploy Docs
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: crate-docs
+        publish_dir: ./target/doc
+        force_orphan: true
