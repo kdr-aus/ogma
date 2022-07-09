@@ -3,11 +3,11 @@ use std::cmp;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-        (+, add, Arithmetic)
-        (*, mul, Arithmetic)
+        ("+", add, Arithmetic)
+        ("*", mul, Arithmetic)
         ("×", mul, Arithmetic)
         ("-", sub, Arithmetic)
-        (/, div, Arithmetic)
+        ("/", div, Arithmetic)
         ("÷", div, Arithmetic)
         (ceil, Arithmetic)
         (floor, Arithmetic)

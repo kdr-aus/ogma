@@ -13,19 +13,23 @@ use std::{
 use Type as Ty;
 
 macro_rules! add {
+    // untyped
     ($impls:expr, ($cmd:tt, $cat:ident) $($rem:tt)*) => {{
-        add!($impls, ($cmd, $cmd, $cat) $($rem)*)
+        add!($impls, (stringify!($cmd), $cmd, $cat) $($rem)*)
     }};
-    ($impls:expr, ($cmd:literal, $inner:tt, $cat:ident) $($rem:tt)*) => {{
-        paste! { add!($impls, ($cmd, [<$inner _intrinsic>], $cat, [<$inner _help>]) $($rem)*) }
+    ($impls:expr, ($cmd:expr, $inner:tt, $cat:ident) $($rem:tt)*) => {{
+        paste! { add!($impls, ($cmd, None, [<$inner _intrinsic>], $cat, [<$inner _help>]) $($rem)*) }
     }};
-    ($impls:expr, ($cmd:tt, $inner:tt, $cat:ident) $($rem:tt)*) => {{
-        paste! { add!($impls, (stringify!($cmd), [<$inner _intrinsic>], $cat, [<$inner _help>]) $($rem)*) }
+    // typed
+    ($impls:expr, ($cmd:literal, $type:ty, $inner:tt, $cat:ident) $($rem:tt)*) => {{
+        let t = Some(<$type as AsType>::as_type());
+        paste! { add!($impls, ($cmd, t, [<$inner _intrinsic>], $cat, [<$inner _help>]) $($rem)*) }
     }};
-    ($impls:expr, ($cmd:expr, $fn:path, $cat:ident, $help:path) $($rem:tt)* ) => {{
+    // agnostic
+    ($impls:expr, ($cmd:expr, $in_ty:expr, $fn:path, $cat:ident, $help:path) $($rem:tt)* ) => {{
         $impls.insert_intrinsic(
             $cmd,
-            None,
+            $in_ty,
             $fn,
             Location::Ogma,
             OperationCategory::$cat,
