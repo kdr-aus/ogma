@@ -30,21 +30,10 @@ where
 
 // ------ Add ------------------------------------------------------------------
 fn add_num_help() -> HelpMessage {
-    HelpMessage {
-        desc: "add arguments together
-if input is a Table, concat or join additional tables
--variadic-: more than one argument can be specified"
-            .into(),
-        params: vec![HelpParameter::Required("args..".into())],
-        flags: vec![
-            ("cols", "join tables (append columns)"),
-            ("union", "expand table to capture all data (default)"),
-            (
-                "intersect",
-                "use minimum size of table; min rows for --cols, min cols for concat rows",
-            ),
-        ],
-        examples: vec![
+    variadic_help(
+        "+",
+        "add numbers together",
+        vec![
             HelpExample {
                 desc: "add 2 to 1",
                 code: "\\ 1 | + 2",
@@ -53,17 +42,8 @@ if input is a Table, concat or join additional tables
                 desc: "add multiple numbers together",
                 code: "+ 1 2 3 4 5",
             },
-            HelpExample {
-                desc: "add two tables together, concatenating rows",
-                code: "range 0 10 | + range 10 20",
-            },
-            HelpExample {
-                desc: "index filesystem items, shrink table to min rows",
-                code: "range 0 1000 | + --cols --intersect ls",
-            },
         ],
-        ..HelpMessage::new("+")
-    }
+    )
 }
 
 fn add_num_intrinsic(blk: Block) -> Result<Step> {
@@ -71,40 +51,20 @@ fn add_num_intrinsic(blk: Block) -> Result<Step> {
 }
 
 fn add_str_help() -> HelpMessage {
-    HelpMessage {
-        desc: "add arguments together
-if input is a Table, concat or join additional tables
--variadic-: more than one argument can be specified"
-            .into(),
-        params: vec![HelpParameter::Required("args..".into())],
-        flags: vec![
-            ("cols", "join tables (append columns)"),
-            ("union", "expand table to capture all data (default)"),
-            (
-                "intersect",
-                "use minimum size of table; min rows for --cols, min cols for concat rows",
-            ),
-        ],
-        examples: vec![
+    variadic_help(
+        "+",
+        "concatenate strings together",
+        vec![
             HelpExample {
-                desc: "add 2 to 1",
-                code: "\\ 1 | + 2",
+                desc: "join together strings",
+                code: "\\ Hello | + ', world!'",
             },
             HelpExample {
-                desc: "add multiple numbers together",
-                code: "+ 1 2 3 4 5",
-            },
-            HelpExample {
-                desc: "add two tables together, concatenating rows",
-                code: "range 0 10 | + range 10 20",
-            },
-            HelpExample {
-                desc: "index filesystem items, shrink table to min rows",
-                code: "range 0 1000 | + --cols --intersect ls",
+                desc: "join strings with a new line",
+                code: "\\ 'First Line' | + #b 'Second Line'",
             },
         ],
-        ..HelpMessage::new("+")
-    }
+    )
 }
 
 fn add_str_intrinsic(blk: Block) -> Result<Step> {
@@ -115,29 +75,10 @@ fn add_str_intrinsic(blk: Block) -> Result<Step> {
 }
 
 fn add_table_help() -> HelpMessage {
-    HelpMessage {
-        desc: "add arguments together
-if input is a Table, concat or join additional tables
--variadic-: more than one argument can be specified"
-            .into(),
-        params: vec![HelpParameter::Required("args..".into())],
-        flags: vec![
-            ("cols", "join tables (append columns)"),
-            ("union", "expand table to capture all data (default)"),
-            (
-                "intersect",
-                "use minimum size of table; min rows for --cols, min cols for concat rows",
-            ),
-        ],
-        examples: vec![
-            HelpExample {
-                desc: "add 2 to 1",
-                code: "\\ 1 | + 2",
-            },
-            HelpExample {
-                desc: "add multiple numbers together",
-                code: "+ 1 2 3 4 5",
-            },
+    let h = variadic_help(
+        "+",
+        "concatenate rows of table",
+        vec![
             HelpExample {
                 desc: "add two tables together, concatenating rows",
                 code: "range 0 10 | + range 10 20",
@@ -147,7 +88,18 @@ if input is a Table, concat or join additional tables
                 code: "range 0 1000 | + --cols --intersect ls",
             },
         ],
-        ..HelpMessage::new("+")
+    );
+
+    HelpMessage {
+        flags: vec![
+            ("cols", "join tables (append columns)"),
+            ("union", "expand table to capture all data (default)"),
+            (
+                "intersect",
+                "use minimum size of table; min rows for --cols, min cols for concat rows",
+            ),
+        ],
+        ..h
     }
 }
 

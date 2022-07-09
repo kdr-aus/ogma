@@ -682,9 +682,9 @@ mod tests {
 
         assert_eq!(ag.node_count(), 38);
 
-        let s = &mut String::new();
-        ag.debug_write_flowchart(&_tg, s);
-        std::fs::write("foo.md", s).unwrap();
+//         let s = &mut String::new();
+//         ag.debug_write_flowchart(&_tg, s);
+//         std::fs::write("foo.md", s).unwrap();
 
         let g = &ag;
 
