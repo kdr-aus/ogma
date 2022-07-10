@@ -68,7 +68,7 @@ struct Keys {
 impl Keys {
     /// Get the [`Impl`] keyed on `ty`. If none are present, tries to get an impl keyed on `None`.
     fn get_impl(&self, ty: &Type) -> Option<&Impl> {
-        self.tys.get(ty).or_else(|| self.agnostic.as_ref())
+        self.tys.get(ty).or(self.agnostic.as_ref())
     }
 
     fn iter(&self) -> impl Iterator<Item = (Option<&Type>, &Impl)> {

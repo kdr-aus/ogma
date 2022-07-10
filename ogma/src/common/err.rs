@@ -88,7 +88,7 @@ pub fn help_as_error(msg: &HelpMessage, in_ty: Option<&Type>) -> Error {
     use fmt::Write;
 
     let cmd = msg.cmd.as_str();
-    let mut source = format!("---- Input Type: ");
+    let mut source = "---- Input Type: ".to_string();
 
     match in_ty {
         Some(t) => write!(&mut source, "{t}"),
