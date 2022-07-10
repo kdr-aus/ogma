@@ -15,10 +15,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         ("/", Number, div_num, Arithmetic)
         ("÷", Number, div_num, Arithmetic)
 
-        (ceil, Arithmetic)
-        (floor, Arithmetic)
-        ("is-finite", isfinite, Arithmetic)
-        (root, Arithmetic)
+        ("ceil", Number, ceil_num, Arithmetic)
+        ("floor", Number, floor_num, Arithmetic)
+        ("is-finite", Number, isfinite_num, Arithmetic)
+        ("root", Number, root_num, Arithmetic)
     };
 }
 
@@ -186,14 +186,14 @@ fn add_table_by_col(mut prev: Table, next: Table, intersect: bool) -> Table {
 }
 
 // ------ Ceil -----------------------------------------------------------------
-fn ceil_help() -> HelpMessage {
+fn ceil_num_help() -> HelpMessage {
     HelpMessage {
         desc: "return the smallest integer greater than or equal to a number".into(),
         ..HelpMessage::new("ceil")
     }
 }
 
-fn ceil_intrinsic(blk: Block) -> Result<Step> {
+fn ceil_num_intrinsic(blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
         return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
@@ -228,14 +228,14 @@ fn div_num_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Floor ----------------------------------------------------------------
-fn floor_help() -> HelpMessage {
+fn floor_num_help() -> HelpMessage {
     HelpMessage {
         desc: "return the largest integer less than or equal to a number".into(),
         ..HelpMessage::new("floor")
     }
 }
 
-fn floor_intrinsic(blk: Block) -> Result<Step> {
+fn floor_num_intrinsic(blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
         return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
@@ -247,7 +247,7 @@ fn floor_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Is Finite ------------------------------------------------------------
-fn isfinite_help() -> HelpMessage {
+fn isfinite_num_help() -> HelpMessage {
     HelpMessage {
         desc: "returns whether a number is finite
 a number is finite if it is not infinite AND not NaN"
@@ -266,7 +266,7 @@ a number is finite if it is not infinite AND not NaN"
     }
 }
 
-fn isfinite_intrinsic(blk: Block) -> Result<Step> {
+fn isfinite_num_intrinsic(blk: Block) -> Result<Step> {
     match blk.in_ty() {
         Ty::Num => blk.eval_o(|n, cx| {
             Number::try_from(n)
@@ -300,7 +300,7 @@ fn mul_num_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Root -----------------------------------------------------------------
-fn root_help() -> HelpMessage {
+fn root_num_help() -> HelpMessage {
     HelpMessage {
         desc: "calculate the nth root of a number".into(),
         params: vec![HelpParameter::Required("index".into())],
@@ -318,7 +318,7 @@ fn root_help() -> HelpMessage {
     }
 }
 
-fn root_intrinsic(mut blk: Block) -> Result<Step> {
+fn root_num_intrinsic(mut blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
         return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }

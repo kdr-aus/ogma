@@ -308,7 +308,7 @@ fn ceil_help_msg() {
         &x,
         "Help: `ceil`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | return the smallest integer greater than or equal to a number
  | 
  | Usage:
@@ -325,7 +325,7 @@ fn floor_help_msg() {
         &x,
         "Help: `floor`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | return the largest integer less than or equal to a number
  | 
  | Usage:
@@ -396,7 +396,7 @@ fn isfinite_help_msg() {
         &x,
         "Help: `is-finite`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | returns whether a number is finite
  | a number is finite if it is not infinite AND not NaN
  | 
@@ -507,7 +507,7 @@ fn root_help_msg() {
         &x,
         "Help: `root`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | calculate the nth root of a number
  | 
  | Usage:
