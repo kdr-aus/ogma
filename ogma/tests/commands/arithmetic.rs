@@ -474,7 +474,7 @@ fn mul_help_msg() {
         &x,
         "Help: `*`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | multiply arguments together
  | -variadic-: more than one argument can be specified
  | 

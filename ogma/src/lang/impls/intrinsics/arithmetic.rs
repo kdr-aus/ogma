@@ -6,8 +6,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         ("+", Number, add_num, Arithmetic)
         ("+", Str, add_str, Arithmetic)
         ("+", Table, add_table, Arithmetic)
-        ("*", mul, Arithmetic)
-        ("×", mul, Arithmetic)
+
+        ("*", Number, mul_num, Arithmetic)
+        ("×", Number, mul_num, Arithmetic)
+
         ("-", sub, Arithmetic)
         ("/", div, Arithmetic)
         ("÷", div, Arithmetic)
@@ -279,7 +281,7 @@ fn isfinite_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Mul ------------------------------------------------------------------
-fn mul_help() -> HelpMessage {
+fn mul_num_help() -> HelpMessage {
     variadic_help(
         "*",
         "multiply arguments together",
@@ -296,7 +298,7 @@ fn mul_help() -> HelpMessage {
     )
 }
 
-fn mul_intrinsic(blk: Block) -> Result<Step> {
+fn mul_num_intrinsic(blk: Block) -> Result<Step> {
     variadic_intrinsic_num(blk, std::ops::Mul::mul)
 }
 
