@@ -10,7 +10,8 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         ("*", Number, mul_num, Arithmetic)
         ("×", Number, mul_num, Arithmetic)
 
-        ("-", sub, Arithmetic)
+        ("-", Number, sub_num, Arithmetic)
+
         ("/", div, Arithmetic)
         ("÷", div, Arithmetic)
         (ceil, Arithmetic)
@@ -348,28 +349,23 @@ fn root_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Sub ------------------------------------------------------------------
-fn sub_help() -> HelpMessage {
+fn sub_num_help() -> HelpMessage {
     variadic_help(
         "-",
-        "subtract arguments from one another
-note: if input is not a Num, the first arg is used as lhs",
+        "subtract arguments from one another",
         vec![
             HelpExample {
                 desc: "subtract 2 from 1",
                 code: "\\ 1 | - 2",
             },
             HelpExample {
-                desc: "subtract 1 - 2 = -1",
-                code: "- 1 2",
-            },
-            HelpExample {
                 desc: "subtract multiple numbers together",
-                code: "- 1 2 3 4 5",
+                code: "\\ 1 | - 2 3 4 5",
             },
         ],
     )
 }
 
-fn sub_intrinsic(blk: Block) -> Result<Step> {
+fn sub_num_intrinsic(blk: Block) -> Result<Step> {
     variadic_intrinsic_num(blk, std::ops::Sub::sub)
 }

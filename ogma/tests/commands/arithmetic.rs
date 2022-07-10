@@ -547,9 +547,8 @@ fn sub_help_msg() {
         &x,
         "Help: `-`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | subtract arguments from one another
- | note: if input is not a Num, the first arg is used as lhs
  | -variadic-: more than one argument can be specified
  | 
  | Usage:
@@ -559,11 +558,8 @@ fn sub_help_msg() {
  |  subtract 2 from 1
  |  => \\ 1 | - 2
  | 
- |  subtract 1 - 2 = -1
- |  => - 1 2
- | 
  |  subtract multiple numbers together
- |  => - 1 2 3 4 5
+ |  => \\ 1 | - 2 3 4 5
 "
     );
 }
