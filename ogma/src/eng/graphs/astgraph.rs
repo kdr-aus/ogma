@@ -288,17 +288,22 @@ impl AstGraph {
             return Err(Error::op_not_found(&op, None, false, impls));
         }
 
-        let op_impls = impls
-            .iter()
-            .filter(|(name, _, _)| op.str() == name.as_str());
+        let op_impls = impls.iter_op(op.str());
 
         recursion_detector.clear_cache();
 
         let mut expanded = false;
 
-        for (name, key, im) in op_impls {
+        for lang::impls::ImplEntry {
+            name,
+            ty,
+            cat: _,
+            help: _,
+            impl_,
+        } in op_impls
+        {
             // sub-root
-            let cmd = match im {
+            let cmd = match impl_ {
                 // always include an intrinsic
                 Implementation::Intrinsic { loc: _, f } => self.0.add_node(AstNode::Intrinsic {
                     op: op.clone(),
@@ -308,7 +313,7 @@ impl AstGraph {
                     // first, test that this def is not already being used in the call chain,
                     // detecting recursion.
                     // make an exception for unkeyed impls, since the path taken may be differing
-                    let id = key.map(|t| format!("{}:{}", name, t));
+                    let id = ty.map(|ty| format!("{name}:{ty}"));
 
                     if id
                         .as_ref()
@@ -345,7 +350,7 @@ impl AstGraph {
             let g = &mut self.0;
 
             // link the op with this subroot, keyed by the key!
-            g.add_edge(opnode_, cmd, Relation::Keyed(key.cloned()));
+            g.add_edge(opnode_, cmd, Relation::Keyed(ty.cloned()));
 
             // link the op's terms to this subroot
             // REVERSED since the neighbors are returned in reverse add order

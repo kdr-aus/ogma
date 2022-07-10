@@ -955,7 +955,7 @@ mod tests {
     }
 
     fn x(t: Type) -> String {
-        t.help().to_string()
+        crate::common::err::help_as_error(&t.help(), None).to_string()
     }
 
     #[test]

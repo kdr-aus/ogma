@@ -35,10 +35,38 @@ fn add_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `+`
+        r#"Help: `+`
 --> shell:0
- | add arguments together
- | if input is a Table, concat or join additional tables
+ | ---- Input Type: Number ----
+ | add numbers together
+ | -variadic-: more than one argument can be specified
+ | 
+ | Usage:
+ |  => + args..
+ | 
+ | Examples:
+ |  add 2 to 1
+ |  => \ 1 | + 2
+ | 
+ |  add multiple numbers together
+ |  => + 1 2 3 4 5
+ | 
+ | ---- Input Type: String ----
+ | concatenate strings together
+ | -variadic-: more than one argument can be specified
+ | 
+ | Usage:
+ |  => + args..
+ | 
+ | Examples:
+ |  join together strings
+ |  => \ Hello | + ', world!'
+ | 
+ |  join strings with a new line
+ |  => \ 'First Line' | + #b 'Second Line'
+ | 
+ | ---- Input Type: Table ----
+ | concatenate rows of table
  | -variadic-: more than one argument can be specified
  | 
  | Usage:
@@ -50,18 +78,12 @@ fn add_help_msg() {
  |  --intersect: use minimum size of table; min rows for --cols, min cols for concat rows
  | 
  | Examples:
- |  add 2 to 1
- |  => \\ 1 | + 2
- | 
- |  add multiple numbers together
- |  => + 1 2 3 4 5
- | 
  |  add two tables together, concatenating rows
  |  => range 0 10 | + range 10 20
  | 
  |  index filesystem items, shrink table to min rows
  |  => range 0 1000 | + --cols --intersect ls
-"
+"#
     );
 }
 

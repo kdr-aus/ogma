@@ -1,4 +1,4 @@
-use crate::prelude::{err::help_as_error, Str};
+use crate::prelude::Str;
 use std::fmt;
 
 /// Help messages work off the back of error messages such that:
@@ -38,12 +38,6 @@ impl HelpMessage {
     }
 }
 
-impl fmt::Display for HelpMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", help_as_error(self))
-    }
-}
-
 #[derive(Clone)]
 pub enum HelpParameter {
     Required(Str),
@@ -73,6 +67,7 @@ pub struct HelpExample {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::err::help_as_error;
 
     #[test]
     fn help_msg() {
@@ -83,7 +78,7 @@ mod tests {
             params: vec![Required("required1".into()), Required("req2".into())],
             ..HelpMessage::new("cmd-name")
         };
-        let s = help_as_error(&h).to_string();
+        let s = help_as_error(&h, None).to_string();
         assert_eq!(
             &s,
             "Help: `cmd-name`
@@ -109,7 +104,7 @@ mod tests {
             ],
             ..HelpMessage::new("cmd-name")
         };
-        let s = help_as_error(&h).to_string();
+        let s = help_as_error(&h, None).to_string();
         assert_eq!(
             &s,
             "Help: `cmd-name`
