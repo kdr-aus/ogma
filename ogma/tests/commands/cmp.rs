@@ -9,6 +9,7 @@ fn cmp_help_test() {
         &x,
         "Help: `cmp`
 --> shell:0
+ | ---- Input Type: <any> ----
  | compare <rhs> to input
  | 
  | Usage:
@@ -31,6 +32,7 @@ fn ord_init_help_test() {
         &x,
         "Help: `Ord`
 --> shell:0
+ | ---- Input Type: <any> ----
  | initialise a `Ord`
  | 
  | Usage:
@@ -162,6 +164,7 @@ fn eq_help_test() {
         &x,
         "Help: `eq`
 --> shell:0
+ | ---- Input Type: <any> ----
  | returns if <rhs> is equal to input
  | 
  | Usage:
@@ -232,6 +235,7 @@ fn gt_help_msg() {
         &x,
         "Help: `>`
 --> shell:0
+ | ---- Input Type: <any> ----
  | user defined implementation in <ogma>
  | `def > (rhs) { cmp $rhs | = Ord::Gt }`
  | test if input is greater than rhs
@@ -269,6 +273,7 @@ fn min_help_msg() {
         &x,
         "Help: `min`
 --> shell:0
+ | ---- Input Type: <any> ----
  | return the minimum value
  | -variadic-: more than one argument can be specified
  | 
@@ -293,6 +298,7 @@ fn max_help_msg() {
         &x,
         "Help: `max`
 --> shell:0
+ | ---- Input Type: <any> ----
  | return the maximum value
  | -variadic-: more than one argument can be specified
  | 

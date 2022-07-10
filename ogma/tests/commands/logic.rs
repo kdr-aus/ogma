@@ -9,6 +9,7 @@ fn and_help_msg() {
         &x,
         "Help: `and`
 --> shell:0
+ | ---- Input Type: <any> ----
  | returns true if all arguments are true
  | -variadic-: more than one argument can be specified
  | 
@@ -50,6 +51,7 @@ fn if_help_msg() {
         &x,
         "Help: `if`
 --> shell:0
+ | ---- Input Type: <any> ----
  | evaluate expression if predicate is met
  | input is carried through to each of the expressions
  | `expr-if-true` and `expr-if-false` must evaluate to the same type
@@ -142,6 +144,7 @@ fn or_help_msg() {
         &x,
         "Help: `or`
 --> shell:0
+ | ---- Input Type: <any> ----
  | returns true if any arguments are true
  | -variadic-: more than one argument can be specified
  | 

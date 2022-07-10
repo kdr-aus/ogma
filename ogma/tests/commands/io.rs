@@ -9,6 +9,7 @@ fn ls_help_msg() {
         &x,
         "Help: `ls`
 --> shell:0
+ | ---- Input Type: <any> ----
  | list out aspects of the input
  | input is Nil; outputs the filesystem contents in the current working dir
  | input is Table; outputs the headers as a table

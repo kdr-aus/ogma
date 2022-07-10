@@ -83,6 +83,7 @@ mod tests {
             &s,
             "Help: `cmd-name`
 --> shell:0
+ | ---- Input Type: <any> ----
  | this is a description
  | 
  | Usage:
@@ -104,11 +105,12 @@ mod tests {
             ],
             ..HelpMessage::new("cmd-name")
         };
-        let s = help_as_error(&h, None).to_string();
+        let s = help_as_error(&h, Some(&crate::prelude::Type::Tab)).to_string();
         assert_eq!(
             &s,
             "Help: `cmd-name`
 --> shell:0
+ | ---- Input Type: Table ----
  | this is a description
  | 
  | Usage:

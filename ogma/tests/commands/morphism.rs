@@ -9,6 +9,7 @@ fn append_help_msg() {
         &x,
         "Help: `append`
 --> shell:0
+ | ---- Input Type: <any> ----
  | add new columns onto a table using one or more expressions
  | each expression adds a new column, populated by row with the result of the expression
  | tags can be optionally specified to name the columns
@@ -95,6 +96,7 @@ fn append_row_help_msg() {
         &x,
         "Help: `append-row`
 --> shell:0
+ | ---- Input Type: <any> ----
  | append a row to the table
  | the row is populated with the expression results
  | -variadic-: more than one argument can be specified
@@ -153,6 +155,7 @@ fn dedup_help_msg() {
         &x,
         "Help: `dedup`
 --> shell:0
+ | ---- Input Type: <any> ----
  | deduplicate items
  | for Tables consectutive repeated rows are removed if the cells in
  | specified columns match. if no columns are specified the whole row must match.
@@ -246,6 +249,7 @@ fn filtering_help_msg() {
         &x,
         "Help: `filter`
 --> shell:0
+ | ---- Input Type: <any> ----
  | filter incoming data using a predicate
  | filter can be used with a column header and a type flag
  | filtering columns is achievable with the --cols flag
@@ -421,6 +425,7 @@ fn fold_help_msg() {
         &x,
         "Help: `fold`
 --> shell:0
+ | ---- Input Type: <any> ----
  | fold (reduce) table into single value
  | fold takes a seed value and an accumulator expression
  | the variable $row is available to query the table row
@@ -457,6 +462,7 @@ fn fold_while_help_msg() {
         &x,
         "Help: `fold-while`
 --> shell:0
+ | ---- Input Type: <any> ----
  | fold (reduce) table into single value while a predicate remains true
  | fold-while is similar to fold with an added predicate check on each iteration
  | the input into the predicate is the current accumulator value
@@ -494,6 +500,7 @@ fn grp_help_msg() {
         &x,
         "Help: `grp`
 --> shell:0
+ | ---- Input Type: <any> ----
  | group a table by column headers
  | each value under the header is stringified and
  | concatenated together separated by a hyphen
@@ -557,6 +564,7 @@ fn grpby_help_msg() {
         &x,
         "Help: `grp-by`
 --> shell:0
+ | ---- Input Type: <any> ----
  | group table using an expression
  | the result of the expression must define a `cmp` implementation
  | this can be used to group user-defined types
@@ -603,6 +611,7 @@ fn map_help_msg() {
         &x,
         "Help: `map`
 --> shell:0
+ | ---- Input Type: <any> ----
  | replace entry in column with result of an expression
  | `map` provides the variable `$row` which is the TableRow
  | the input into the expression is the value of the entry
@@ -697,6 +706,7 @@ fn pick_help_msg() {
         &x,
         "Help: `pick`
 --> shell:0
+ | ---- Input Type: <any> ----
  | pick out columns to keep in a table, in order
  | 
  | Usage:
@@ -816,6 +826,7 @@ fn ren_help_msg() {
         &x,
         "Help: `ren`
 --> shell:0
+ | ---- Input Type: <any> ----
  | rename column headers
  | each binding takes the form `<col-ref> <name>`
  | `<col-ref>` can be a string or a column index number
@@ -903,6 +914,7 @@ fn ren_with_help_msg() {
         &x,
         "Help: `ren-with`
 --> shell:0
+ | ---- Input Type: <any> ----
  | rename column headers using a row as a seed
  | each entry is fed into the expression, which returns a string
  | the default entry type required is a string
@@ -1010,6 +1022,7 @@ fn rev_help_msg() {
         &x,
         "Help: `rev`
 --> shell:0
+ | ---- Input Type: <any> ----
  | reverse the order of the input
  | for String inputs; character ordering is reversed
  | for Table inputs; row or col ordering is reversed
@@ -1074,6 +1087,7 @@ fn skip_help_msg() {
         &x,
         "Help: `skip`
 --> shell:0
+ | ---- Input Type: <any> ----
  | skip the first n elements of a data structure
  | 
  | Usage:
@@ -1141,6 +1155,7 @@ fn sort_help_msg() {
         &x,
         "Help: `sort`
 --> shell:0
+ | ---- Input Type: <any> ----
  | sort a table by column headers
  | each header sorts the rows lowest to highest in a canonical fashion,
  | in order specified (1st column is sorted first)
@@ -1206,6 +1221,7 @@ fn sortby_help_msg() {
         &x,
         "Help: `sort-by`
 --> shell:0
+ | ---- Input Type: <any> ----
  | sort table using an expression
  | the result of the expression must define a `cmp` implementation
  | this can be used to sort user-defined types
@@ -1353,6 +1369,7 @@ fn take_help_msg() {
         &x,
         "Help: `take`
 --> shell:0
+ | ---- Input Type: <any> ----
  | take the first n elements of a data structure
  | 
  | Usage:

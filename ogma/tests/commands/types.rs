@@ -82,6 +82,7 @@ fn table_help_msg() {
         &x,
         "Help: `Table`
 --> shell:0
+ | ---- Input Type: <any> ----
  | create an empty table with the given table headers
  | -variadic-: more than one argument can be specified
  | 
@@ -122,6 +123,7 @@ fn tuple_help_msg() {
         &x,
         "Help: `Tuple`
 --> shell:0
+ | ---- Input Type: <any> ----
  | construct a tuple of the result of each expression
  | tuples impl `eq` and `cmp` if all its fields also implement `eq` and `cmp`
  | tuples have unique types: `U_<t0_Ty>-<t1_Ty>_`
@@ -300,6 +302,7 @@ fn point_construction_help() {
         &x,
         "Help: `Point`
 --> shell:0
+ | ---- Input Type: <any> ----
  | initialise a `Point`
  | 
  | Usage:

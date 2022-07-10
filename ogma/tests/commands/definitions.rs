@@ -13,6 +13,7 @@ fn defs_help_msg() {
         &x,
         "Help: `def`
 --> shell:0
+ | ---- Input Type: <any> ----
  | define a command that encapsulates an expression
  | def has specialised syntax which takes variable params: ( )
  | 
@@ -47,6 +48,7 @@ fn user_def_help_msg() {
         &x,
         "Help: `num5`
 --> shell:0
+ | ---- Input Type: <any> ----
  | user defined implementation in shell
  | `def num5 () { \\ 5 }`
  | 
@@ -61,6 +63,7 @@ fn user_def_help_msg() {
         &x,
         "Help: `gt10`
 --> shell:0
+ | ---- Input Type: <any> ----
  | user defined implementation in 'some/file' - line 12
  | `def gt10 (n) { get $n | > 10 }`
  | 
@@ -182,6 +185,7 @@ def z2 () { ls }";
         &x,
         "Help: `z2`
 --> shell:0
+ | ---- Input Type: <any> ----
  | user defined implementation in 'hello' - line 6
  | `def z2 () { ls }`
  | 
@@ -266,6 +270,7 @@ def bar () {
         &x,
         "Help: `zog`
 --> shell:0
+ | ---- Input Type: Number ----
  | user defined implementation in 'foo' - line 4
  | `def zog Num (x y) {
  |     + $x |
@@ -289,6 +294,7 @@ def bar () {
         &x,
         "Help: `bar`
 --> shell:0
+ | ---- Input Type: <any> ----
  | user defined implementation in 'foo' - line 18
  | `def bar () {
  |     if {= foo}
