@@ -1,5 +1,6 @@
 use super::{completion::*, *};
 use ::libs::{parking_lot::RwLock, rustc_hash::FxHashMap as HashMap};
+use itertools::Itertools;
 use lsp_types::{TextDocumentContentChangeEvent, Url};
 use ogma::{
     common::err::help_as_error,
@@ -140,12 +141,18 @@ impl Workspace {
 
     pub(crate) fn impls(&self) -> Vec<Def> {
         let t = NodeType::Command;
-        self.defs
-            .read()
-            .impls()
+        let x = self.defs.read();
+        let impls = x.impls();
+
+        impls
             .iter()
-            .map(|ogma::lang::ImplEntry { name, ty, help, .. }| {
-                let helpstr = help_as_error(help, ty).to_string();
+            .map(|x| x.name)
+            .dedup()
+            .map(|name| {
+                let helpstr = impls
+                    .get_help_all(name)
+                    .expect("help should exist")
+                    .to_string();
                 let doc = Some(add_doc_body(doc_header(name, t), &helpstr));
                 Def {
                     name: name.to_string(),
