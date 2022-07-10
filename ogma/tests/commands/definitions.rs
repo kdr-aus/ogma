@@ -127,7 +127,7 @@ fn list_defs() {
 │ to-str         ┆ pipeline    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
 │ typify         ┆ diagnostics ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
 │ ×              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
-│ ÷              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
+│ ÷              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 └────────────────┴─────────────┴────────┴──────────┴──────┴────────────────────────────┘
 "
         );

@@ -12,8 +12,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 
         ("-", Number, sub_num, Arithmetic)
 
-        ("/", div, Arithmetic)
-        ("÷", div, Arithmetic)
+        ("/", Number, div_num, Arithmetic)
+        ("÷", Number, div_num, Arithmetic)
+
         (ceil, Arithmetic)
         (floor, Arithmetic)
         ("is-finite", isfinite, Arithmetic)
@@ -204,11 +205,10 @@ fn ceil_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Div ------------------------------------------------------------------
-fn div_help() -> HelpMessage {
+fn div_num_help() -> HelpMessage {
     variadic_help(
         "/",
         "divide arguments against one another
-note: if input is not a Num, the first arg is used as lhs
 dividing by 0 will result in infinity (∞)",
         vec![
             HelpExample {
@@ -216,18 +216,14 @@ dividing by 0 will result in infinity (∞)",
                 code: "\\ 4 | / 2",
             },
             HelpExample {
-                desc: "divide 2 ÷ 3",
-                code: "÷ 2 3",
-            },
-            HelpExample {
                 desc: "divide multiple numbers together",
-                code: "/ 1 2 3 4 5",
+                code: "\\ 1 | / 2 3 4 5",
             },
         ],
     )
 }
 
-fn div_intrinsic(blk: Block) -> Result<Step> {
+fn div_num_intrinsic(blk: Block) -> Result<Step> {
     variadic_intrinsic_num(blk, std::ops::Div::div)
 }
 

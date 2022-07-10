@@ -356,9 +356,8 @@ fn div_help_msg() {
         &x,
         "Help: `/`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Number ----
  | divide arguments against one another
- | note: if input is not a Num, the first arg is used as lhs
  | dividing by 0 will result in infinity (∞)
  | -variadic-: more than one argument can be specified
  | 
@@ -369,11 +368,8 @@ fn div_help_msg() {
  |  divide 4 by 2
  |  => \\ 4 | / 2
  | 
- |  divide 2 ÷ 3
- |  => ÷ 2 3
- | 
  |  divide multiple numbers together
- |  => / 1 2 3 4 5
+ |  => \\ 1 | / 2 3 4 5
 "
     );
 }
