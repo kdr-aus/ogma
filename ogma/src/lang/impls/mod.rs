@@ -102,12 +102,17 @@ impl Default for Implementations {
     }
 }
 
+/// An implementation entry.
 pub struct ImplEntry<'a> {
+    /// The command/op name.
     pub name: &'a Str,
     /// The input type this is keyed on.
     pub ty: Option<&'a Type>,
+    /// Command category.
     pub cat: OperationCategory,
+    /// Command help.
     pub help: &'a HelpMessage,
+    /// The implementation.
     pub impl_: &'a Implementation,
 }
 
