@@ -337,7 +337,7 @@ def has specialised syntax which takes variable params: ( )"
             ],
             ..HelpMessage::new("def")
         };
-        Err(err::help_as_error(&help))
+        Err(err::help_as_error(&help, None))
     } else if s.contains(" --list") {
         let post = s.split_once(" | ").map(|x| x.1);
         Ok((Value::Tab(construct_def_table(defs)), post))
@@ -480,15 +480,23 @@ pub fn construct_def_table(defs: &Definitions) -> Table {
     let mut rows = defs
         .impls
         .iter()
-        .map(|(name, ty, im)| {
-            let cat = Obj(defs.impls.get_cat(name).unwrap().to_string().into());
-            let name = Obj(name.clone());
-            let inty = ty.map(|t| Str::from(t.to_string())).map(Obj).unwrap_or(Nil);
-            let loc = Obj(location(im));
-            let line = line(im);
-            let code = code(im);
-            vec![name, cat, inty, loc, line, code]
-        })
+        .map(
+            |super::impls::ImplEntry {
+                 name,
+                 ty,
+                 cat,
+                 help: _,
+                 impl_,
+             }| {
+                let cat = Obj(cat.to_string().into());
+                let name = Obj(name.clone());
+                let inty = ty.map(|t| Str::from(t.to_string())).map(Obj).unwrap_or(Nil);
+                let loc = Obj(location(impl_));
+                let line = line(impl_);
+                let code = code(impl_);
+                vec![name, cat, inty, loc, line, code]
+            },
+        )
         .collect::<Vec<_>>();
 
     // we know we can unwrap because all names are strings which implement total ordering

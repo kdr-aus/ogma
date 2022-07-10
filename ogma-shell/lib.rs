@@ -550,6 +550,7 @@ fn highlight_help(printed_error: &str, wsp: &Workspace) -> String {
     use std::fmt::Write;
     enum Stage {
         None,
+        InputType,
         Usage,
         Flags,
         Examples,
@@ -563,7 +564,9 @@ fn highlight_help(printed_error: &str, wsp: &Workspace) -> String {
     for line in printed_error.lines() {
         if let Some(x) = line.strip_prefix(line_prefix) {
             // update stage
-            if x.starts_with("Usage:") {
+            if x.starts_with("---- Input Type:") {
+                stg = Stage::InputType;
+            } else if x.starts_with("Usage:") {
                 stg = Stage::Usage;
             } else if x.starts_with("Flags:") {
                 stg = Stage::Flags;
@@ -575,9 +578,14 @@ fn highlight_help(printed_error: &str, wsp: &Workspace) -> String {
 
             // colour based on stage
             match stg {
+                Stage::InputType if !empty => {
+                    let s = x.trim_end_matches(line_suffix);
+                    stg = Stage::None;
+                    writeln!(buf, "{line_prefix}{}", s.bright_blue().bold().underline())
+                }
                 Stage::Usage if !empty => {
                     let s = x.trim_end_matches(line_suffix);
-                    writeln!(buf, "{}{}", line_prefix, s.green())
+                    writeln!(buf, "{line_prefix}{}", s.green().bold())
                 }
                 Stage::Flags if !empty => {
                     let s = x.trim_end_matches(line_suffix);
@@ -585,33 +593,36 @@ fn highlight_help(printed_error: &str, wsp: &Workspace) -> String {
                         let mut split = s.splitn(2, ':');
                         writeln!(
                             buf,
-                            "{}{}:{}",
-                            line_prefix,
+                            "{line_prefix}{}:{}",
                             split.next().unwrap().red(),
                             split.next().unwrap().white()
                         )
                     } else {
-                        writeln!(buf, "{}{}", line_prefix, s.red())
+                        writeln!(buf, "{line_prefix}{}", s.red().bold())
                     }
                 }
                 Stage::Examples if x.starts_with("Examples:") => {
                     let s = x.trim_end_matches(line_suffix);
-                    writeln!(buf, "{}{}", line_prefix, s.magenta())
+                    writeln!(buf, "{line_prefix}{}", s.magenta().bold())
                 }
                 Stage::Examples if x.starts_with(" => ") => {
                     let code = x.trim_start_matches(" => ").trim_end_matches(line_suffix);
                     let s = syntax_highlight(code, wsp);
-                    writeln!(buf, "{} => {}{}", line_prefix, s, line_suffix)
+                    writeln!(buf, "{line_prefix} => {s}{line_suffix}")
                 }
                 Stage::Examples if !empty => {
                     let s = x.trim_end_matches(line_suffix);
-                    writeln!(buf, "{}{}", line_prefix, s.yellow())
+                    writeln!(buf, "{line_prefix}{}", s.yellow())
                 }
-                _ => writeln!(buf, "{}", line),
+                _ => writeln!(
+                    buf,
+                    "{line_prefix}{}",
+                    x.trim_end_matches(line_suffix).italic()
+                ),
             }
             .ok();
         } else {
-            writeln!(buf, "{}", line).ok();
+            writeln!(buf, "{line}").ok();
         }
     }
 
@@ -705,6 +716,7 @@ mod tests {
         let wsp = Workspace::init();
         let hlp_dbg = "\u{1b}[93mHelp\u{1b}[0m\u{1b}[97m: `filter`\u{1b}[0m
 \u{1b}[95m--> shell:0\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m---- Input Type: <any> ----\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37mfilter incoming data using a predicate\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37mfilter can be used with a column header and a type flag\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37mfiltering columns is achievable with the --cols flag\u{1b}[0m
@@ -734,27 +746,28 @@ mod tests {
 
         let exp = "\u{1b}[93mHelp\u{1b}[0m\u{1b}[97m: `filter`\u{1b}[0m
 \u{1b}[95m--> shell:0\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37mfilter incoming data using a predicate\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37mfilter can be used with a column header and a type flag\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37mfiltering columns is achievable with the --cols flag\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[32mUsage:\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[32m => filter [col-name] <predicate>\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[31mFlags:\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[1;4;94m---- Input Type: <any> ----\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3mfilter incoming data using a predicate\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3mfilter can be used with a column header and a type flag\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3mfiltering columns is achievable with the --cols flag\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[1;32mUsage:\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[1;32m => filter [col-name] <predicate>\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[1;31mFlags:\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[31m --<type>\u{1b}[0m:\u{1b}[37m only filter entries of type. defaults to Num if not specified\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[31m --cols\u{1b}[0m:\u{1b}[37m filter columns with predicate. predicate is String -> Bool\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[35mExamples:\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[1;35mExamples:\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter ls items greater than 5kB\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96mls\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m \u{1b}[37msize\u{1b}[0m \u{1b}[96m>\u{1b}[0m \u{1b}[35m5e3\u{1b}[0m\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter ls by extension\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96mls\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m \u{1b}[37mext\u{1b}[0m \u{1b}[91m--Str\u{1b}[0m \u{1b}[96m=\u{1b}[0m \u{1b}[37mmd\u{1b}[0m\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter a table by two columns\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96m\\\u{1b}[0m \u{1b}[37mtable.csv\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m { \u{1b}[96mand\u{1b}[0m { \u{1b}[96mget\u{1b}[0m \u{1b}[37mcol-a\u{1b}[0m | \u{1b}[96m>\u{1b}[0m \u{1b}[35m100\u{1b}[0m } { \u{1b}[96mget\u{1b}[0m \u{1b}[37mcol-b\u{1b}[0m | \u{1b}[96m<\u{1b}[0m \u{1b}[35m10\u{1b}[0m } }\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter table columns\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96m\\\u{1b}[0m \u{1b}[37mtable.csv\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m \u{1b}[91m--cols\u{1b}[0m \u{1b}[96mor\u{1b}[0m { \u{1b}[96m=\u{1b}[0m \'\u{1b}[37mfoo\u{1b}[0m\' } { \u{1b}[96m=\u{1b}[0m \u{1b}[37mbar\u{1b}[0m }\u{1b}[0m
 ";

@@ -646,6 +646,8 @@ mod tests {
     fn path_from_root_test() {
         let (ag, _) = init_graphs("let $a | + { > 3 }");
 
+        assert_eq!(ag.node_count(), 25);
+
         let f = |n: u32| ag.path_from_root(n.into()).collect::<Vec<_>>();
         let e = |i: &[_]| i.iter().copied().map(Into::into).collect::<Vec<_>>();
 
@@ -656,28 +658,33 @@ mod tests {
         assert_eq!(f(4), e(&[0, 3, 4]));
         assert_eq!(f(5), e(&[0, 3, 4, 5]));
         assert_eq!(f(6), e(&[0, 3, 4, 5, 6]));
-        assert_eq!(f(9), e(&[0, 3, 4, 5, 9]));
-        assert_eq!(f(10), e(&[0, 3, 4, 5, 9, 10]));
-        assert_eq!(f(11), e(&[0, 3, 4, 5, 9, 10, 11]));
-        assert_eq!(f(12), e(&[0, 3, 4, 5, 9, 10, 11, 12]));
-        assert_eq!(f(13), e(&[0, 3, 4, 5, 9, 10, 13]));
-        assert_eq!(f(14), e(&[0, 3, 4, 5, 9, 10, 13, 14]));
-        assert_eq!(f(15), e(&[0, 3, 4, 5, 9, 10, 13, 14, 15]));
-        assert_eq!(f(17), e(&[0, 3, 4, 5, 9, 10, 13, 17]));
-        assert_eq!(f(18), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18]));
-        assert_eq!(f(19), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18, 19]));
-        assert_eq!(f(20), e(&[0, 3, 4, 5, 9, 10, 13, 17, 18, 19, 20]));
+        assert_eq!(f(9), e(&[0, 3, 9]));
+        assert_eq!(f(10), e(&[0, 3, 10]));
+        assert_eq!(f(11), e(&[0, 3, 4, 5, 11]));
+        assert_eq!(f(12), e(&[0, 3, 4, 5, 11, 12]));
+        assert_eq!(f(13), e(&[0, 3, 4, 5, 11, 12, 13]));
+        assert_eq!(f(14), e(&[0, 3, 4, 5, 11, 12, 13, 14]));
+        assert_eq!(f(15), e(&[0, 3, 4, 5, 11, 12, 15]));
+        assert_eq!(f(16), e(&[0, 3, 4, 5, 11, 12, 15, 16]));
+        assert_eq!(f(17), e(&[0, 3, 4, 5, 11, 12, 15, 16, 17]));
+        assert_eq!(f(18), e(&[0, 3, 4, 5, 11, 12, 13, 18]));
+        assert_eq!(f(19), e(&[0, 3, 4, 5, 11, 12, 15, 19]));
+        assert_eq!(f(20), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20]));
+        assert_eq!(f(21), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20, 21]));
+        assert_eq!(f(22), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20, 21, 22]));
+        assert_eq!(f(23), e(&[0, 3, 4, 5, 11, 12, 15, 16, 17, 23]));
+        assert_eq!(f(24), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20, 21, 24]));
     }
 
     #[test]
     fn node_accessors() {
         let (ag, _tg) = init_graphs("let $a | + { > 3 } | + - + 3");
 
-        assert_eq!(ag.node_count(), 32);
+        assert_eq!(ag.node_count(), 38);
 
         //         let s = &mut String::new();
         //         ag.debug_write_flowchart(&_tg, s);
-        //         std::fs::write("foo", s).unwrap();
+        //         std::fs::write("foo.md", s).unwrap();
 
         let g = &ag;
 
@@ -694,7 +701,7 @@ mod tests {
         assert_eq!(ExprNode(0.into()).first_op(g), OpNode(1.into()));
         assert_eq!(ExprNode(0.into()).parent(g), None);
         assert_eq!(ExprNode(6.into()).parent(g), Some(OpNode(5.into())));
-        assert_eq!(ExprNode(17.into()).parent(g), Some(OpNode(7.into())));
-        assert_eq!(ExprNode(21.into()).parent(g), Some(OpNode(20.into())));
+        assert_eq!(ExprNode(21.into()).parent(g), Some(OpNode(7.into())));
+        assert_eq!(ExprNode(25.into()).parent(g), Some(OpNode(24.into())));
     }
 }

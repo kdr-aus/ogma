@@ -110,11 +110,15 @@ pub(super) fn map_def_params_into_variables(
             let impl_ = tg[op.idx()]
                 .input
                 .ty()
-                .and_then(|inty| defs.impls().get_impl(optag, inty).ok())
+                .and_then(|inty| defs.impls().get_impl_with_err(optag, inty).ok())
                 .or_else(|| {
                     defs.impls()
-                        .iter()
-                        .find_map(|x| (x.0 == optag.str()).then(|| x.2))
+                        .iter_op(optag.str())
+                        .map(|x| x.impl_)
+                        // TODO: this returns on the first match, but I don't think that is a reasonable
+                        // option???
+                        // Maybe it should fail if not typed???, dunno...
+                        .next()
                 })
                 .and_then(|i| match i {
                     Implementation::Definition(x) => Some(x.as_ref()),

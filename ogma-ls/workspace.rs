@@ -1,7 +1,11 @@
 use super::{completion::*, *};
 use ::libs::{parking_lot::RwLock, rustc_hash::FxHashMap as HashMap};
+use itertools::Itertools;
 use lsp_types::{TextDocumentContentChangeEvent, Url};
-use ogma::lang::{ast::Tag, Definitions};
+use ogma::{
+    common::err::help_as_error,
+    lang::{ast::Tag, Definitions},
+};
 use std::{collections::VecDeque, sync::Arc};
 
 type Version = i32;
@@ -102,9 +106,9 @@ impl Workspace {
         self.defs
             .read()
             .impls()
-            .get_help(name)
-            .ok()
-            .map(|h| h.to_string())
+            .get_help_all(name.str())
+            .as_ref()
+            .map(ToString::to_string)
     }
 
     pub(crate) fn type_help_string(&self, name: &Tag) -> Option<String> {
@@ -113,7 +117,7 @@ impl Workspace {
             .types()
             .get_using_tag(name)
             .ok()
-            .map(|t| t.help().to_string())
+            .map(|t| help_as_error(&t.help(), None).to_string())
     }
 
     /// Akin to `def --load`. Loads _all_ current files into the definitions list.
@@ -137,12 +141,19 @@ impl Workspace {
 
     pub(crate) fn impls(&self) -> Vec<Def> {
         let t = NodeType::Command;
-        self.defs
-            .read()
-            .impls()
-            .help_iter()
-            .map(|(name, help)| {
-                let doc = Some(add_doc_body(doc_header(name, t), &help.to_string()));
+        let x = self.defs.read();
+        let impls = x.impls();
+
+        impls
+            .iter()
+            .map(|x| x.name)
+            .dedup()
+            .map(|name| {
+                let helpstr = impls
+                    .get_help_all(name)
+                    .expect("help should exist")
+                    .to_string();
+                let doc = Some(add_doc_body(doc_header(name, t), &helpstr));
                 Def {
                     name: name.to_string(),
                     kind: Kind::Impl,
@@ -159,7 +170,8 @@ impl Workspace {
             .types()
             .help_iter()
             .map(|(name, help)| {
-                let doc = Some(add_doc_body(doc_header(name, t), &help.to_string()));
+                let helpstr = help_as_error(&help, None).to_string();
+                let doc = Some(add_doc_body(doc_header(name, t), &helpstr));
                 Def {
                     name: name.to_string(),
                     kind: Kind::Type,

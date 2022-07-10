@@ -1,6 +1,8 @@
 **🛑 Breaking Changes**
 
 **🔬 New Features**
+- Improve help messages for defs with multiple input types
+    (https://github.com/kdr-aus/ogma/pull/134)
 
 **🐛 Bug Fixes**
 - Fix variable type inferencing when passing variables to `def`s (https://github.com/kdr-aus/ogma/pull/115)

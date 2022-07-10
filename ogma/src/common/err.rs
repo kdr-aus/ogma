@@ -84,11 +84,19 @@ pub struct Trace {
 }
 
 /// Represent a help message using the [`Error`] infrastructure.
-pub fn help_as_error(msg: &HelpMessage) -> Error {
+pub fn help_as_error(msg: &HelpMessage, in_ty: Option<&Type>) -> Error {
     use fmt::Write;
 
     let cmd = msg.cmd.as_str();
-    let mut source = format!("{}\n\nUsage:\n => {}", msg.desc, cmd);
+    let mut source = "---- Input Type: ".to_string();
+
+    match in_ty {
+        Some(t) => write!(&mut source, "{t}"),
+        None => write!(&mut source, "<any>"),
+    }
+    .ok();
+
+    source = source + " ----\n" + &msg.desc + "\n\nUsage:\n => " + cmd;
 
     for param in &msg.params {
         let brk = matches!(param, HelpParameter::Break);
@@ -182,7 +190,7 @@ impl Error {
             x.map(|x| x.to_string()).unwrap_or_else(|| "<any>".into())
         }
 
-        let ty = impls.iter().filter(|x| x.0 == op.str()).collect::<Vec<_>>();
+        let ty = impls.iter_op(op.str()).collect::<Vec<_>>();
 
         let hlp = if recursion_detected {
             "recursion is not supported.
@@ -191,8 +199,8 @@ impl Error {
             "view a list of definitions using `def --list`".into()
         } else {
             ty.into_iter().fold(
-                format!("`{}` is implemented for the following input types:", op),
-                |s, t| s + " " + &tystr(t.1),
+                format!("`{op}` is implemented for the following input types:"),
+                |s, t| s + " " + &tystr(t.ty),
             )
         };
 

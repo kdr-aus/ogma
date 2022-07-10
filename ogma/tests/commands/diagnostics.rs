@@ -9,6 +9,7 @@ fn benchmark_help_msg() {
         &x,
         "Help: `benchmark`
 --> shell:0
+ | ---- Input Type: <any> ----
  | time the expression evaluation
  | pipes <input> to <expr>
  | 
@@ -51,6 +52,7 @@ fn typify_help_msg() {
         &x,
         "Help: `typify`
 --> shell:0
+ | ---- Input Type: <any> ----
  | output an expanded, type annotated, string of the argument
  | 
  | Usage:

@@ -955,7 +955,7 @@ mod tests {
     }
 
     fn x(t: Type) -> String {
-        t.help().to_string()
+        crate::common::err::help_as_error(&t.help(), None).to_string()
     }
 
     #[test]
@@ -964,6 +964,7 @@ mod tests {
             &x(Nil),
             "Help: `Nil`
 --> shell:0
+ | ---- Input Type: <any> ----
  | nothing value
  | 
  | Usage:
@@ -974,6 +975,7 @@ mod tests {
             &x(Bool),
             "Help: `Bool`
 --> shell:0
+ | ---- Input Type: <any> ----
  | boolean value
  | true | false
  | 
@@ -985,6 +987,7 @@ mod tests {
             &x(Num),
             "Help: `Number`
 --> shell:0
+ | ---- Input Type: <any> ----
  | number value
  | 100 | -1 | 3.14 | -1.23e-5
  | 
@@ -996,6 +999,7 @@ mod tests {
             &x(Str),
             "Help: `String`
 --> shell:0
+ | ---- Input Type: <any> ----
  | string value
  | 
  | Usage:
@@ -1006,6 +1010,7 @@ mod tests {
             &x(Tab),
             "Help: `Table`
 --> shell:0
+ | ---- Input Type: <any> ----
  | table value
  | 
  | Usage:
@@ -1016,6 +1021,7 @@ mod tests {
             &x(TabRow),
             "Help: `TableRow`
 --> shell:0
+ | ---- Input Type: <any> ----
  | table row
  | 
  | Usage:
@@ -1030,6 +1036,7 @@ mod tests {
             &x(Def(ORD.get())),
             "Help: `Ord`
 --> shell:0
+ | ---- Input Type: <any> ----
  | <ogma>
  | `def-ty Ord :: Lt | Eq | Gt`
  | 

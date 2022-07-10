@@ -9,6 +9,7 @@ fn dotop_help_msg() {
         &x,
         "Help: `.`
 --> shell:0
+ | ---- Input Type: <any> ----
  | extract a value out of a structure using an infix operator
  | 
  | Usage:
@@ -240,6 +241,7 @@ fn get_help_msg() {
         &x,
         "Help: `get`
 --> shell:0
+ | ---- Input Type: <any> ----
  | extract a value out of a data structure
  | optionally specify a default value if the get type does not match
  | 
@@ -327,6 +329,7 @@ fn input_help_msg() {
         &x,
         "Help: `\\`
 --> shell:0
+ | ---- Input Type: <any> ----
  | sets the input value for the next pipeline block
  | 
  | Usage:
@@ -420,6 +423,7 @@ fn len_help_msg() {
         &x,
         "Help: `len`
 --> shell:0
+ | ---- Input Type: <any> ----
  | return the length of a table or string (chars)
  | table length **does not include header row**
  | 
@@ -471,6 +475,7 @@ fn let_help_msg() {
         &x,
         "Help: `let`
 --> shell:0
+ | ---- Input Type: <any> ----
  | assign variable identifiers to expression results
  | each binding takes the form `<expr> $var`
  | optionally a final `$var` can be specified which assigns the input
@@ -703,6 +708,7 @@ fn nth_help_msg() {
         &x,
         "Help: `nth`
 --> shell:0
+ | ---- Input Type: <any> ----
  | retrieve the nth element of a data structure
  | String: retrieves the nth character
  | Table: retrieves the nth row and applies the expression
@@ -810,6 +816,7 @@ fn rand_help_msg() {
         &x,
         "Help: `rand`
 --> shell:0
+ | ---- Input Type: <any> ----
  | return a random number
  | rand has four ways of calling:
  | 1. Without arguments: this returns a number (0,1],
@@ -876,6 +883,7 @@ fn range_help_msg() {
         &x,
         "Help: `range`
 --> shell:0
+ | ---- Input Type: <any> ----
  | create a single column table of integers (from,to]
  | `from` is inclusive, `to` is exclusive
  | `to` can be omitted if input is a number
@@ -938,6 +946,7 @@ fn to_str_help_msg() {
         &x,
         "Help: `to-str`
 --> shell:0
+ | ---- Input Type: <any> ----
  | convert the input into a string
  | 
  | Usage:

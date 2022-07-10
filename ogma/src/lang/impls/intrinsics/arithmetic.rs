@@ -3,11 +3,13 @@ use std::cmp;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-        (+, add, Arithmetic)
-        (*, mul, Arithmetic)
+        ("+", Number, add_num, Arithmetic)
+        ("+", Str, add_str, Arithmetic)
+        ("+", Table, add_table, Arithmetic)
+        ("*", mul, Arithmetic)
         ("×", mul, Arithmetic)
         ("-", sub, Arithmetic)
-        (/, div, Arithmetic)
+        ("/", div, Arithmetic)
         ("÷", div, Arithmetic)
         (ceil, Arithmetic)
         (floor, Arithmetic)
@@ -27,22 +29,11 @@ where
 }
 
 // ------ Add ------------------------------------------------------------------
-fn add_help() -> HelpMessage {
-    HelpMessage {
-        desc: "add arguments together
-if input is a Table, concat or join additional tables
--variadic-: more than one argument can be specified"
-            .into(),
-        params: vec![HelpParameter::Required("args..".into())],
-        flags: vec![
-            ("cols", "join tables (append columns)"),
-            ("union", "expand table to capture all data (default)"),
-            (
-                "intersect",
-                "use minimum size of table; min rows for --cols, min cols for concat rows",
-            ),
-        ],
-        examples: vec![
+fn add_num_help() -> HelpMessage {
+    variadic_help(
+        "+",
+        "add numbers together",
+        vec![
             HelpExample {
                 desc: "add 2 to 1",
                 code: "\\ 1 | + 2",
@@ -51,6 +42,43 @@ if input is a Table, concat or join additional tables
                 desc: "add multiple numbers together",
                 code: "+ 1 2 3 4 5",
             },
+        ],
+    )
+}
+
+fn add_num_intrinsic(blk: Block) -> Result<Step> {
+    variadic_intrinsic_num(blk, std::ops::Add::add)
+}
+
+fn add_str_help() -> HelpMessage {
+    variadic_help(
+        "+",
+        "concatenate strings together",
+        vec![
+            HelpExample {
+                desc: "join together strings",
+                code: "\\ Hello | + ', world!'",
+            },
+            HelpExample {
+                desc: "join strings with a new line",
+                code: "\\ 'First Line' | + #b 'Second Line'",
+            },
+        ],
+    )
+}
+
+fn add_str_intrinsic(blk: Block) -> Result<Step> {
+    variadic_intrinsic_in_constrained::<Str, _>(blk, |mut prev, next| {
+        prev.to_mut().push_str(&next);
+        (prev, false)
+    })
+}
+
+fn add_table_help() -> HelpMessage {
+    let h = variadic_help(
+        "+",
+        "concatenate rows of table",
+        vec![
             HelpExample {
                 desc: "add two tables together, concatenating rows",
                 code: "range 0 10 | + range 10 20",
@@ -60,23 +88,22 @@ if input is a Table, concat or join additional tables
                 code: "range 0 1000 | + --cols --intersect ls",
             },
         ],
-        ..HelpMessage::new("+")
+    );
+
+    HelpMessage {
+        flags: vec![
+            ("cols", "join tables (append columns)"),
+            ("union", "expand table to capture all data (default)"),
+            (
+                "intersect",
+                "use minimum size of table; min rows for --cols, min cols for concat rows",
+            ),
+        ],
+        ..h
     }
 }
 
-fn add_intrinsic(blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Num => variadic_intrinsic_num(blk, std::ops::Add::add),
-        Ty::Str => variadic_intrinsic_in_constrained::<Str, _>(blk, |mut prev, next| {
-            prev.to_mut().push_str(&next);
-            (prev, false)
-        }),
-        Ty::Tab => add_table(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
-}
-
-fn add_table(mut blk: Block) -> Result<Step> {
+fn add_table_intrinsic(mut blk: Block) -> Result<Step> {
     let mut f = |s| blk.get_flag(s).is_some();
     let byrow = !f("cols");
     let intersect = !f("union") && f("intersect");

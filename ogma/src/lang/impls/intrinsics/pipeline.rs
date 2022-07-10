@@ -6,6 +6,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         (get, Pipeline)
         (
             ".",
+            None,
             ast::DotOperatorBlock::instrinsic,
             Pipeline,
             ast::DotOperatorBlock::help
@@ -16,9 +17,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         (nth, Pipeline)
         (rand, Pipeline)
         (range, Pipeline)
-        (Table, table, Pipeline)
+        ("Table", table, Pipeline)
         ("to-str", to_str, Pipeline)
-        (Tuple, tuple, Pipeline)
+        ("Tuple", tuple, Pipeline)
     };
 }
 

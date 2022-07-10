@@ -34,13 +34,14 @@ where
 /// Check if an expression has a help flag and output the help message (as the `Err` variant).
 pub fn handle_help(expr: &ast::Expression, definitions: &Definitions) -> Result<()> {
     if let Some(block) = expr.blocks.get(0) {
-        let help = definitions.impls().get_help(&block.op())?;
-        if block
+        let help_flagged = block
             .terms()
             .iter()
-            .any(|x| matches!(x, ast::Term::Flag(f) if f.str() == "help"))
-        {
-            Err(err::help_as_error(help))
+            .any(|x| matches!(x, ast::Term::Flag(f) if f.str() == "help"));
+
+        if help_flagged {
+            let x = definitions.impls().get_help_with_err(&block.op())?;
+            Err(x)
         } else {
             Ok(())
         }

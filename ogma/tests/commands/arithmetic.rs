@@ -9,6 +9,7 @@ fn abs_help_msg() {
         &x,
         "Help: `abs`
 --> shell:0
+ | ---- Input Type: Number ----
  | user defined implementation in <ogma>
  | `def abs Num () { if {< 0} {* -1} #i }`
  | take the absolute of a number
@@ -35,10 +36,38 @@ fn add_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `+`
+        r#"Help: `+`
 --> shell:0
- | add arguments together
- | if input is a Table, concat or join additional tables
+ | ---- Input Type: Number ----
+ | add numbers together
+ | -variadic-: more than one argument can be specified
+ | 
+ | Usage:
+ |  => + args..
+ | 
+ | Examples:
+ |  add 2 to 1
+ |  => \ 1 | + 2
+ | 
+ |  add multiple numbers together
+ |  => + 1 2 3 4 5
+ | 
+ | ---- Input Type: String ----
+ | concatenate strings together
+ | -variadic-: more than one argument can be specified
+ | 
+ | Usage:
+ |  => + args..
+ | 
+ | Examples:
+ |  join together strings
+ |  => \ Hello | + ', world!'
+ | 
+ |  join strings with a new line
+ |  => \ 'First Line' | + #b 'Second Line'
+ | 
+ | ---- Input Type: Table ----
+ | concatenate rows of table
  | -variadic-: more than one argument can be specified
  | 
  | Usage:
@@ -50,18 +79,12 @@ fn add_help_msg() {
  |  --intersect: use minimum size of table; min rows for --cols, min cols for concat rows
  | 
  | Examples:
- |  add 2 to 1
- |  => \\ 1 | + 2
- | 
- |  add multiple numbers together
- |  => + 1 2 3 4 5
- | 
  |  add two tables together, concatenating rows
  |  => range 0 10 | + range 10 20
  | 
  |  index filesystem items, shrink table to min rows
  |  => range 0 1000 | + --cols --intersect ls
-"
+"#
     );
 }
 
@@ -285,6 +308,7 @@ fn ceil_help_msg() {
         &x,
         "Help: `ceil`
 --> shell:0
+ | ---- Input Type: <any> ----
  | return the smallest integer greater than or equal to a number
  | 
  | Usage:
@@ -301,6 +325,7 @@ fn floor_help_msg() {
         &x,
         "Help: `floor`
 --> shell:0
+ | ---- Input Type: <any> ----
  | return the largest integer less than or equal to a number
  | 
  | Usage:
@@ -331,6 +356,7 @@ fn div_help_msg() {
         &x,
         "Help: `/`
 --> shell:0
+ | ---- Input Type: <any> ----
  | divide arguments against one another
  | note: if input is not a Num, the first arg is used as lhs
  | dividing by 0 will result in infinity (∞)
@@ -374,6 +400,7 @@ fn isfinite_help_msg() {
         &x,
         "Help: `is-finite`
 --> shell:0
+ | ---- Input Type: <any> ----
  | returns whether a number is finite
  | a number is finite if it is not infinite AND not NaN
  | 
@@ -414,6 +441,7 @@ fn mod_help_msg() {
         &x,
         "Help: `mod`
 --> shell:0
+ | ---- Input Type: Number ----
  | user defined implementation in <ogma>
  | `def mod Num (denom) { - {/ $denom | floor | * $denom} }`
  | return the modulus of a number
@@ -446,6 +474,7 @@ fn mul_help_msg() {
         &x,
         "Help: `*`
 --> shell:0
+ | ---- Input Type: <any> ----
  | multiply arguments together
  | -variadic-: more than one argument can be specified
  | 
@@ -482,6 +511,7 @@ fn root_help_msg() {
         &x,
         "Help: `root`
 --> shell:0
+ | ---- Input Type: <any> ----
  | calculate the nth root of a number
  | 
  | Usage:
@@ -517,6 +547,7 @@ fn sub_help_msg() {
         &x,
         "Help: `-`
 --> shell:0
+ | ---- Input Type: <any> ----
  | subtract arguments from one another
  | note: if input is not a Num, the first arg is used as lhs
  | -variadic-: more than one argument can be specified

@@ -53,57 +53,123 @@ impl fmt::Display for OperationCategory {
     }
 }
 
+type Impl = (Implementation, OperationCategory, HelpMessage);
+
 #[derive(Clone)]
-pub struct Implementations {
-    /// Impls are the (name, in_ty)
-    impls: HashMap<(Str, Option<Type>), Implementation>,
-    names: HashMap<Str, (OperationCategory, HelpMessage)>,
+// Structure is a nested map of maps, first by the command name, then by the input type.
+pub struct Implementations(HashMap<Str, Keys>);
+
+#[derive(Clone, Default)]
+struct Keys {
+    tys: HashMap<Type, Impl>,
+    agnostic: Option<Impl>,
+}
+
+impl Keys {
+    /// Get the [`Impl`] keyed on `ty`. If none are present, tries to get an impl keyed on `None`.
+    fn get_impl(&self, ty: &Type) -> Option<&Impl> {
+        self.tys.get(ty).or(self.agnostic.as_ref())
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (Option<&Type>, &Impl)> {
+        self.tys
+            .iter()
+            .map(|(t, x)| (Some(t), x))
+            .chain(self.agnostic.iter().map(|x| (None, x)))
+    }
+
+    fn retain<F>(&mut self, mut predicate: F)
+    where
+        F: FnMut(Option<&Type>, &Implementation, &OperationCategory, &HelpMessage) -> bool,
+    {
+        self.tys.retain(|t, (i, o, h)| predicate(Some(t), i, o, h));
+        self.agnostic = self
+            .agnostic
+            .take()
+            .filter(|(i, o, h)| predicate(None, i, o, h));
+    }
+
+    fn is_empty(&self) -> bool {
+        self.tys.is_empty() && self.agnostic.is_none()
+    }
 }
 
 impl Default for Implementations {
     fn default() -> Self {
-        let mut impls = Implementations {
-            impls: HashMap::default(),
-            names: HashMap::default(),
-        };
-
+        let mut impls = Implementations(HashMap::default());
         intrinsics::add_intrinsics(&mut impls);
-
         impls
     }
 }
 
+/// An implementation entry.
+pub struct ImplEntry<'a> {
+    /// The command/op name.
+    pub name: &'a Str,
+    /// The input type this is keyed on.
+    pub ty: Option<&'a Type>,
+    /// Command category.
+    pub cat: OperationCategory,
+    /// Command help.
+    pub help: &'a HelpMessage,
+    /// The implementation.
+    pub impl_: &'a Implementation,
+}
+
 impl Implementations {
-    pub fn contains_op(&self, op: &str) -> bool {
-        self.names.contains_key(op)
+    /// Is there an op with `name`?
+    pub fn contains_op(&self, name: &str) -> bool {
+        self.0.contains_key(name)
     }
 
-    pub fn get_help(&self, op: &Tag) -> Result<&HelpMessage> {
-        if !self.contains_op(op.str()) {
-            return Err(Error::op_not_found(op, None, false, self));
-        }
-
-        Ok(&self.names.get(op.str()).expect("checked was in").1)
+    /// Gets the specific help message of a command given the input type.
+    pub fn get_help(&self, op: &str, ty: &Type) -> Option<&HelpMessage> {
+        self.0.get(op)?.get_impl(ty).map(|x| &x.2)
     }
 
-    pub fn get_cat(&self, op: &str) -> Option<OperationCategory> {
-        self.names.get(op).map(|x| x.0)
+    /// **Builds** the help message which concatenates all applicable input types.
+    pub fn get_help_all(&self, op: &str) -> Option<Error> {
+        let mut xs = self
+            .0
+            .get(op)?
+            .iter()
+            .map(|(t, (_, _, x))| (t, x))
+            .collect::<Vec<_>>();
+        xs.sort_unstable_by_key(|a| a.0.map(ToString::to_string));
+
+        xs.into_iter()
+            .map(|(t, x)| err::help_as_error(x, t))
+            .reduce(|mut acc, x| {
+                if let Some((a, b)) = acc.traces.get_mut(0).zip(x.traces.get(0)) {
+                    a.source += "\n";
+                    a.source += &b.source;
+                }
+                acc
+            })
     }
 
-    pub fn get_impl(&self, op: &Tag, ty: &Type) -> Result<&Implementation> {
-        if !self.contains_op(op.str()) {
-            return Err(Error::op_not_found(op, Some(ty), false, self));
-        }
+    /// **Builds** the help message which concatenates all applicable input types.
+    /// If `op` is not found, returns an error.
+    pub fn get_help_with_err(&self, op: &Tag) -> Result<Error> {
+        self.get_help_all(op.str())
+            .ok_or_else(|| Error::op_not_found(op, None, false, self))
+    }
 
-        let mut key = (Str::new(op), Some(ty.clone()));
-        let mut r = self.impls.get(&key); // first try to get impl which matches input type `ty`
-        if r.is_none() {
-            // if none found, try finding an impl with no ty
-            key.1 = None;
-            r = self.impls.get(&key);
-        }
+    /// Find the appropriate [`Implementation`] for the command `op` with the input `ty`pe.
+    /// This will _fallback_ to commands which have agnostic input types if no specific
+    /// implementation is found.
+    pub fn get_impl(&self, op: &str, ty: &Type) -> Option<&Implementation> {
+        self.0.get(op)?.get_impl(ty).map(|x| &x.0)
+    }
 
-        r.ok_or_else(|| Error::impl_not_found(op, ty))
+    /// Helper which is the same as [`Self::get_impl`] but creates an [`Error`] upon failure.
+    pub fn get_impl_with_err(&self, op: &Tag, ty: &Type) -> Result<&Implementation> {
+        match self.contains_op(op.str()) {
+            true => self
+                .get_impl(op.str(), ty)
+                .ok_or_else(|| Error::impl_not_found(op, ty)),
+            false => Err(Error::op_not_found(op, Some(ty), false, self)),
+        }
     }
 
     fn insert_intrinsic<O, I, F>(
@@ -120,14 +186,28 @@ impl Implementations {
         F: Fn(Block) -> Result<Step> + Send + Sync + 'static,
     {
         let name = op.into();
-        self.impls.insert(
-            (name.clone(), in_ty.into()),
+        let keys = self.0.entry(name).or_default();
+
+        let impl_ = (
             Implementation::Intrinsic {
                 loc,
                 f: Arc::new(f),
             },
+            cat,
+            help,
         );
-        self.names.insert(name, (cat, help));
+        let _not_overwritten = match in_ty.into() {
+            Some(t) => keys.tys.insert(t, impl_).is_none(),
+            None => {
+                let x = keys.agnostic.is_none();
+                keys.agnostic = Some(impl_);
+                x
+            }
+        };
+        debug_assert!(
+            _not_overwritten,
+            "intrinsics should not overwrite one another"
+        );
     }
 
     pub fn insert_impl<I>(
@@ -140,45 +220,75 @@ impl Implementations {
     where
         I: Into<Option<Type>>,
     {
-        let name = Str::new(&def.name);
-        let key = (name.clone(), in_ty.into());
-        if let Some(im) = self.impls.get(&key) {
-            // we check that the impl does not conflict with ogma defined ones
-            let ogma_defined = match im {
+        let name = def.name.str();
+        let ty = in_ty.into();
+        // we check that the impl does not conflict with ogma defined ones
+        let ogma_defined = self
+            .0
+            .get(name)
+            .and_then(|x| match &ty {
+                Some(t) => x.tys.get(t),
+                None => x.agnostic.as_ref(),
+            })
+            .map(|(im, _, _)| im)
+            .filter(|im| match im {
                 Implementation::Intrinsic { .. } => true,
                 Implementation::Definition(x) if x.loc == Location::Ogma => true,
                 _ => false,
-            };
-            if ogma_defined {
-                return Err(Error::predefined_impl(&def, key.1.as_ref()));
-            }
+            })
+            .is_some();
+
+        if ogma_defined {
+            return Err(Error::predefined_impl(&def, ty.as_ref()));
         }
 
-        self.impls
-            .insert(key, Implementation::Definition(Box::new(def)));
-        self.names.insert(name, (cat, help));
+        let name = Str::new(name);
+
+        let keys = self.0.entry(name).or_default();
+        let impl_ = (Implementation::Definition(Box::new(def)), cat, help);
+
+        match ty {
+            Some(t) => {
+                keys.tys.insert(t, impl_);
+            }
+            None => keys.agnostic = Some(impl_),
+        }
 
         Ok(())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Str, Option<&Type>, &Implementation)> {
-        self.impls
-            .iter()
-            .map(|((name, ty), im)| (name, ty.as_ref(), im))
+    /// Iterate over _all_ the implementations.
+    pub fn iter(&self) -> impl Iterator<Item = ImplEntry> {
+        self.0.keys().flat_map(|name| self.iter_op(name))
     }
 
-    pub fn help_iter(&self) -> impl Iterator<Item = (&Str, &HelpMessage)> {
-        self.names.iter().map(|(name, (_, help))| (name, help))
+    /// Iterate over _all_ the implementations for `op`.
+    pub fn iter_op<'a>(&'a self, op: &str) -> impl Iterator<Item = ImplEntry<'a>> {
+        self.0
+            .get_key_value(op)
+            .into_iter()
+            .flat_map(|(name, map)| {
+                map.iter().map(|(ty, (impl_, cat, help))| ImplEntry {
+                    name,
+                    ty,
+                    cat: *cat,
+                    help,
+                    impl_,
+                })
+            })
     }
 
+    /// Remove any loaded implementations, reducing the implementations down to what is defined in
+    /// `ogma`. If `only_files` is `true`, items defined in the shell are retained.
     pub fn clear(&mut self, only_files: bool) {
-        self.impls.retain(|_, im| match im.location() {
-            Location::Ogma => true,
-            Location::Shell => only_files,
-            Location::File(_, _) => false,
+        self.0.values_mut().for_each(|m| {
+            m.retain(|_, im, _, _| match im.location() {
+                Location::Ogma => true,
+                Location::Shell => only_files,
+                Location::File(_, _) => false,
+            })
         });
-        let names = self.impls.keys().map(|k| &k.0).collect::<HashSet<_>>();
-        self.names.retain(|k, _| names.contains(k));
+        self.0.retain(|_, m| !m.is_empty())
     }
 }
 
