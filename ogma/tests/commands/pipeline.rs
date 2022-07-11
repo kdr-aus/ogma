@@ -239,31 +239,35 @@ fn get_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `get`
+        r#"Help: `get`
 --> shell:0
  | ---- Input Type: <any> ----
  | extract a value out of a data structure
- | optionally specify a default value if the get type does not match
  | 
  | Usage:
- |  => get field [default]
- | 
- | Flags:
- |  --<type>: assert that the entry is of type. defaults to Num if not specified
+ |  => get field
  | 
  | Examples:
  |  get the x field of a user defined Point type
  |  => Point 1 3 | get x
  | 
+ | ---- Input Type: TableRow ----
+ | extract a value out of a column in a table row.
+ | optionally specify a default value if the get type does not match
+ | 
+ | Usage:
+ |  => get field [default]
+ | 
+ | Examples:
  |  get the entry of a table row under the column 'size'
  |  => ls | filter { get size | > 100 }
  | 
- |  get all files in the directory, using the --Str flag
- |  => ls | filter { get type --Str | = 'file' }
+ |  get all files in the directory, requiring 'type' to return a string
+ |  => ls | filter { get:Str type | = 'file' }
  | 
  |  sum the size of files, using a default of zero
- |  => ls | fold 0 { + {\\$row | get size 0} }
-"
+ |  => ls | fold 0 { + {\$row | get size 0} }
+"#
     );
 }
 

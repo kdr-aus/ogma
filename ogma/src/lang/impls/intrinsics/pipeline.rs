@@ -3,7 +3,9 @@ use libs::fastrand;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
+        ("get", TableRow, get_tabrow, Pipeline)
         (get, Pipeline)
+
         (
             ".",
             None,
@@ -24,9 +26,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 }
 
 // ------ Get ------------------------------------------------------------------
-fn get_help() -> HelpMessage {
+fn get_tabrow_help() -> HelpMessage {
     HelpMessage {
-        desc: "extract a value out of a data structure
+        desc: "extract a value out of a column in a table row.
 optionally specify a default value if the get type does not match"
             .into(),
         params: vec![
@@ -35,34 +37,26 @@ optionally specify a default value if the get type does not match"
         ],
         examples: vec![
             HelpExample {
-                desc: "get the x field of a user defined Point type",
-                code: "Point 1 3 | get x",
-            },
-            HelpExample {
                 desc: "get the entry of a table row under the column 'size'",
                 code: "ls | filter { get size | > 100 }",
             },
             HelpExample {
-                desc: "get all files in the directory, using the --Str flag",
-                code: "ls | filter { get type --Str | = 'file' }",
+                desc: "get all files in the directory, requiring 'type' to return a string",
+                code: "ls | filter { get:Str type | = 'file' }",
             },
             HelpExample {
                 desc: "sum the size of files, using a default of zero",
                 code: "ls | fold 0 { + {\\$row | get size 0} }",
             },
         ],
-        flags: vec![(
-            "<type>",
-            "assert that the entry is of type. defaults to Num if not specified",
-        )],
 
         ..HelpMessage::new("get")
     }
 }
 
-fn get_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty().clone() {
-        Ty::TabRow => {
+fn get_tabrow_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::TabRow)?;
+
             let colarg = blk
                 .next_arg()?
                 .supplied(Type::Nil)?
@@ -92,14 +86,30 @@ fn get_intrinsic(mut blk: Block) -> Result<Step> {
                 table_row_get(&trow, &colarg, &get_type, cx)
             })
         }
-        t => {
+
+fn get_help() -> HelpMessage {
+    HelpMessage {
+        desc: "extract a value out of a data structure".into(),
+        params: vec![
+            HelpParameter::Required("field".into()),
+        ],
+        examples: vec![
+            HelpExample {
+                desc: "get the x field of a user defined Point type",
+                code: "Point 1 3 | get x",
+            },
+        ],
+
+        ..HelpMessage::new("get")
+    }
+}
+
+fn get_intrinsic(mut blk: Block) -> Result<Step> {
             let field_arg = blk.next_arg()?.supplied(None)?.concrete()?;
-            let (facc, out_ty) = FieldAccessor::construct(&t, &field_arg, blk.op_tag())?;
+            let (facc, out_ty) = FieldAccessor::construct(blk.in_ty(), &field_arg, blk.op_tag())?;
             blk.eval(out_ty, move |input, cx| {
                 facc.get(input).and_then(|x| cx.done(x))
             })
-        }
-    }
 }
 
 enum TableGetType {
