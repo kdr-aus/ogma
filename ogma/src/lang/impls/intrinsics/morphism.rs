@@ -12,7 +12,8 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("filter", Str, filter_str, Morphism)
     ("filter", Table, filter_table, Morphism)
 
-    (fold, Morphism)
+    ("fold", Table, fold_table, Morphism)
+
     ("fold-while", fold_while, Morphism)
     (grp, Morphism)
     ("grp-by", grpby, Morphism)
@@ -173,12 +174,10 @@ fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
 fn dedup_str_help() -> HelpMessage {
     HelpMessage {
         desc: "de-duplicate consecutive characters from a string".into(),
-        examples: vec![
-            HelpExample {
-                desc: "reduce the string 'aabbcc' to 'abc'",
-                code: "\\ 'aabbcc' | dedup",
-            },
-        ],
+        examples: vec![HelpExample {
+            desc: "reduce the string 'aabbcc' to 'abc'",
+            code: "\\ 'aabbcc' | dedup",
+        }],
         ..HelpMessage::new("dedup")
     }
 }
@@ -259,15 +258,11 @@ fn dedup_table_intrinsic(mut blk: Block) -> Result<Step> {
 fn filter_str_help() -> HelpMessage {
     HelpMessage {
         desc: "filter a string based on if a character matches a predicate".into(),
-        params: vec![
-            HelpParameter::Required("<predicate>".into()),
-        ],
-        examples: vec![
-            HelpExample {
-                desc: "filtering a string",
-                code: "\\ 'Hello, world!' | filter != ' '",
-            },
-        ],
+        params: vec![HelpParameter::Required("<predicate>".into())],
+        examples: vec![HelpExample {
+            desc: "filtering a string",
+            code: "\\ 'Hello, world!' | filter != ' '",
+        }],
         ..HelpMessage::new("filter")
     }
 }
@@ -348,15 +343,15 @@ filtering columns is achievable with the --cols flag"
 }
 
 fn filter_table_intrinsic(mut blk: Block) -> Result<Step> {
-            blk.assert_input(&Ty::Tab)?;
-            blk.assert_output(Ty::Tab); // filtering Table -> Table
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab); // filtering Table -> Table
 
-            let cols = blk.get_flag("cols").is_some();
-            if cols {
-                filter_table_columns(blk)
-            } else {
-                FilterTable::filter(blk)
-            }
+    let cols = blk.get_flag("cols").is_some();
+    if cols {
+        filter_table_columns(blk)
+    } else {
+        FilterTable::filter(blk)
+    }
 }
 
 struct FilterTable {
@@ -514,9 +509,8 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
     })
 }
 
-
 // ------ Fold -----------------------------------------------------------------
-fn fold_help() -> HelpMessage {
+fn fold_table_help() -> HelpMessage {
     HelpMessage {
         desc: "fold (reduce) table into single value
 fold takes a seed value and an accumulator expression
@@ -540,35 +534,32 @@ the variable $row is available to query the table row"
     }
 }
 
-fn fold_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
-            let out_ty = seed.out_ty().clone();
-            blk.assert_output(out_ty.clone());
+fn fold_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
 
-            let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
-            let acc_expr = blk
-                .next_arg()?
-                .supplied(out_ty.clone())? // accumulator supplies seed type
-                .returns(out_ty.clone())? // and must return seed type!
-                .concrete()?;
+    let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
+    let out_ty = seed.out_ty().clone();
+    blk.assert_output(out_ty.clone());
 
-            blk.eval(out_ty, move |table, mut cx| {
-                let table: Table = table.try_into()?;
-                let colmap = types::TableRowColMap::default();
-                let mut x = seed.resolve(|| Value::Nil, &cx)?;
-                for idx in 1..table.rows_len() {
-                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-                    row_var.set_data(&mut cx.env, trow.into());
-                    x = acc_expr.resolve(|| x, &cx)?;
-                }
+    let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    let acc_expr = blk
+        .next_arg()?
+        .supplied(out_ty.clone())? // accumulator supplies seed type
+        .returns(out_ty.clone())? // and must return seed type!
+        .concrete()?;
 
-                cx.done(x)
-            })
+    blk.eval(out_ty, move |table, mut cx| {
+        let table: Table = table.try_into()?;
+        let colmap = types::TableRowColMap::default();
+        let mut x = seed.resolve(|| Value::Nil, &cx)?;
+        for idx in 1..table.rows_len() {
+            let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+            row_var.set_data(&mut cx.env, trow.into());
+            x = acc_expr.resolve(|| x, &cx)?;
         }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
+
+        cx.done(x)
+    })
 }
 
 // ------ Fold-While -----------------------------------------------------------

@@ -440,7 +440,7 @@ fn fold_help_msg() {
         &x,
         "Help: `fold`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | fold (reduce) table into single value
  | fold takes a seed value and an accumulator expression
  | the variable $row is available to query the table row
