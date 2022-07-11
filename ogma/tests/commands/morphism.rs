@@ -9,7 +9,7 @@ fn append_help_msg() {
         &x,
         "Help: `append`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | add new columns onto a table using one or more expressions
  | each expression adds a new column, populated by row with the result of the expression
  | tags can be optionally specified to name the columns

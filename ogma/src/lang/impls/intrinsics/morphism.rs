@@ -3,7 +3,7 @@ use std::{cell::RefCell, cmp, collections::BTreeMap, mem, rc::Rc};
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-    (append, Morphism)
+    ("append", Table, append_table, Morphism)
     ("append-row", append_row, Morphism)
     (dedup, Morphism)
     (filter, Morphism)
@@ -24,7 +24,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 }
 
 // ------ Append ---------------------------------------------------------------
-fn append_help() -> HelpMessage {
+fn append_table_help() -> HelpMessage {
     HelpMessage{
         desc: "add new columns onto a table using one or more expressions
 each expression adds a new column, populated by row with the result of the expression
@@ -45,10 +45,9 @@ tags can be optionally specified to name the columns".into(),
     }
 }
 
-fn append_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn append_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
 
     let len = blk.args_len();
     if len == 0 {
