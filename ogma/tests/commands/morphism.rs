@@ -1394,10 +1394,23 @@ fn take_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `take`
+        r#"Help: `take`
 --> shell:0
- | ---- Input Type: <any> ----
- | take the first n elements of a data structure
+ | ---- Input Type: String ----
+ | take the first n characters of a string
+ | 
+ | Usage:
+ |  => take count
+ | 
+ | Examples:
+ |  take the first 5 characters of a string
+ |  => \ 'Hello, world!' | take 5
+ | 
+ |  skip and take can be used to slice into a string
+ |  => \ 'Hello, world!' | skip 7 | take 5
+ | 
+ | ---- Input Type: Table ----
+ | take the first n rows of a table
  | 
  | Usage:
  |  => take count
@@ -1405,13 +1418,7 @@ fn take_help_msg() {
  | Examples:
  |  take the first 10 rows of a table
  |  => take 10
- | 
- |  take the first 5 characters of a string
- |  => \\ 'Hello, world!' | take 5
- | 
- |  skip and take can be used to slice into a string
- |  => \\ 'Hello, world!' | skip 7 | take 5
-"
+"#
     );
 }
 

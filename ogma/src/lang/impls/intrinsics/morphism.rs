@@ -29,7 +29,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 
     ("sort", Table, sort_table, Morphism)
     ("sort-by", Table, sortby_table, Morphism)
-    (take, Morphism)
+
+    ("take", Str, take_str, Morphism)
+    ("take", Table, take_table, Morphism)
     };
 }
 
@@ -1491,15 +1493,11 @@ fn reorder_table(mut table: Table, order: SortIdx) -> Table {
 }
 
 // ------ Take -----------------------------------------------------------------
-fn take_help() -> HelpMessage {
+fn take_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "take the first n elements of a data structure".into(),
+        desc: "take the first n characters of a string".into(),
         params: vec![HelpParameter::Required("count".into())],
         examples: vec![
-            HelpExample {
-                desc: "take the first 10 rows of a table",
-                code: "take 10",
-            },
             HelpExample {
                 desc: "take the first 5 characters of a string",
                 code: "\\ 'Hello, world!' | take 5",
@@ -1513,10 +1511,43 @@ fn take_help() -> HelpMessage {
     }
 }
 
-fn take_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
+fn take_str_intrinsic(mut blk: Block) -> Result<Step> {
+            blk.assert_input(&Ty::Str)?;
+            blk.assert_output(Ty::Str);
+
+            let count = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Ty::Num)?
+                .concrete()?;
+            blk.eval_o::<_, Str>(move |string, cx| {
+                let count = count
+                    .resolve(|| string.clone(), &cx)
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+                Str::try_from(string)
+                    .map(|s| s.chars().take(count).collect::<Str>())
+                    .and_then(|x| cx.done_o(x))
+            })
+}
+
+fn take_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "take the first n rows of a table".into(),
+        params: vec![HelpParameter::Required("count".into())],
+        examples: vec![
+            HelpExample {
+                desc: "take the first 10 rows of a table",
+                code: "take 10",
+            },
+        ],
+        ..HelpMessage::new("take")
+    }
+}
+
+fn take_table_intrinsic(mut blk: Block) -> Result<Step> {
+            blk.assert_input(&Ty::Tab)?;
             blk.assert_output(Ty::Tab); // table -> table
+
             let count = blk
                 .next_arg()?
                 .supplied(None)?
@@ -1541,23 +1572,4 @@ fn take_intrinsic(mut blk: Block) -> Result<Step> {
                 }
                 cx.done_o(table)
             })
-        }
-        Ty::Str => {
-            blk.assert_output(Ty::Str);
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let count = count
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                Str::try_from(string)
-                    .map(|s| s.chars().take(count).collect::<Str>())
-                    .and_then(|x| cx.done_o(x))
-            })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
 }
