@@ -24,7 +24,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("rev", Str, rev_str, Morphism)
     ("rev", Table, rev_table, Morphism)
 
-    (skip, Morphism)
+    ("skip", Str, skip_str, Morphism)
+    ("skip", Table, skip_table, Morphism)
+
     (sort, Morphism)
     ("sort-by", sortby, Morphism)
     (take, Morphism)
@@ -588,47 +590,47 @@ fold-while will stop iterating once the predicate returns false"
 fn fold_while_table_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Tab)?;
 
-            let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
-            let out_ty = seed.out_ty().clone();
-            blk.assert_output(out_ty.clone());
+    let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
+    let out_ty = seed.out_ty().clone();
+    blk.assert_output(out_ty.clone());
 
-            // predicate and predicate row variable
-            let row_var_predicate = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
-            let acc_predicate = blk
-                .next_arg()?
-                .supplied(out_ty.clone())?
-                .returns(Ty::Bool)?
-                .concrete()?;
-            // expr and expr row variable
-            let row_var_expr = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
-            let acc_expr = blk
-                .next_arg()?
-                .supplied(out_ty.clone())?
-                .returns(out_ty.clone())?
-                .concrete()?;
+    // predicate and predicate row variable
+    let row_var_predicate = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    let acc_predicate = blk
+        .next_arg()?
+        .supplied(out_ty.clone())?
+        .returns(Ty::Bool)?
+        .concrete()?;
+    // expr and expr row variable
+    let row_var_expr = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    let acc_expr = blk
+        .next_arg()?
+        .supplied(out_ty.clone())?
+        .returns(out_ty.clone())?
+        .concrete()?;
 
-            blk.eval(out_ty, move |table, mut cx| {
-                let table: Table = table.try_into()?;
-                let colmap = types::TableRowColMap::default();
-                let mut x = seed.resolve(|| Value::Nil, &cx)?;
-                for idx in 1..table.rows_len() {
-                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-                    row_var_predicate.set_data(&mut cx.env, trow.into());
+    blk.eval(out_ty, move |table, mut cx| {
+        let table: Table = table.try_into()?;
+        let colmap = types::TableRowColMap::default();
+        let mut x = seed.resolve(|| Value::Nil, &cx)?;
+        for idx in 1..table.rows_len() {
+            let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+            row_var_predicate.set_data(&mut cx.env, trow.into());
 
-                    let met = acc_predicate
-                        .resolve(|| x.clone(), &cx)
-                        .and_then(bool::try_from)?;
-                    if !met {
-                        break;
-                    }
+            let met = acc_predicate
+                .resolve(|| x.clone(), &cx)
+                .and_then(bool::try_from)?;
+            if !met {
+                break;
+            }
 
-                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-                    row_var_expr.set_data(&mut cx.env, trow.into());
-                    x = acc_expr.resolve(|| x, &cx)?;
-                }
+            let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+            row_var_expr.set_data(&mut cx.env, trow.into());
+            x = acc_expr.resolve(|| x, &cx)?;
+        }
 
-                cx.done(x)
-            })
+        cx.done(x)
+    })
 }
 
 // ------ Grouping -------------------------------------------------------------
@@ -1180,12 +1182,10 @@ fn ren_with_table_intrinsic(mut blk: Block) -> Result<Step> {
 fn rev_str_help() -> HelpMessage {
     HelpMessage {
         desc: "reverse the order of characters".into(),
-        examples: vec![
-            HelpExample {
-                desc: "reverse string character ordering",
-                code: "\\ '!dlrow ,olleH' | rev",
-            },
-        ],
+        examples: vec![HelpExample {
+            desc: "reverse string character ordering",
+            code: "\\ '!dlrow ,olleH' | rev",
+        }],
         ..HelpMessage::new("rev")
     }
 }
@@ -1193,24 +1193,22 @@ fn rev_str_help() -> HelpMessage {
 fn rev_str_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Str)?;
     blk.assert_output(Ty::Str);
-        blk.eval_o(|input, cx| {
-            Str::try_from(input)
-                .map(|s| s.chars().rev().collect::<String>())
-                .map(Str::from)
-                .and_then(|x| cx.done_o(x))
-        })
+    blk.eval_o(|input, cx| {
+        Str::try_from(input)
+            .map(|s| s.chars().rev().collect::<String>())
+            .map(Str::from)
+            .and_then(|x| cx.done_o(x))
+    })
 }
 
 fn rev_table_help() -> HelpMessage {
     HelpMessage {
         desc: "reverse the order of table rows or columns".into(),
         flags: vec![("cols", "reverse table column ordering")],
-        examples: vec![
-            HelpExample {
-                desc: "reverse table row ordering",
-                code: "ls | rev",
-            },
-        ],
+        examples: vec![HelpExample {
+            desc: "reverse table row ordering",
+            code: "ls | rev",
+        }],
         ..HelpMessage::new("rev")
     }
 }
@@ -1219,28 +1217,24 @@ fn rev_table_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
-            let cols = blk.get_flag("cols").is_some();
-            blk.eval_o(move |input, cx| {
-                let mut table: Table = input.try_into()?;
-                if cols {
-                    table.make_mut().reverse_cols_par();
-                } else {
-                    table.make_mut().reverse_rows();
-                }
-                cx.done_o(table)
-            })
+    let cols = blk.get_flag("cols").is_some();
+    blk.eval_o(move |input, cx| {
+        let mut table: Table = input.try_into()?;
+        if cols {
+            table.make_mut().reverse_cols_par();
+        } else {
+            table.make_mut().reverse_rows();
+        }
+        cx.done_o(table)
+    })
 }
 
 // ------ Skip -----------------------------------------------------------------
-fn skip_help() -> HelpMessage {
+fn skip_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "skip the first n elements of a data structure".into(),
+        desc: "skip the first n characters of a string".into(),
         params: vec![HelpParameter::Required("count".into())],
         examples: vec![
-            HelpExample {
-                desc: "skip the first 10 rows of a table",
-                code: "skip 10",
-            },
             HelpExample {
                 desc: "skip the first 5 characters of a string",
                 code: "\\ 'Hello, world!' | skip 5",
@@ -1254,10 +1248,43 @@ fn skip_help() -> HelpMessage {
     }
 }
 
-fn skip_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
+fn skip_str_intrinsic(mut blk: Block) -> Result<Step> {
+            blk.assert_input(&Ty::Str)?;
+            blk.assert_output(Ty::Str); // str -> str
+
+            let count = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Ty::Num)?
+                .concrete()?;
+            blk.eval_o::<_, Str>(move |string, cx| {
+                let count = count
+                    .resolve(|| string.clone(), &cx)
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+                Str::try_from(string)
+                    .map(|s| s.chars().skip(count).collect::<Str>())
+                    .and_then(|x| cx.done_o(x))
+            })
+}
+
+fn skip_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "skip the first n rows of a table".into(),
+        params: vec![HelpParameter::Required("count".into())],
+        examples: vec![
+            HelpExample {
+                desc: "skip the first 10 rows of a table",
+                code: "skip 10",
+            },
+        ],
+        ..HelpMessage::new("skip")
+    }
+}
+
+fn skip_table_intrinsic(mut blk: Block) -> Result<Step> {
+            blk.assert_input(&Ty::Tab)?;
             blk.assert_output(Ty::Tab); // table -> table
+
             let count = blk
                 .next_arg()?
                 .supplied(None)?
@@ -1282,25 +1309,6 @@ fn skip_intrinsic(mut blk: Block) -> Result<Step> {
                 }
                 cx.done_o(table)
             })
-        }
-        Ty::Str => {
-            blk.assert_output(Ty::Str); // str -> str
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let count = count
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                Str::try_from(string)
-                    .map(|s| s.chars().skip(count).collect::<Str>())
-                    .and_then(|x| cx.done_o(x))
-            })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
 }
 
 // ------ Sorting --------------------------------------------------------------

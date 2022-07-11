@@ -1105,10 +1105,23 @@ fn skip_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `skip`
+        r#"Help: `skip`
 --> shell:0
- | ---- Input Type: <any> ----
- | skip the first n elements of a data structure
+ | ---- Input Type: String ----
+ | skip the first n characters of a string
+ | 
+ | Usage:
+ |  => skip count
+ | 
+ | Examples:
+ |  skip the first 5 characters of a string
+ |  => \ 'Hello, world!' | skip 5
+ | 
+ |  skip and take can be used to slice into a string
+ |  => \ 'Hello, world!' | skip 7 | take 5
+ | 
+ | ---- Input Type: Table ----
+ | skip the first n rows of a table
  | 
  | Usage:
  |  => skip count
@@ -1116,13 +1129,7 @@ fn skip_help_msg() {
  | Examples:
  |  skip the first 10 rows of a table
  |  => skip 10
- | 
- |  skip the first 5 characters of a string
- |  => \\ 'Hello, world!' | skip 5
- | 
- |  skip and take can be used to slice into a string
- |  => \\ 'Hello, world!' | skip 7 | take 5
-"
+"#
     );
 }
 
