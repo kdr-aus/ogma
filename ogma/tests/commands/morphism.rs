@@ -626,7 +626,7 @@ fn map_help_msg() {
         &x,
         "Help: `map`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | replace entry in column with result of an expression
  | `map` provides the variable `$row` which is the TableRow
  | the input into the expression is the value of the entry

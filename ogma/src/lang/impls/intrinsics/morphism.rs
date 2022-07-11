@@ -16,7 +16,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("fold-while", Table, fold_while_table, Morphism)
     ("grp", Table, grp_table, Morphism)
     ("grp-by", Table, grpby_table, Morphism)
-    (map, Morphism)
+    ("map", Table, map_table, Morphism)
     (pick, Morphism)
     (ren, Morphism)
     ("ren-with", ren_with, Morphism)
@@ -813,7 +813,7 @@ where
 }
 
 // ------ Map ------------------------------------------------------------------
-fn map_help() -> HelpMessage {
+fn map_table_help() -> HelpMessage {
     HelpMessage {
         desc: "replace entry in column with result of an expression
 `map` provides the variable `$row` which is the TableRow
@@ -841,11 +841,10 @@ the input into the expression is the value of the entry"
     }
 }
 
-fn map_intrinsic(blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => MapTable::map(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
+fn map_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
+    MapTable::map(blk)
 }
 
 struct MapTable {
@@ -858,8 +857,6 @@ struct MapTable {
 
 impl MapTable {
     fn map(mut blk: Block) -> Result<Step> {
-        blk.assert_output(Ty::Tab);
-
         let colarg = blk
             .next_arg()?
             .supplied(Ty::Nil)?
