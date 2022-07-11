@@ -118,7 +118,7 @@ fn list_defs() {
 │ name           ┆ category    ┆ input  ┆ location ┆ line ┆ code                       │
 ╞════════════════╪═════════════╪════════╪══════════╪══════╪════════════════════════════╡
 │ !=             ┆ cmp         ┆ -      ┆ <ogma>   ┆ -    ┆ != (rhs) { eq $rhs | not } │
-│ *              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
+│ *              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ String ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ Table  ┆ <ogma>   ┆ -    ┆ -                          │
@@ -126,8 +126,8 @@ fn list_defs() {
 │ take           ┆ morphism    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
 │ to-str         ┆ pipeline    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
 │ typify         ┆ diagnostics ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
-│ ×              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
-│ ÷              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
+│ ×              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
+│ ÷              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 └────────────────┴─────────────┴────────┴──────────┴──────┴────────────────────────────┘
 "
         );

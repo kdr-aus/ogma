@@ -6,15 +6,19 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         ("+", Number, add_num, Arithmetic)
         ("+", Str, add_str, Arithmetic)
         ("+", Table, add_table, Arithmetic)
-        ("*", mul, Arithmetic)
-        ("×", mul, Arithmetic)
-        ("-", sub, Arithmetic)
-        ("/", div, Arithmetic)
-        ("÷", div, Arithmetic)
-        (ceil, Arithmetic)
-        (floor, Arithmetic)
-        ("is-finite", isfinite, Arithmetic)
-        (root, Arithmetic)
+
+        ("*", Number, mul_num, Arithmetic)
+        ("×", Number, mul_num, Arithmetic)
+
+        ("-", Number, sub_num, Arithmetic)
+
+        ("/", Number, div_num, Arithmetic)
+        ("÷", Number, div_num, Arithmetic)
+
+        ("ceil", Number, ceil_num, Arithmetic)
+        ("floor", Number, floor_num, Arithmetic)
+        ("is-finite", Number, isfinite_num, Arithmetic)
+        ("root", Number, root_num, Arithmetic)
     };
 }
 
@@ -182,14 +186,14 @@ fn add_table_by_col(mut prev: Table, next: Table, intersect: bool) -> Table {
 }
 
 // ------ Ceil -----------------------------------------------------------------
-fn ceil_help() -> HelpMessage {
+fn ceil_num_help() -> HelpMessage {
     HelpMessage {
         desc: "return the smallest integer greater than or equal to a number".into(),
         ..HelpMessage::new("ceil")
     }
 }
 
-fn ceil_intrinsic(blk: Block) -> Result<Step> {
+fn ceil_num_intrinsic(blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
         return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
@@ -201,11 +205,10 @@ fn ceil_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Div ------------------------------------------------------------------
-fn div_help() -> HelpMessage {
+fn div_num_help() -> HelpMessage {
     variadic_help(
         "/",
         "divide arguments against one another
-note: if input is not a Num, the first arg is used as lhs
 dividing by 0 will result in infinity (∞)",
         vec![
             HelpExample {
@@ -213,30 +216,26 @@ dividing by 0 will result in infinity (∞)",
                 code: "\\ 4 | / 2",
             },
             HelpExample {
-                desc: "divide 2 ÷ 3",
-                code: "÷ 2 3",
-            },
-            HelpExample {
                 desc: "divide multiple numbers together",
-                code: "/ 1 2 3 4 5",
+                code: "\\ 1 | / 2 3 4 5",
             },
         ],
     )
 }
 
-fn div_intrinsic(blk: Block) -> Result<Step> {
+fn div_num_intrinsic(blk: Block) -> Result<Step> {
     variadic_intrinsic_num(blk, std::ops::Div::div)
 }
 
 // ------ Floor ----------------------------------------------------------------
-fn floor_help() -> HelpMessage {
+fn floor_num_help() -> HelpMessage {
     HelpMessage {
         desc: "return the largest integer less than or equal to a number".into(),
         ..HelpMessage::new("floor")
     }
 }
 
-fn floor_intrinsic(blk: Block) -> Result<Step> {
+fn floor_num_intrinsic(blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
         return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
@@ -248,7 +247,7 @@ fn floor_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Is Finite ------------------------------------------------------------
-fn isfinite_help() -> HelpMessage {
+fn isfinite_num_help() -> HelpMessage {
     HelpMessage {
         desc: "returns whether a number is finite
 a number is finite if it is not infinite AND not NaN"
@@ -267,7 +266,7 @@ a number is finite if it is not infinite AND not NaN"
     }
 }
 
-fn isfinite_intrinsic(blk: Block) -> Result<Step> {
+fn isfinite_num_intrinsic(blk: Block) -> Result<Step> {
     match blk.in_ty() {
         Ty::Num => blk.eval_o(|n, cx| {
             Number::try_from(n)
@@ -279,7 +278,7 @@ fn isfinite_intrinsic(blk: Block) -> Result<Step> {
 }
 
 // ------ Mul ------------------------------------------------------------------
-fn mul_help() -> HelpMessage {
+fn mul_num_help() -> HelpMessage {
     variadic_help(
         "*",
         "multiply arguments together",
@@ -296,12 +295,12 @@ fn mul_help() -> HelpMessage {
     )
 }
 
-fn mul_intrinsic(blk: Block) -> Result<Step> {
+fn mul_num_intrinsic(blk: Block) -> Result<Step> {
     variadic_intrinsic_num(blk, std::ops::Mul::mul)
 }
 
 // ------ Root -----------------------------------------------------------------
-fn root_help() -> HelpMessage {
+fn root_num_help() -> HelpMessage {
     HelpMessage {
         desc: "calculate the nth root of a number".into(),
         params: vec![HelpParameter::Required("index".into())],
@@ -319,7 +318,7 @@ fn root_help() -> HelpMessage {
     }
 }
 
-fn root_intrinsic(mut blk: Block) -> Result<Step> {
+fn root_num_intrinsic(mut blk: Block) -> Result<Step> {
     if blk.in_ty() != &Ty::Num {
         return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
     }
@@ -346,28 +345,23 @@ fn root_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Sub ------------------------------------------------------------------
-fn sub_help() -> HelpMessage {
+fn sub_num_help() -> HelpMessage {
     variadic_help(
         "-",
-        "subtract arguments from one another
-note: if input is not a Num, the first arg is used as lhs",
+        "subtract arguments from one another",
         vec![
             HelpExample {
                 desc: "subtract 2 from 1",
                 code: "\\ 1 | - 2",
             },
             HelpExample {
-                desc: "subtract 1 - 2 = -1",
-                code: "- 1 2",
-            },
-            HelpExample {
                 desc: "subtract multiple numbers together",
-                code: "- 1 2 3 4 5",
+                code: "\\ 1 | - 2 3 4 5",
             },
         ],
     )
 }
 
-fn sub_intrinsic(blk: Block) -> Result<Step> {
+fn sub_num_intrinsic(blk: Block) -> Result<Step> {
     variadic_intrinsic_num(blk, std::ops::Sub::sub)
 }
