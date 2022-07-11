@@ -515,7 +515,7 @@ fn grp_help_msg() {
         &x,
         "Help: `grp`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | group a table by column headers
  | each value under the header is stringified and
  | concatenated together separated by a hyphen

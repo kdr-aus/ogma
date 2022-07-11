@@ -14,8 +14,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 
     ("fold", Table, fold_table, Morphism)
     ("fold-while", Table, fold_while_table, Morphism)
-
-    (grp, Morphism)
+    ("grp", Table, grp_table, Morphism)
     ("grp-by", grpby, Morphism)
     (map, Morphism)
     (pick, Morphism)
@@ -630,7 +629,7 @@ fn fold_while_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Grouping -------------------------------------------------------------
-fn grp_help() -> HelpMessage {
+fn grp_table_help() -> HelpMessage {
     HelpMessage {
         desc: "group a table by column headers
 each value under the header is stringified and
@@ -652,10 +651,8 @@ to group on a derived value see `grp-by`"
     }
 }
 
-fn grp_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn grp_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
     let colnames = ColNameArgs::build(&mut blk)?;
