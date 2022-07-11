@@ -281,8 +281,11 @@ pub struct Types {
     map: HashMap<Str, Type>,
 }
 
+/// Ctor methods.
 impl Types {
-    pub fn init(impls: &mut Implementations) -> Self {
+    /// Initialise the standard types, returning the types and a vector of typedefs that need to
+    /// have their initialisation impls added ([`lang::impls::add_typedef_init_impls`]).
+    pub(super) fn init_std() -> (Self, Vec<Arc<TypeDef>>) {
         let mut map = HashMap::default();
 
         map.insert(Str::from("Nil"), Type::Nil);
@@ -298,10 +301,12 @@ impl Types {
         // we can unwrap here as these should always parse just fine (and is tested)
         // we also initialise the associated static references
         let tys = &mut types;
+        let mut xs = Vec::new();
         macro_rules! init {
             ($($id:ident, $ac:literal, $code:literal)|*) => {{
                 $(
-                tys.insert($code, Location::Ogma, None, impls).unwrap();
+                let x = tys.insert_inner($code, Location::Ogma, None).unwrap();
+                xs.push(x);
                 $id.set(match tys.map.get($ac).unwrap() {
                     Type::Def(x) => x.clone(),
                     _ => unreachable!("will always be a a TypeDef"),
@@ -314,29 +319,15 @@ impl Types {
             ORD, "Ord", "def-ty Ord :: Lt | Eq | Gt"
         };
 
-        types
+        (types, xs)
     }
 
-    pub fn get_using_tag(&self, type_name: &Tag) -> Result<&Type> {
-        self.get_using_str(type_name.str())
-            .ok_or_else(|| Error::type_not_found(type_name))
-    }
-
-    pub fn get_using_str(&self, type_name: &str) -> Option<&Type> {
-        self.map.get(type_name)
-    }
-
-    pub fn contains_type(&self, type_name: &str) -> bool {
-        self.map.contains_key(type_name)
-    }
-
-    pub fn insert(
+    fn insert_inner(
         &mut self,
         def: &str,
         loc: Location,
         help: Option<String>,
-        impls: &mut Implementations,
-    ) -> Result<()> {
+    ) -> Result<Arc<TypeDef>> {
         let def = lang::syntax::parse::definition_type(def, loc).map_err(|e| e.0)?;
         let ty = TypeDef::from_parsed_def(def, help, self)?;
         if self.contains_type(ty.name().str()) {
@@ -359,15 +350,37 @@ impl Types {
             })
         } else {
             let ty = Arc::new(ty);
-            self.insert_inner(ty.clone());
-            lang::impls::add_typedef_init_impls(impls, ty);
-            Ok(())
+            let name = Str::new(&ty.name);
+            self.map.insert(name, Type::Def(ty.clone()));
+            Ok(ty)
         }
     }
+}
 
-    fn insert_inner(&mut self, typedef: Arc<TypeDef>) {
-        let name = Str::new(&typedef.name);
-        self.map.insert(name, Type::Def(typedef));
+impl Types {
+    pub fn get_using_tag(&self, type_name: &Tag) -> Result<&Type> {
+        self.get_using_str(type_name.str())
+            .ok_or_else(|| Error::type_not_found(type_name))
+    }
+
+    pub fn get_using_str(&self, type_name: &str) -> Option<&Type> {
+        self.map.get(type_name)
+    }
+
+    pub fn contains_type(&self, type_name: &str) -> bool {
+        self.map.contains_key(type_name)
+    }
+
+    pub fn insert(
+        &mut self,
+        def: &str,
+        loc: Location,
+        help: Option<String>,
+        impls: &mut Implementations,
+    ) -> Result<()> {
+        let ty = self.insert_inner(def, loc, help)?;
+        lang::impls::add_typedef_init_impls(impls, ty);
+        Ok(())
     }
 
     pub fn clear(&mut self, only_files: bool) {

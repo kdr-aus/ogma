@@ -451,7 +451,7 @@ mod tests {
     fn def_tg_linking_def_and_intrinsic() {
         let defs = &mut Definitions::default();
         lang::process_definition(
-            "def cmp Nil (a b) { \\ #t }",
+            "def cmp Table (a b) { \\ #t }",
             Default::default(),
             None,
             defs,
@@ -464,21 +464,16 @@ mod tests {
         tg.apply_ast_edges(&ag);
 
         // Assert some info about the AST nodes
-        assert_eq!(ag.node_count(), 10);
-        assert_eq!(ag.edge_count(), 14);
-        // 0: cmp 'one' 'two'
-        // 1: cmp
-        // 2: one
-        // 3: two
-        // 4: Def([a b])
-        // 5: \ #t
-        // 6: \
-        // 7: #t
-        // 8: cmp Intrinsic
-        // 9: \ Intrinsic
+        assert_eq!(ag.node_count(), 15);
+        assert_eq!(ag.edge_count(), 29);
 
         // Type graph nodes
         use tygraph::Flow;
+
+        // use this to view the flowchart for checking
+        //                  let s = &mut String::new();
+        //                  tg.debug_write_flowchart(&ag, s);
+        //                  std::fs::write("foo.md", s).unwrap();
 
         assert_eq!(tg.edge_count(), 6);
 
@@ -487,14 +482,14 @@ mod tests {
         assert_eq!(getedge(0, 1), &Flow::II); // root -> cmp: II
         assert_eq!(getedge(1, 0), &Flow::OO); // cmp -> root: OO
 
-        assert_eq!(getedge(5, 6), &Flow::II); // \ #t -> \: II
-        assert_eq!(getedge(6, 5), &Flow::OO); // \ -> \ #t: OO
+        assert_eq!(getedge(7, 8), &Flow::II); // \ #t -> \: II
+        assert_eq!(getedge(8, 7), &Flow::OO); // \ -> \ #t: OO
 
-        assert_eq!(getedge(4, 5), &Flow::II); // Def -> Expr: II
-        assert_eq!(getedge(5, 4), &Flow::OO); // Expr -> Def: OO
+        assert_eq!(getedge(6, 7), &Flow::II); // Def -> Expr: II
+        assert_eq!(getedge(7, 6), &Flow::OO); // Expr -> Def: OO
 
-        // NOTE: there is NO 4 -> 1 (Def -> cmp) since we do not know which path would be taken
-        // NOTE: there is NO 1 -> 4 (cmp -> Def) since this is not a keyed type
+        // NOTE: there is NO 6 -> 1 (Def -> cmp) since we do not know which path would be taken
+        // NOTE: there is NO 1 -> 6 (cmp -> Def) since this is not a keyed type
     }
 
     #[test]
@@ -646,7 +641,7 @@ mod tests {
     fn path_from_root_test() {
         let (ag, _) = init_graphs("let $a | + { > 3 }");
 
-        assert_eq!(ag.node_count(), 25);
+        assert_eq!(ag.node_count(), 30);
 
         let f = |n: u32| ag.path_from_root(n.into()).collect::<Vec<_>>();
         let e = |i: &[_]| i.iter().copied().map(Into::into).collect::<Vec<_>>();
@@ -668,19 +663,24 @@ mod tests {
         assert_eq!(f(16), e(&[0, 3, 4, 5, 11, 12, 15, 16]));
         assert_eq!(f(17), e(&[0, 3, 4, 5, 11, 12, 15, 16, 17]));
         assert_eq!(f(18), e(&[0, 3, 4, 5, 11, 12, 13, 18]));
-        assert_eq!(f(19), e(&[0, 3, 4, 5, 11, 12, 15, 19]));
-        assert_eq!(f(20), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20]));
-        assert_eq!(f(21), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20, 21]));
-        assert_eq!(f(22), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20, 21, 22]));
-        assert_eq!(f(23), e(&[0, 3, 4, 5, 11, 12, 15, 16, 17, 23]));
-        assert_eq!(f(24), e(&[0, 3, 4, 5, 11, 12, 15, 19, 20, 21, 24]));
+        assert_eq!(f(19), e(&[0, 3, 4, 5, 11, 12, 13, 19]));
+        assert_eq!(f(20), e(&[0, 3, 4, 5, 11, 12, 13, 20]));
+        assert_eq!(f(21), e(&[0, 3, 4, 5, 11, 12, 13, 21]));
+        assert_eq!(f(22), e(&[0, 3, 4, 5, 11, 12, 13, 22]));
+        assert_eq!(f(23), e(&[0, 3, 4, 5, 11, 12, 13, 23]));
+        assert_eq!(f(24), e(&[0, 3, 4, 5, 11, 12, 15, 24]));
+        assert_eq!(f(25), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25]));
+        assert_eq!(f(26), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26]));
+        assert_eq!(f(27), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 27]));
+        assert_eq!(f(28), e(&[0, 3, 4, 5, 11, 12, 15, 16, 17, 28]));
+        assert_eq!(f(29), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 29]));
     }
 
     #[test]
     fn node_accessors() {
         let (ag, _tg) = init_graphs("let $a | + { > 3 } | + - + 3");
 
-        assert_eq!(ag.node_count(), 38);
+        assert_eq!(ag.node_count(), 43);
 
         //         let s = &mut String::new();
         //         ag.debug_write_flowchart(&_tg, s);

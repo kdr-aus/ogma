@@ -5,6 +5,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
         ("cmp", (), cmp_nil, Cmp)
         ("cmp", bool, cmp_bool, Cmp)
+        ("cmp", Number, cmp_num, Cmp)
+        ("cmp", Str, cmp_str, Cmp)
+        ("cmp", cmp::Ordering, cmp_ord, Cmp)
+        (cmp, Cmp)
 
         (eq, Cmp)
         (max, Cmp)
@@ -24,11 +28,11 @@ fn cmp_nil_help() -> HelpMessage {
 fn cmp_nil_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Type::Nil)?;
     blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
-            blk.next_arg()?
-                .supplied(None)?
-                .returns(Ty::Nil)?
-                .concrete()?; // we don't use rhs but we do req its existence
-            blk.eval_o(|_, cx| cx.done_o(cmp::Ordering::Equal))
+    blk.next_arg()?
+        .supplied(None)?
+        .returns(Ty::Nil)?
+        .concrete()?; // we don't use rhs but we do req its existence
+    blk.eval_o(|_, cx| cx.done_o(cmp::Ordering::Equal))
 }
 
 fn cmp_bool_help() -> HelpMessage {
@@ -42,22 +46,22 @@ fn cmp_bool_help() -> HelpMessage {
 fn cmp_bool_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Type::Bool)?;
     blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Bool)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: bool = lhs.try_into()?;
-                let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
-                cx.done_o(lhs.cmp(&rhs))
-            })
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Bool)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: bool = lhs.try_into()?;
+        let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
+        cx.done_o(lhs.cmp(&rhs))
+    })
 }
 
-fn cmp_help() -> HelpMessage {
+fn cmp_num_help() -> HelpMessage {
     HelpMessage {
         desc: "compare <rhs> to input.".into(),
-        params: vec![HelpParameter::Required("rhs".into())],
+        params: vec![HelpParameter::Required("rhs:Num".into())],
         examples: vec![HelpExample {
             desc: "compare 2 to 1",
             code: "\\ 1 | cmp 2",
@@ -66,43 +70,88 @@ fn cmp_help() -> HelpMessage {
     }
 }
 
+fn cmp_num_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Num)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: Number = lhs.try_into()?;
+        let rhs: Number = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
+        cx.done_o(lhs.cmp(&rhs))
+    })
+}
+
+fn cmp_str_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Str".into())],
+        examples: vec![HelpExample {
+            desc: "compare 'aabb' to 'bbaa'",
+            code: "\\ 'aabb' | cmp bbaa",
+        }],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Str)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Str)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: Str = lhs.try_into()?;
+        let rhs: Str = rhs.resolve(|| lhs.clone().into(), &cx)?.try_into()?;
+        cx.done_o(lhs.cmp(&rhs))
+    })
+}
+
+fn cmp_ord_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Ord".into())],
+        examples: vec![HelpExample {
+            desc: "compare Ord::Eq to Ord::Lt == Ord::Gt",
+            code: "Ord::Eq | cmp Ord::Lt",
+        }],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_ord_intrinsic(mut blk: Block) -> Result<Step> {
+    let ordty = cmp::Ordering::as_type();
+    blk.assert_input(&ordty)?;
+    blk.assert_output(ordty.clone()); // all 'cmp's return an Ord
+
+    let rhs = blk.next_arg()?.supplied(None)?.returns(ordty)?.concrete()?;
+    // cmp Ord to Ord returns another Ord
+    blk.eval_o(move |lhs, cx| {
+        let lhs_variant = lhs.variant_idx().expect("Ord type");
+        let rhs = rhs.resolve(|| lhs, &cx)?.variant_idx().expect("Ord type");
+        cx.done_o(lhs_variant.cmp(&rhs))
+    })
+}
+
+fn cmp_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs".into())],
+        ..HelpMessage::new("cmp")
+    }
+}
 
 fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+
     match blk.in_ty() {
-        Ty::Num => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: Number = lhs.try_into()?;
-                let rhs: Number = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
-                cx.done_o(lhs.cmp(&rhs))
-            })
-        }
-        Ty::Str => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Str)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: Str = lhs.try_into()?;
-                let rhs: Str = rhs.resolve(|| lhs.clone().into(), &cx)?.try_into()?;
-                cx.done_o(lhs.cmp(&rhs))
-            })
-        }
-        Ty::Def(x) if x.as_ref() == "Ord" => {
-            let ordty = Type::Def(types::ORD.get());
-            let rhs = blk.next_arg()?.supplied(None)?.returns(ordty)?.concrete()?;
-            // cmp Ord to Ord returns another Ord
-            blk.eval_o(move |lhs, cx| {
-                let lhs_variant = lhs.variant_idx().expect("Ord type");
-                let rhs = rhs.resolve(|| lhs, &cx)?.variant_idx().expect("Ord type");
-                cx.done_o(lhs_variant.cmp(&rhs))
-            })
-        }
         Ty::Def(x) if x.is_tuple() => {
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),
@@ -125,7 +174,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
                 .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();
-            let exp_ty = Ty::Def(types::ORD.get());
+            let exp_ty = cmp::Ordering::as_type();
 
             if oty != &exp_ty {
                 Err(Error::unexp_code_injection_output_ty(

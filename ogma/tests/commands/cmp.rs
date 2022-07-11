@@ -5,19 +5,58 @@ use super::*;
 fn cmp_help_test() {
     let defs = &Definitions::new();
     let x = process_w_nil("cmp --help", defs).unwrap_err().to_string();
+    println!("{x}");
     assert_eq!(
         &x,
         "Help: `cmp`
 --> shell:0
  | ---- Input Type: <any> ----
- | compare <rhs> to input
+ | compare <rhs> to input.
  | 
  | Usage:
  |  => cmp rhs
  | 
+ | ---- Input Type: Bool ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Bool
+ | 
+ | ---- Input Type: Nil ----
+ | compare <rhs> to input. Nil types are always equal.
+ | 
+ | Usage:
+ |  => cmp rhs:Nil
+ | 
+ | ---- Input Type: Number ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Num
+ | 
  | Examples:
  |  compare 2 to 1
  |  => \\ 1 | cmp 2
+ | 
+ | ---- Input Type: Ord ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Ord
+ | 
+ | Examples:
+ |  compare Ord::Eq to Ord::Lt == Ord::Gt
+ |  => Ord::Eq | cmp Ord::Lt
+ | 
+ | ---- Input Type: String ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Str
+ | 
+ | Examples:
+ |  compare 'aabb' to 'bbaa'
+ |  => \\ 'aabb' | cmp bbaa
 "
     );
 }
