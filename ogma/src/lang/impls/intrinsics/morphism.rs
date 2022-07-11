@@ -27,7 +27,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("skip", Str, skip_str, Morphism)
     ("skip", Table, skip_table, Morphism)
 
-    (sort, Morphism)
+    ("sort", Table, sort_table, Morphism)
     ("sort-by", sortby, Morphism)
     (take, Morphism)
     };
@@ -1312,7 +1312,7 @@ fn skip_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Sorting --------------------------------------------------------------
-fn sort_help() -> HelpMessage {
+fn sort_table_help() -> HelpMessage {
     HelpMessage {
         desc: "sort a table by column headers
 each header sorts the rows lowest to highest in a canonical fashion,
@@ -1334,12 +1334,10 @@ this sorts different value types, but NOT user-defined types. see `sort-by`"
     }
 }
 
-fn sort_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
-
+fn sort_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
+
     let colnames = ColNameArgs::build(&mut blk)?;
     blk.eval_o(move |table, cx| {
         let mut table: Table = table.try_into()?;

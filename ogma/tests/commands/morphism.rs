@@ -1182,7 +1182,7 @@ fn sort_help_msg() {
         &x,
         "Help: `sort`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | sort a table by column headers
  | each header sorts the rows lowest to highest in a canonical fashion,
  | in order specified (1st column is sorted first)
