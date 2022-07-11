@@ -13,8 +13,8 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("filter", Table, filter_table, Morphism)
 
     ("fold", Table, fold_table, Morphism)
+    ("fold-while", Table, fold_while_table, Morphism)
 
-    ("fold-while", fold_while, Morphism)
     (grp, Morphism)
     ("grp-by", grpby, Morphism)
     (map, Morphism)
@@ -563,7 +563,7 @@ fn fold_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Fold-While -----------------------------------------------------------
-fn fold_while_help() -> HelpMessage {
+fn fold_while_table_help() -> HelpMessage {
     HelpMessage {
         desc: "fold (reduce) table into single value while a predicate remains true
 fold-while is similar to fold with an added predicate check on each iteration
@@ -583,9 +583,9 @@ fold-while will stop iterating once the predicate returns false"
     }
 }
 
-fn fold_while_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
+fn fold_while_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+
             let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
             let out_ty = seed.out_ty().clone();
             blk.assert_output(out_ty.clone());
@@ -627,9 +627,6 @@ fn fold_while_intrinsic(mut blk: Block) -> Result<Step> {
 
                 cx.done(x)
             })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
 }
 
 // ------ Grouping -------------------------------------------------------------

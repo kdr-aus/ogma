@@ -477,7 +477,7 @@ fn fold_while_help_msg() {
         &x,
         "Help: `fold-while`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | fold (reduce) table into single value while a predicate remains true
  | fold-while is similar to fold with an added predicate check on each iteration
  | the input into the predicate is the current accumulator value
