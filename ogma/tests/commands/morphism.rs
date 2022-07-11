@@ -1248,7 +1248,7 @@ fn sortby_help_msg() {
         &x,
         "Help: `sort-by`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | sort table using an expression
  | the result of the expression must define a `cmp` implementation
  | this can be used to sort user-defined types

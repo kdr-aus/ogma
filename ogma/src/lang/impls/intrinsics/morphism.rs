@@ -28,7 +28,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("skip", Table, skip_table, Morphism)
 
     ("sort", Table, sort_table, Morphism)
-    ("sort-by", sortby, Morphism)
+    ("sort-by", Table, sortby_table, Morphism)
     (take, Morphism)
     };
 }
@@ -1400,7 +1400,7 @@ fn entry_discriminant(e: &Entry<Value>) -> u8 {
 // expression, then sorts the resulting values (and by proxy; the table)
 // sorting the values uses `cmp` definitions
 // the actual implementation is a bit more complex; we must create a pseudo-env to eval `cmp`
-fn sortby_help() -> HelpMessage {
+fn sortby_table_help() -> HelpMessage {
     HelpMessage {
         desc: "sort table using an expression
 the result of the expression must define a `cmp` implementation
@@ -1421,10 +1421,8 @@ this can be used to sort user-defined types"
     }
 }
 
-fn sortby_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn sortby_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
     // the expression which will be sorted on
