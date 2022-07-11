@@ -132,8 +132,8 @@ impl Definitions {
             OperationCategory::Pipeline,
             "apply the expression to the last row in a table",
             vec![HelpExample {
-                desc: "fetch value in column in table",
-                code: "last {get 'foo' --Str}",
+                desc: "fetch the last value in a column 'foo'",
+                code: "last {get:Str 'foo'}",
             }],
         );
         add_derived_impl(

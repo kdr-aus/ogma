@@ -1251,66 +1251,64 @@ fn skip_str_help() -> HelpMessage {
 }
 
 fn skip_str_intrinsic(mut blk: Block) -> Result<Step> {
-            blk.assert_input(&Ty::Str)?;
-            blk.assert_output(Ty::Str); // str -> str
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str); // str -> str
 
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let count = count
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                Str::try_from(string)
-                    .map(|s| s.chars().skip(count).collect::<Str>())
-                    .and_then(|x| cx.done_o(x))
-            })
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o::<_, Str>(move |string, cx| {
+        let count = count
+            .resolve(|| string.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        Str::try_from(string)
+            .map(|s| s.chars().skip(count).collect::<Str>())
+            .and_then(|x| cx.done_o(x))
+    })
 }
 
 fn skip_table_help() -> HelpMessage {
     HelpMessage {
         desc: "skip the first n rows of a table".into(),
         params: vec![HelpParameter::Required("count".into())],
-        examples: vec![
-            HelpExample {
-                desc: "skip the first 10 rows of a table",
-                code: "skip 10",
-            },
-        ],
+        examples: vec![HelpExample {
+            desc: "skip the first 10 rows of a table",
+            code: "skip 10",
+        }],
         ..HelpMessage::new("skip")
     }
 }
 
 fn skip_table_intrinsic(mut blk: Block) -> Result<Step> {
-            blk.assert_input(&Ty::Tab)?;
-            blk.assert_output(Ty::Tab); // table -> table
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab); // table -> table
 
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |table, cx| {
-                let count = count
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                let mut table = Table::try_from(table)?;
-                if let Some(t) = table.get_mut() {
-                    t.retain_rows(|i, _| i == 0 || i > count);
-                } else {
-                    let rows = table
-                        .rows()
-                        .take(1)
-                        .chain(table.rows().skip(count + 1))
-                        .map(|x| x.cloned());
-                    let mut t = ::table::Table::new();
-                    t.add_rows(rows);
-                    table = t.into();
-                }
-                cx.done_o(table)
-            })
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |table, cx| {
+        let count = count
+            .resolve(|| table.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        let mut table = Table::try_from(table)?;
+        if let Some(t) = table.get_mut() {
+            t.retain_rows(|i, _| i == 0 || i > count);
+        } else {
+            let rows = table
+                .rows()
+                .take(1)
+                .chain(table.rows().skip(count + 1))
+                .map(|x| x.cloned());
+            let mut t = ::table::Table::new();
+            t.add_rows(rows);
+            table = t.into();
+        }
+        cx.done_o(table)
+    })
 }
 
 // ------ Sorting --------------------------------------------------------------
@@ -1512,64 +1510,62 @@ fn take_str_help() -> HelpMessage {
 }
 
 fn take_str_intrinsic(mut blk: Block) -> Result<Step> {
-            blk.assert_input(&Ty::Str)?;
-            blk.assert_output(Ty::Str);
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
 
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let count = count
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                Str::try_from(string)
-                    .map(|s| s.chars().take(count).collect::<Str>())
-                    .and_then(|x| cx.done_o(x))
-            })
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o::<_, Str>(move |string, cx| {
+        let count = count
+            .resolve(|| string.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        Str::try_from(string)
+            .map(|s| s.chars().take(count).collect::<Str>())
+            .and_then(|x| cx.done_o(x))
+    })
 }
 
 fn take_table_help() -> HelpMessage {
     HelpMessage {
         desc: "take the first n rows of a table".into(),
         params: vec![HelpParameter::Required("count".into())],
-        examples: vec![
-            HelpExample {
-                desc: "take the first 10 rows of a table",
-                code: "take 10",
-            },
-        ],
+        examples: vec![HelpExample {
+            desc: "take the first 10 rows of a table",
+            code: "take 10",
+        }],
         ..HelpMessage::new("take")
     }
 }
 
 fn take_table_intrinsic(mut blk: Block) -> Result<Step> {
-            blk.assert_input(&Ty::Tab)?;
-            blk.assert_output(Ty::Tab); // table -> table
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab); // table -> table
 
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |table, cx| {
-                let count = count
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                let mut table = Table::try_from(table)?;
-                if let Some(t) = table.get_mut() {
-                    t.retain_rows(|i, _| i == 0 || i <= count);
-                } else {
-                    let rows = table
-                        .rows()
-                        .take(1)
-                        .chain(table.rows().skip(1).take(count))
-                        .map(|x| x.cloned());
-                    let mut t = ::table::Table::new();
-                    t.add_rows(rows);
-                    table = t.into();
-                }
-                cx.done_o(table)
-            })
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |table, cx| {
+        let count = count
+            .resolve(|| table.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        let mut table = Table::try_from(table)?;
+        if let Some(t) = table.get_mut() {
+            t.retain_rows(|i, _| i == 0 || i <= count);
+        } else {
+            let rows = table
+                .rows()
+                .take(1)
+                .chain(table.rows().skip(1).take(count))
+                .map(|x| x.cloned());
+            let mut t = ::table::Table::new();
+            t.add_rows(rows);
+            table = t.into();
+        }
+        cx.done_o(table)
+    })
 }

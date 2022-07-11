@@ -404,6 +404,41 @@ fn input_backslash_str() {
 
 // ------ Last -----------------------------------------------------------------
 #[test]
+fn last_help_msg() {
+    let src = "last --help";
+    let x = print_help(src, &Definitions::new());
+    assert_eq!(
+        &x,
+        r#"Help: `last`
+--> shell:0
+ | ---- Input Type: String ----
+ | user defined implementation in <ogma>
+ | `def last Str () { nth {len | - 1} }`
+ | get the last character of a string
+ | 
+ | Usage:
+ |  => last
+ | 
+ | Examples:
+ |  get the last character
+ |  => \ 'Hello' | last
+ | 
+ | ---- Input Type: Table ----
+ | user defined implementation in <ogma>
+ | `def last Table (expr:Expr) { nth {len | - 1} $expr }`
+ | apply the expression to the last row in a table
+ | 
+ | Usage:
+ |  => last expr:Expr
+ | 
+ | Examples:
+ |  fetch the last value in a column 'foo'
+ |  => last {get:Str 'foo'}
+"#
+    );
+}
+
+#[test]
 fn last_testing() {
     let defs = &Definitions::new();
 
@@ -425,11 +460,21 @@ fn len_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `len`
+        r#"Help: `len`
 --> shell:0
- | ---- Input Type: <any> ----
- | return the length of a table or string (chars)
- | table length **does not include header row**
+ | ---- Input Type: String ----
+ | return the number of characters in a string
+ | 
+ | Usage:
+ |  => len
+ | 
+ | Examples:
+ |  length of a string
+ |  => \ 'Hello, 🌎!' | len
+ | 
+ | ---- Input Type: Table ----
+ | return the number of rows or columns in a table.
+ | length **does not include header row**
  | 
  | Usage:
  |  => len
@@ -443,10 +488,7 @@ fn len_help_msg() {
  | 
  |  columns in the ls table
  |  => ls | len --cols
- | 
- |  length of a string
- |  => \\ 'Hello, 🌎!' | len
-"
+"#
     );
 }
 

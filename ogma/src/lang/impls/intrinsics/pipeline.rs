@@ -14,7 +14,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
             ast::DotOperatorBlock::help
         )
         ("\\", in, Pipeline)
-        (len, Pipeline)
+
+        ("len", Str, len_str, Pipeline)
+        ("len", Table, len_table, Pipeline)
+
         (let, Pipeline)
         (nth, Pipeline)
         (rand, Pipeline)
@@ -57,59 +60,55 @@ optionally specify a default value if the get type does not match"
 fn get_tabrow_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::TabRow)?;
 
-            let colarg = blk
-                .next_arg()?
-                .supplied(Type::Nil)?
-                .returns(Ty::Str)?
-                .concrete()?;
-            // this is the default arg: 'get foo 0'
-            let get_type = match blk.args_len() {
-                1 => blk
-                    .next_arg()?
-                    .supplied(Type::Nil)?
-                    .concrete()
-                    .map(TableGetType::Default)?,
-                // use the type flag
-                _ => type_flag(&mut blk)
-                    .and_then(|ty| {
-                        // otherwise try to infer the output
-                        ty.map(Ok).unwrap_or_else(|| {
-                            blk.output_ty()
-                                .ok_or_else(|| Error::unknown_blk_output_type(blk.blk_tag()))
-                        })
-                    })
-                    .map(TableGetType::Flag)?,
-            };
-
-            blk.eval(get_type.ty().clone(), move |x, cx| {
-                let trow: TableRow = x.try_into()?;
-                table_row_get(&trow, &colarg, &get_type, cx)
+    let colarg = blk
+        .next_arg()?
+        .supplied(Type::Nil)?
+        .returns(Ty::Str)?
+        .concrete()?;
+    // this is the default arg: 'get foo 0'
+    let get_type = match blk.args_len() {
+        1 => blk
+            .next_arg()?
+            .supplied(Type::Nil)?
+            .concrete()
+            .map(TableGetType::Default)?,
+        // use the type flag
+        _ => type_flag(&mut blk)
+            .and_then(|ty| {
+                // otherwise try to infer the output
+                ty.map(Ok).unwrap_or_else(|| {
+                    blk.output_ty()
+                        .ok_or_else(|| Error::unknown_blk_output_type(blk.blk_tag()))
+                })
             })
-        }
+            .map(TableGetType::Flag)?,
+    };
+
+    blk.eval(get_type.ty().clone(), move |x, cx| {
+        let trow: TableRow = x.try_into()?;
+        table_row_get(&trow, &colarg, &get_type, cx)
+    })
+}
 
 fn get_help() -> HelpMessage {
     HelpMessage {
         desc: "extract a value out of a data structure".into(),
-        params: vec![
-            HelpParameter::Required("field".into()),
-        ],
-        examples: vec![
-            HelpExample {
-                desc: "get the x field of a user defined Point type",
-                code: "Point 1 3 | get x",
-            },
-        ],
+        params: vec![HelpParameter::Required("field".into())],
+        examples: vec![HelpExample {
+            desc: "get the x field of a user defined Point type",
+            code: "Point 1 3 | get x",
+        }],
 
         ..HelpMessage::new("get")
     }
 }
 
 fn get_intrinsic(mut blk: Block) -> Result<Step> {
-            let field_arg = blk.next_arg()?.supplied(None)?.concrete()?;
-            let (facc, out_ty) = FieldAccessor::construct(blk.in_ty(), &field_arg, blk.op_tag())?;
-            blk.eval(out_ty, move |input, cx| {
-                facc.get(input).and_then(|x| cx.done(x))
-            })
+    let field_arg = blk.next_arg()?.supplied(None)?.concrete()?;
+    let (facc, out_ty) = FieldAccessor::construct(blk.in_ty(), &field_arg, blk.op_tag())?;
+    blk.eval(out_ty, move |input, cx| {
+        facc.get(input).and_then(|x| cx.done(x))
+    })
 }
 
 enum TableGetType {
@@ -279,10 +278,35 @@ fn in_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Length ---------------------------------------------------------------
-fn len_help() -> HelpMessage {
+fn len_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "return the length of a table or string (chars)
-table length **does not include header row**"
+        desc: "return the number of characters in a string".into(),
+        examples: vec![
+            HelpExample {
+                desc: "length of a string",
+                code: "\\ 'Hello, 🌎!' | len",
+            },
+        ],
+        ..HelpMessage::new("len")
+    }
+}
+
+fn len_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Num);
+
+    blk.eval_o(|i, cx| {
+            Str::try_from(i)
+                .map(|s| s.chars().count())
+                .map(Number::from)
+                .and_then(|x| cx.done_o(x))
+        })
+}
+
+fn len_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "return the number of rows or columns in a table.
+length **does not include header row**"
             .into(),
         flags: vec![("cols", "return the number of columns in a table")],
         examples: vec![
@@ -294,24 +318,15 @@ table length **does not include header row**"
                 desc: "columns in the ls table",
                 code: "ls | len --cols",
             },
-            HelpExample {
-                desc: "length of a string",
-                code: "\\ 'Hello, 🌎!' | len",
-            },
         ],
         ..HelpMessage::new("len")
     }
 }
 
-fn len_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => blk.eval_o(|i, cx| {
-            Str::try_from(i)
-                .map(|s| s.chars().count())
-                .map(Number::from)
-                .and_then(|x| cx.done_o(x))
-        }),
-        Ty::Tab => {
+fn len_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Num);
+
             let cols = blk.get_flag("cols").is_some();
             blk.eval_o(move |t, cx| {
                 Table::try_from(t)
@@ -325,9 +340,6 @@ fn len_intrinsic(mut blk: Block) -> Result<Step> {
                     .map(Number::from)
                     .and_then(|x| cx.done_o(x))
             })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
 }
 
 // ------ Let ------------------------------------------------------------------
