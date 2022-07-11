@@ -170,28 +170,18 @@ fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
 // ------ Dedup ----------------------------------------------------------------
 fn dedup_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "deduplicate items
-for Tables consectutive repeated rows are removed if the cells in
-specified columns match. if no columns are specified the whole row must match.
-if the table is sorted, this removes all duplicates.
-for Strs duplicate characters are removed."
-            .into(),
-        params: vec![HelpParameter::Required("col-name..".into())],
+        desc: "de-duplicate consecutive characters from a string".into(),
         examples: vec![
             HelpExample {
-                desc: "remove all duplicate entries in the 'Product' heading",
-                code: "sort Product | dedup Product",
-            },
-            HelpExample {
-                desc: "remove duplicates that match the entire row",
-                code: "ls foo | + ls bar | sort name | dedup",
+                desc: "reduce the string 'aabbcc' to 'abc'",
+                code: "\\ 'aabbcc' | dedup",
             },
         ],
         ..HelpMessage::new("dedup")
     }
 }
 
-fn dedup_str_intrinsic(blk: Block) -> Result<Step> {
+fn dedup_str_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Str)?;
     blk.assert_output(Ty::Str);
 
@@ -217,11 +207,10 @@ fn dedup_str_intrinsic(blk: Block) -> Result<Step> {
 
 fn dedup_table_help() -> HelpMessage {
     HelpMessage {
-        desc: "deduplicate items
-for Tables consectutive repeated rows are removed if the cells in
-specified columns match. if no columns are specified the whole row must match.
-if the table is sorted, this removes all duplicates.
-for Strs duplicate characters are removed."
+        desc: "de-duplicate consecutive repeated rows.
+rows are removed if the cells in the specified columns match.
+if no columns are specified the whole row must match.
+if the table is sorted, this removes all duplicates."
             .into(),
         params: vec![HelpParameter::Required("col-name..".into())],
         examples: vec![
@@ -238,7 +227,7 @@ for Strs duplicate characters are removed."
     }
 }
 
-fn dedup_table_instrinc(mut blk: Block) -> Result<Step> {
+fn dedup_table_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 

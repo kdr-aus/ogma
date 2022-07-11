@@ -122,7 +122,7 @@ fn list_defs() {
 │ +              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ String ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ Table  ┆ <ogma>   ┆ -    ┆ -                          │
-│ 74 rows elided ┆ ...         ┆ ...    ┆ ...      ┆ ...  ┆ ...                        │
+│ 75 rows elided ┆ ...         ┆ ...    ┆ ...      ┆ ...  ┆ ...                        │
 │ take           ┆ morphism    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
 │ to-str         ┆ pipeline    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
 │ typify         ┆ diagnostics ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │

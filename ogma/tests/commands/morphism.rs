@@ -153,14 +153,23 @@ fn dedup_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `dedup`
+        r#"Help: `dedup`
 --> shell:0
- | ---- Input Type: <any> ----
- | deduplicate items
- | for Tables consectutive repeated rows are removed if the cells in
- | specified columns match. if no columns are specified the whole row must match.
+ | ---- Input Type: String ----
+ | de-duplicate consecutive characters from a string
+ | 
+ | Usage:
+ |  => dedup
+ | 
+ | Examples:
+ |  reduce the string 'aabbcc' to 'abc'
+ |  => \ 'aabbcc' | dedup
+ | 
+ | ---- Input Type: Table ----
+ | de-duplicate consecutive repeated rows.
+ | rows are removed if the cells in the specified columns match.
+ | if no columns are specified the whole row must match.
  | if the table is sorted, this removes all duplicates.
- | for Strs duplicate characters are removed.
  | 
  | Usage:
  |  => dedup col-name..
@@ -171,7 +180,7 @@ fn dedup_help_msg() {
  | 
  |  remove duplicates that match the entire row
  |  => ls foo | + ls bar | sort name | dedup
-"
+"#
     );
 }
 
