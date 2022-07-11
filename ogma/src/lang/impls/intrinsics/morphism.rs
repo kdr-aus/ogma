@@ -17,7 +17,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("grp", Table, grp_table, Morphism)
     ("grp-by", Table, grpby_table, Morphism)
     ("map", Table, map_table, Morphism)
-    (pick, Morphism)
+    ("pick", Table, pick_table, Morphism)
     (ren, Morphism)
     ("ren-with", ren_with, Morphism)
     (rev, Morphism)
@@ -930,7 +930,7 @@ impl MapTable {
 }
 
 // ------ Pick -----------------------------------------------------------------
-fn pick_help() -> HelpMessage {
+fn pick_table_help() -> HelpMessage {
     HelpMessage {
         desc: "pick out columns to keep in a table, in order".into(),
         params: vec![HelpParameter::Required("col-name..".into())],
@@ -949,16 +949,7 @@ fn pick_help() -> HelpMessage {
     }
 }
 
-fn pick_intrinsic(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Type::Tab); // always return a table
-
-    match blk.in_ty() {
-        Ty::Tab => pick_table_columns(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
-}
-
-fn pick_table_columns(mut blk: Block) -> Result<Step> {
+fn pick_table_intrinsic(mut blk: Block) -> Result<Step> {
     let addflag = blk.get_flag("add").is_some();
     let trailflag = blk.get_flag("trail").is_some();
     //

@@ -721,7 +721,7 @@ fn pick_help_msg() {
         &x,
         "Help: `pick`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | pick out columns to keep in a table, in order
  | 
  | Usage:
