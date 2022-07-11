@@ -5,7 +5,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
     ("append", Table, append_table, Morphism)
     ("append-row", Table, append_row, Morphism)
-    (dedup, Morphism)
+
+    ("dedup", Str, dedup_str, Morphism)
+    ("dedup", Table, dedup_table, Morphism)
+
     (filter, Morphism)
     (fold, Morphism)
     ("fold-while", fold_while, Morphism)
@@ -165,7 +168,7 @@ fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Dedup ----------------------------------------------------------------
-fn dedup_help() -> HelpMessage {
+fn dedup_str_help() -> HelpMessage {
     HelpMessage {
         desc: "deduplicate items
 for Tables consectutive repeated rows are removed if the cells in
@@ -188,17 +191,57 @@ for Strs duplicate characters are removed."
     }
 }
 
-fn dedup_intrinsic(blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => dedup_str(blk),
-        Ty::Tab => dedup_table(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+fn dedup_str_intrinsic(blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+
+    blk.eval_o(move |string, cx| {
+        let string: Str = string.try_into()?;
+
+        let mut x = None;
+        let s: Str = string
+            .chars()
+            .filter(|&c| match x {
+                Some(x) if c == x => false,
+                _ => {
+                    x = Some(c);
+                    true
+                }
+            })
+            .collect::<String>()
+            .into();
+
+        cx.done_o(s)
+    })
+}
+
+fn dedup_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "deduplicate items
+for Tables consectutive repeated rows are removed if the cells in
+specified columns match. if no columns are specified the whole row must match.
+if the table is sorted, this removes all duplicates.
+for Strs duplicate characters are removed."
+            .into(),
+        params: vec![HelpParameter::Required("col-name..".into())],
+        examples: vec![
+            HelpExample {
+                desc: "remove all duplicate entries in the 'Product' heading",
+                code: "sort Product | dedup Product",
+            },
+            HelpExample {
+                desc: "remove duplicates that match the entire row",
+                code: "ls foo | + ls bar | sort name | dedup",
+            },
+        ],
+        ..HelpMessage::new("dedup")
     }
 }
 
-/// Assumes already check that input is Table.
-fn dedup_table(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Ty::Tab); // table -> table
+fn dedup_table_instrinc(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
+
     let colnames = match blk.args_len() {
         0 => None,
         _ => Some(ColNameArgs::build(&mut blk)?),
@@ -218,28 +261,6 @@ fn dedup_table(mut blk: Block) -> Result<Step> {
         t.dedup_by(|a, b| cols.iter().all(|&c| a[c] == b[c]));
 
         cx.done_o(Table::from(InnerTable::from(t)))
-    })
-}
-
-/// Assumes already check that input is Str.
-fn dedup_str(blk: Block) -> Result<Step> {
-    blk.eval_o(move |string, cx| {
-        let string: Str = string.try_into()?;
-
-        let mut x = None;
-        let s: Str = string
-            .chars()
-            .filter(|&c| match x {
-                Some(x) if c == x => false,
-                _ => {
-                    x = Some(c);
-                    true
-                }
-            })
-            .collect::<String>()
-            .into();
-
-        cx.done_o(s)
     })
 }
 
