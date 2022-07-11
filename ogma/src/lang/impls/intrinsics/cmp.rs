@@ -3,7 +3,9 @@ use std::cmp;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-        (cmp, Cmp)
+        ("cmp", (), cmp_nil, Cmp)
+        ("cmp", bool, cmp_bool, Cmp)
+
         (eq, Cmp)
         (max, Cmp)
         (min, Cmp)
@@ -11,30 +13,35 @@ pub fn add_intrinsics(impls: &mut Implementations) {
 }
 
 // ------ Cmp ------------------------------------------------------------------
-fn cmp_help() -> HelpMessage {
+fn cmp_nil_help() -> HelpMessage {
     HelpMessage {
-        desc: "compare <rhs> to input".into(),
-        params: vec![HelpParameter::Required("rhs".into())],
-        examples: vec![HelpExample {
-            desc: "compare 2 to 1",
-            code: "\\ 1 | cmp 2",
-        }],
+        desc: "compare <rhs> to input. Nil types are always equal.".into(),
+        params: vec![HelpParameter::Required("rhs:Nil".into())],
         ..HelpMessage::new("cmp")
     }
 }
 
-fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
+fn cmp_nil_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Nil)?;
     blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
-
-    match blk.in_ty() {
-        Ty::Nil => {
             blk.next_arg()?
                 .supplied(None)?
                 .returns(Ty::Nil)?
                 .concrete()?; // we don't use rhs but we do req its existence
             blk.eval_o(|_, cx| cx.done_o(cmp::Ordering::Equal))
-        }
-        Ty::Bool => {
+}
+
+fn cmp_bool_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Bool".into())],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_bool_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Bool)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
             let rhs = blk
                 .next_arg()?
                 .supplied(None)?
@@ -45,7 +52,23 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
                 let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
                 cx.done_o(lhs.cmp(&rhs))
             })
-        }
+}
+
+fn cmp_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs".into())],
+        examples: vec![HelpExample {
+            desc: "compare 2 to 1",
+            code: "\\ 1 | cmp 2",
+        }],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+
+fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
+    match blk.in_ty() {
         Ty::Num => {
             let rhs = blk
                 .next_arg()?
