@@ -4,7 +4,7 @@ use std::{cell::RefCell, cmp, collections::BTreeMap, mem, rc::Rc};
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
     ("append", Table, append_table, Morphism)
-    ("append-row", append_row, Morphism)
+    ("append-row", Table, append_row, Morphism)
     (dedup, Morphism)
     (filter, Morphism)
     (fold, Morphism)
@@ -133,10 +133,8 @@ the row is populated with the expression results",
 }
 
 fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
-    blk.assert_output(Ty::Tab); // table -> table
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
 
     let len = blk.args_len();
     let mut cols = Vec::with_capacity(len);

@@ -96,7 +96,7 @@ fn append_row_help_msg() {
         &x,
         "Help: `append-row`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | append a row to the table
  | the row is populated with the expression results
  | -variadic-: more than one argument can be specified
