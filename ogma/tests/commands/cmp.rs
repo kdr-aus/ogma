@@ -199,9 +199,10 @@ fn cmp_tablerow() {
 fn eq_help_test() {
     let defs = &Definitions::new();
     let x = process_w_nil("eq --help", defs).unwrap_err().to_string();
+    println!("{x}");
     assert_eq!(
         &x,
-        "Help: `eq`
+        r#"Help: `eq`
 --> shell:0
  | ---- Input Type: <any> ----
  | returns if <rhs> is equal to input
@@ -211,11 +212,56 @@ fn eq_help_test() {
  | 
  | Examples:
  |  does 2 equal 1
- |  => \\ 1 | eq 2
+ |  => \ 1 | eq 2
  | 
  |  1 equals 1
- |  => \\ 1 | eq 1
-"
+ |  => \ 1 | eq 1
+ | 
+ | ---- Input Type: Bool ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Bool
+ | 
+ | ---- Input Type: Nil ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Nil
+ | 
+ | ---- Input Type: Number ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Num
+ | 
+ | Examples:
+ |  does 2 equal 1
+ |  => \ 1 | eq 2
+ | 
+ |  1 equals 1
+ |  => \ 1 | eq 1
+ | 
+ | ---- Input Type: Ord ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Ord
+ | 
+ | Examples:
+ |  does Ord::Gt equal Ord::Gt
+ |  => Ord::Gt | eq Ord::Gt
+ | 
+ | ---- Input Type: String ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Str
+ | 
+ | Examples:
+ |  does 'ab' equal 'cd'
+ |  => \ 'ab' | eq 'cd'
+"#
     );
 }
 

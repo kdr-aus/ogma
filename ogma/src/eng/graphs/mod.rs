@@ -149,12 +149,17 @@ mod tests {
         assert!(matches!(ag.node_weight(7.into()), Some(Intrinsic { .. }))); // filter intrinsic
         assert!(matches!(ag.node_weight(8.into()), Some(Intrinsic { .. }))); // len intrinsic
         assert!(matches!(ag.node_weight(9.into()), Some(Intrinsic { .. }))); // eq intrinsic
-        assert!(matches!(ag.node_weight(10.into()), None));
+        assert!(matches!(ag.node_weight(10.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(11.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(12.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(13.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(14.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(15.into()), None));
 
-        assert_eq!(ag.node_count(), 10);
-        assert_eq!(ag.edge_count(), 12);
+        assert_eq!(ag.node_count(), 15);
+        assert_eq!(ag.edge_count(), 22);
 
-        assert_eq!(tg.node_count(), 10);
+        assert_eq!(tg.node_count(), 15);
         assert_eq!(tg.edge_count(), 0); // zeroed initially
 
         check_relation(&ag, 0, 1, 0, Normal); // root -> filter
@@ -167,8 +172,10 @@ mod tests {
         check_relation(&ag, 2, 7, 7, Term(0)); // foo -> intrinsic
         check_relation(&ag, 3, 7, 8, Term(1)); // eq 3 -> intrinsic
         check_relation(&ag, 4, 8, 9, Keyed(None)); // len -> intrinsic
-        check_relation(&ag, 5, 9, 10, Keyed(None)); // eq -> intrinsic
+        check_relation(&ag, 5, 9, 10, Keyed(Some(Type::Nil))); // eq -> intrinsic
         check_relation(&ag, 6, 9, 11, Term(0)); // 3 -> intrinsic
+        check_relation(&ag, 5, 10, 12, Keyed(Some(Type::Num))); // eq -> intrinsic
+        check_relation(&ag, 5, 11, 14, Keyed(Some(Type::Bool))); // eq -> intrinsic
     }
 
     #[test]
@@ -177,7 +184,7 @@ mod tests {
 
         tg.apply_ast_types(&ag);
 
-        assert_eq!(tg.node_count(), 13);
+        assert_eq!(tg.node_count(), 23);
 
         use tygraph::{Knowledge, Node};
         let def = || Node {
@@ -224,10 +231,10 @@ mod tests {
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
 
-        assert_eq!(ag.node_count(), 12);
-        assert_eq!(ag.edge_count(), 14);
+        assert_eq!(ag.node_count(), 17);
+        assert_eq!(ag.edge_count(), 24);
 
-        assert_eq!(tg.node_count(), 12);
+        assert_eq!(tg.node_count(), 17);
 
         // Check AST graph edges
         assert!(matches!(ag.node_weight(0.into()), Some(Expr(_)))); // root
@@ -242,7 +249,12 @@ mod tests {
         assert!(matches!(ag.node_weight(9.into()), Some(Intrinsic { .. }))); // filter intrinsic
         assert!(matches!(ag.node_weight(10.into()), Some(Intrinsic { .. }))); // len intrinsic
         assert!(matches!(ag.node_weight(11.into()), Some(Intrinsic { .. }))); // eq intrinsic
-        assert!(matches!(ag.node_weight(12.into()), None));
+        assert!(matches!(ag.node_weight(12.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(13.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(14.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(15.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(16.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(17.into()), None));
 
         check_relation(&ag, 0, 1, 0, Normal); // root -> ls
         check_relation(&ag, 0, 2, 1, Normal); // root -> filter
@@ -257,7 +269,7 @@ mod tests {
         check_relation(&ag, 1, 8, 7, Keyed(None)); // ls -> intrinsic
         check_relation(&ag, 2, 9, 8, Keyed(None)); // filter -> intrinsic
         check_relation(&ag, 5, 10, 11, Keyed(None)); // len -> intrinsic
-        check_relation(&ag, 6, 11, 12, Keyed(None)); // eq -> intrinsic
+        check_relation(&ag, 6, 11, 12, Keyed(Some(Type::Nil))); // eq -> intrinsic
 
         check_relation(&ag, 3, 9, 9, Term(0)); // foo -> filter intrinsic
         check_relation(&ag, 4, 9, 10, Term(1)); // eq 0 -> filter intrinsic
@@ -372,10 +384,15 @@ mod tests {
         assert!(matches!(ag.node_weight(5.into()), Some(Op { .. }))); // eq
         assert!(matches!(ag.node_weight(6.into()), Some(Var(_)))); // $rhs
         assert!(matches!(ag.node_weight(7.into()), Some(Intrinsic { .. }))); // eq intrinsic
-        assert!(matches!(ag.node_weight(8.into()), None));
+        assert!(matches!(ag.node_weight(8.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(9.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(10.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(11.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(12.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(13.into()), None));
 
-        assert_eq!(ag.node_count(), 8);
-        assert_eq!(ag.edge_count(), 9);
+        assert_eq!(ag.node_count(), 13);
+        assert_eq!(ag.edge_count(), 19);
 
         check_relation(&ag, 0, 1, 0, Normal); // root -> =
         check_relation(&ag, 1, 2, 1, Normal); // = -> 3
@@ -384,7 +401,7 @@ mod tests {
         check_relation(&ag, 3, 4, 4, Normal); // Def -> eq $rhs
         check_relation(&ag, 1, 3, 5, Keyed(None)); // = -> Def
         check_relation(&ag, 2, 3, 6, Term(0)); // 3 -> Def
-        check_relation(&ag, 5, 7, 7, Keyed(None)); // = -> Def
+        check_relation(&ag, 5, 7, 7, Keyed(Some(Type::Nil))); // = -> Def
         check_relation(&ag, 6, 7, 8, Term(0)); // 3 -> Def
     }
 
@@ -396,8 +413,8 @@ mod tests {
         tg.apply_ast_edges(&ag);
 
         // Assert some info about the AST nodes
-        assert_eq!(ag.node_count(), 8);
-        assert_eq!(ag.edge_count(), 9);
+        assert_eq!(ag.node_count(), 13);
+        assert_eq!(ag.edge_count(), 19);
         // 0: = 3
         // 1: =
         // 2: 3
@@ -429,7 +446,42 @@ mod tests {
         assert_eq!(tg.node_weight(4.into()), Some(&def())); // eq $rhs
         assert_eq!(tg.node_weight(5.into()), Some(&def())); // eq
         assert_eq!(tg.node_weight(6.into()), Some(&def())); // $rhs
-        assert_eq!(tg.node_weight(7.into()), Some(&def())); // eq intrinsic
+        assert_eq!(
+            tg.node_weight(7.into()),
+            Some(&Node {
+                input: Knowledge::Known(Type::Nil),
+                ..def()
+            })
+        ); // eq intrinsic
+        assert_eq!(
+            tg.node_weight(8.into()),
+            Some(&Node {
+                input: Knowledge::Known(Type::Num),
+                ..def()
+            })
+        ); // eq intrinsic
+        assert_eq!(
+            tg.node_weight(9.into()),
+            Some(&Node {
+                input: Knowledge::Known(Type::Bool),
+                ..def()
+            })
+        ); // eq intrinsic
+        assert_eq!(
+            tg.node_weight(10.into()),
+            Some(&Node {
+                input: Knowledge::Known(std::cmp::Ordering::as_type()),
+                ..def()
+            })
+        ); // eq intrinsic
+        assert_eq!(
+            tg.node_weight(11.into()),
+            Some(&Node {
+                input: Knowledge::Known(Type::Str),
+                ..def()
+            })
+        ); // eq intrinsic
+        assert_eq!(tg.node_weight(12.into()), Some(&def())); // eq intrinsic (any type)
 
         // Type graph edges
         let getedge = |a: u32, b: u32| &tg[tg.find_edge(a.into(), b.into()).unwrap()];
@@ -641,7 +693,7 @@ mod tests {
     fn path_from_root_test() {
         let (ag, _) = init_graphs("let $a | + { > 3 }");
 
-        assert_eq!(ag.node_count(), 30);
+        assert_eq!(ag.node_count(), 35);
 
         let f = |n: u32| ag.path_from_root(n.into()).collect::<Vec<_>>();
         let e = |i: &[_]| i.iter().copied().map(Into::into).collect::<Vec<_>>();
@@ -674,13 +726,18 @@ mod tests {
         assert_eq!(f(27), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 27]));
         assert_eq!(f(28), e(&[0, 3, 4, 5, 11, 12, 15, 16, 17, 28]));
         assert_eq!(f(29), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 29]));
+        assert_eq!(f(30), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 30]));
+        assert_eq!(f(31), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 31]));
+        assert_eq!(f(32), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 32]));
+        assert_eq!(f(33), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 33]));
+        assert_eq!(f(34), e(&[0, 3, 4, 5, 11, 12, 15, 24, 25, 26, 34]));
     }
 
     #[test]
     fn node_accessors() {
         let (ag, _tg) = init_graphs("let $a | + { > 3 } | + - + 3");
 
-        assert_eq!(ag.node_count(), 43);
+        assert_eq!(ag.node_count(), 48);
 
         //         let s = &mut String::new();
         //         ag.debug_write_flowchart(&_tg, s);
