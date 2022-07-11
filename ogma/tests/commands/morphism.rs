@@ -256,13 +256,22 @@ fn filtering_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `filter`
+        r#"Help: `filter`
 --> shell:0
- | ---- Input Type: <any> ----
- | filter incoming data using a predicate
+ | ---- Input Type: String ----
+ | filter a string based on if a character matches a predicate
+ | 
+ | Usage:
+ |  => filter <predicate>
+ | 
+ | Examples:
+ |  filtering a string
+ |  => \ 'Hello, world!' | filter != ' '
+ | 
+ | ---- Input Type: Table ----
+ | filter table using a predicate
  | filter can be used with a column header and a type flag
  | filtering columns is achievable with the --cols flag
- | filtering on a string supplies one character at a time
  | 
  | Usage:
  |  => filter [col-name] <predicate>
@@ -279,14 +288,11 @@ fn filtering_help_msg() {
  |  => ls | filter ext --Str = md
  | 
  |  filter a table by two columns
- |  => \\ table.csv | filter { and { get col-a | > 100 } { get col-b | < 10 } }
+ |  => \ table.csv | filter { and { get col-a | > 100 } { get col-b | < 10 } }
  | 
  |  filter table columns
- |  => \\ table.csv | filter --cols or { = 'foo' } { = bar }
- | 
- |  filtering a string
- |  => \\ 'Hello, world!' | filter != ' '
-"
+ |  => \ table.csv | filter --cols or { = 'foo' } { = bar }
+"#
     );
 }
 

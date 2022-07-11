@@ -147,19 +147,20 @@ mod tests {
         assert!(matches!(ag.node_weight(5.into()), Some(Op { .. }))); // eq
         assert!(matches!(ag.node_weight(6.into()), Some(Num { .. }))); // 3
         assert!(matches!(ag.node_weight(7.into()), Some(Intrinsic { .. }))); // filter intrinsic
-        assert!(matches!(ag.node_weight(8.into()), Some(Intrinsic { .. }))); // len intrinsic
-        assert!(matches!(ag.node_weight(9.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(8.into()), Some(Intrinsic { .. }))); // filter intrinsic
+        assert!(matches!(ag.node_weight(9.into()), Some(Intrinsic { .. }))); // len intrinsic
         assert!(matches!(ag.node_weight(10.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(11.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(12.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(13.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(14.into()), Some(Intrinsic { .. }))); // eq intrinsic
-        assert!(matches!(ag.node_weight(15.into()), None));
+        assert!(matches!(ag.node_weight(15.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(16.into()), None));
 
-        assert_eq!(ag.node_count(), 15);
-        assert_eq!(ag.edge_count(), 22);
+        assert_eq!(ag.node_count(), 16);
+        assert_eq!(ag.edge_count(), 25);
 
-        assert_eq!(tg.node_count(), 15);
+        assert_eq!(tg.node_count(), 16);
         assert_eq!(tg.edge_count(), 0); // zeroed initially
 
         check_relation(&ag, 0, 1, 0, Normal); // root -> filter
@@ -168,14 +169,15 @@ mod tests {
         check_relation(&ag, 0, 4, 3, Normal); // root -> len
         check_relation(&ag, 3, 5, 4, Normal); // eq 3 -> eq
         check_relation(&ag, 5, 6, 5, Normal); // eq -> 3
-        check_relation(&ag, 1, 7, 6, Keyed(None)); // filter -> intrinsic
+        check_relation(&ag, 1, 7, 6, Keyed(Some(Type::Tab))); // filter -> intrinsic
+        check_relation(&ag, 1, 8, 9, Keyed(Some(Type::Str))); // filter -> intrinsic
         check_relation(&ag, 2, 7, 7, Term(0)); // foo -> intrinsic
         check_relation(&ag, 3, 7, 8, Term(1)); // eq 3 -> intrinsic
-        check_relation(&ag, 4, 8, 9, Keyed(None)); // len -> intrinsic
-        check_relation(&ag, 5, 9, 10, Keyed(Some(Type::Nil))); // eq -> intrinsic
-        check_relation(&ag, 6, 9, 11, Term(0)); // 3 -> intrinsic
-        check_relation(&ag, 5, 10, 12, Keyed(Some(Type::Num))); // eq -> intrinsic
-        check_relation(&ag, 5, 11, 14, Keyed(Some(Type::Bool))); // eq -> intrinsic
+        check_relation(&ag, 4, 9, 12, Keyed(None)); // len -> intrinsic
+        check_relation(&ag, 5, 10, 13, Keyed(Some(Type::Nil))); // eq -> intrinsic
+        check_relation(&ag, 6, 10, 14, Term(0)); // 3 -> intrinsic
+        check_relation(&ag, 5, 11, 15, Keyed(Some(Type::Num))); // eq -> intrinsic
+        check_relation(&ag, 5, 12, 17, Keyed(Some(Type::Bool))); // eq -> intrinsic
     }
 
     #[test]
@@ -184,7 +186,7 @@ mod tests {
 
         tg.apply_ast_types(&ag);
 
-        assert_eq!(tg.node_count(), 23);
+        assert_eq!(tg.node_count(), 24);
 
         use tygraph::{Knowledge, Node};
         let def = || Node {
@@ -231,10 +233,10 @@ mod tests {
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
 
-        assert_eq!(ag.node_count(), 18);
-        assert_eq!(ag.edge_count(), 25);
+        assert_eq!(ag.node_count(), 19);
+        assert_eq!(ag.edge_count(), 28);
 
-        assert_eq!(tg.node_count(), 18);
+        assert_eq!(tg.node_count(), 19);
 
         // Check AST graph edges
         assert!(matches!(ag.node_weight(0.into()), Some(Expr(_)))); // root
@@ -248,14 +250,15 @@ mod tests {
         assert!(matches!(ag.node_weight(8.into()), Some(Intrinsic { .. }))); // ls intrinsic
         assert!(matches!(ag.node_weight(9.into()), Some(Intrinsic { .. }))); // ls intrinsic
         assert!(matches!(ag.node_weight(10.into()), Some(Intrinsic { .. }))); // filter intrinsic
-        assert!(matches!(ag.node_weight(11.into()), Some(Intrinsic { .. }))); // len intrinsic
-        assert!(matches!(ag.node_weight(12.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(11.into()), Some(Intrinsic { .. }))); // filter intrinsic
+        assert!(matches!(ag.node_weight(12.into()), Some(Intrinsic { .. }))); // len intrinsic
         assert!(matches!(ag.node_weight(13.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(14.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(15.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(16.into()), Some(Intrinsic { .. }))); // eq intrinsic
         assert!(matches!(ag.node_weight(17.into()), Some(Intrinsic { .. }))); // eq intrinsic
-        assert!(matches!(ag.node_weight(18.into()), None));
+        assert!(matches!(ag.node_weight(18.into()), Some(Intrinsic { .. }))); // eq intrinsic
+        assert!(matches!(ag.node_weight(19.into()), None));
 
         check_relation(&ag, 0, 1, 0, Normal); // root -> ls
         check_relation(&ag, 0, 2, 1, Normal); // root -> filter
@@ -269,14 +272,17 @@ mod tests {
 
         check_relation(&ag, 1, 8, 7, Keyed(Some(Type::Tab))); // ls -> intrinsic
         check_relation(&ag, 1, 9, 8, Keyed(None)); // ls -> intrinsic
-        check_relation(&ag, 2, 10, 9, Keyed(None)); // filter -> intrinsic
-        check_relation(&ag, 5, 11, 12, Keyed(None)); // len -> intrinsic
-        check_relation(&ag, 6, 12, 13, Keyed(Some(Type::Nil))); // eq -> intrinsic
+        check_relation(&ag, 2, 10, 9, Keyed(Some(Type::Tab))); // filter -> intrinsic
+        check_relation(&ag, 2, 11, 12, Keyed(Some(Type::Str))); // filter -> intrinsic
+        check_relation(&ag, 5, 12, 15, Keyed(None)); // len -> intrinsic
+        check_relation(&ag, 6, 13, 16, Keyed(Some(Type::Nil))); // eq -> intrinsic
 
         check_relation(&ag, 3, 10, 10, Term(0)); // foo -> filter intrinsic
         check_relation(&ag, 4, 10, 11, Term(1)); // eq 0 -> filter intrinsic
+        check_relation(&ag, 3, 11, 13, Term(0)); // foo -> filter intrinsic
+        check_relation(&ag, 4, 11, 14, Term(1)); // eq 0 -> filter intrinsic
 
-        check_relation(&ag, 7, 12, 14, Term(0)); // 0 -> eq intrinsic
+        check_relation(&ag, 7, 13, 17, Term(0)); // 0 -> eq intrinsic
 
         // Type graph nodes
         use tygraph::{Flow, Knowledge, Node};

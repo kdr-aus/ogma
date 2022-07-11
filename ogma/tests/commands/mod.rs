@@ -268,11 +268,11 @@ fn multiline_errs() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Semantics Error: `filter` does not support `Nil` input data
+        "Unknown Command: operation `filter` not defined
 --> shell:0
  | filter {
- | ^^^^^^
---> help: use `filter --help` to view requirements. consider implementing `def filter`
+ | ^^^^^^ `filter` not defined for input `Nil`
+--> help: `filter` is implemented for the following input types: Table String
 "
     );
 

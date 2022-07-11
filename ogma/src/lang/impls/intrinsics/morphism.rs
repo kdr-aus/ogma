@@ -9,7 +9,9 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("dedup", Str, dedup_str, Morphism)
     ("dedup", Table, dedup_table, Morphism)
 
-    (filter, Morphism)
+    ("filter", Str, filter_str, Morphism)
+    ("filter", Table, filter_table, Morphism)
+
     (fold, Morphism)
     ("fold-while", fold_while, Morphism)
     (grp, Morphism)
@@ -254,12 +256,60 @@ fn dedup_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Filter ---------------------------------------------------------------
-fn filter_help() -> HelpMessage {
+fn filter_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "filter incoming data using a predicate
+        desc: "filter a string based on if a character matches a predicate".into(),
+        params: vec![
+            HelpParameter::Required("<predicate>".into()),
+        ],
+        examples: vec![
+            HelpExample {
+                desc: "filtering a string",
+                code: "\\ 'Hello, world!' | filter != ' '",
+            },
+        ],
+        ..HelpMessage::new("filter")
+    }
+}
+
+fn filter_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+
+    let predicate = blk
+        .next_arg()?
+        .supplied(Ty::Str)?
+        .returns(Ty::Bool)?
+        .concrete()?;
+
+    blk.eval_o(move |input, cx| {
+        let mut string = Str::try_from(input)?;
+        let s = string.to_mut();
+        let r = predicate.resolver_sync(&cx);
+        let mut e = None;
+        s.retain(|c| {
+            r(Value::Str(c.into()))
+                .and_then(bool::try_from)
+                .unwrap_or_else(|err| {
+                    e = Some(err);
+                    true
+                })
+        });
+
+        drop(r);
+
+        match e {
+            Some(e) => Err(e),
+            None => cx.done_o(string),
+        }
+    })
+}
+
+fn filter_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "filter table using a predicate
 filter can be used with a column header and a type flag
-filtering columns is achievable with the --cols flag
-filtering on a string supplies one character at a time"
+filtering columns is achievable with the --cols flag"
             .into(),
         params: vec![
             HelpParameter::Optional("col-name".into()),
@@ -292,19 +342,13 @@ filtering on a string supplies one character at a time"
                 desc: "filter table columns",
                 code: "\\ table.csv | filter --cols or { = 'foo' } { = bar }",
             },
-            HelpExample {
-                desc: "filtering a string",
-                code: "\\ 'Hello, world!' | filter != ' '",
-            },
         ],
         ..HelpMessage::new("filter")
     }
 }
 
-fn filter_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => filter_string(blk),
-        Ty::Tab => {
+fn filter_table_intrinsic(mut blk: Block) -> Result<Step> {
+            blk.assert_input(&Ty::Tab)?;
             blk.assert_output(Ty::Tab); // filtering Table -> Table
 
             let cols = blk.get_flag("cols").is_some();
@@ -313,9 +357,6 @@ fn filter_intrinsic(mut blk: Block) -> Result<Step> {
             } else {
                 FilterTable::filter(blk)
             }
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
 }
 
 struct FilterTable {
@@ -473,37 +514,6 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
     })
 }
 
-fn filter_string(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Type::Str);
-
-    let predicate = blk
-        .next_arg()?
-        .supplied(Ty::Str)?
-        .returns(Ty::Bool)?
-        .concrete()?;
-
-    blk.eval_o(move |input, cx| {
-        let mut string = Str::try_from(input)?;
-        let s = string.to_mut();
-        let r = predicate.resolver_sync(&cx);
-        let mut e = None;
-        s.retain(|c| {
-            r(Value::Str(c.into()))
-                .and_then(bool::try_from)
-                .unwrap_or_else(|err| {
-                    e = Some(err);
-                    true
-                })
-        });
-
-        drop(r);
-
-        match e {
-            Some(e) => Err(e),
-            None => cx.done_o(string),
-        }
-    })
-}
 
 // ------ Fold -----------------------------------------------------------------
 fn fold_help() -> HelpMessage {
