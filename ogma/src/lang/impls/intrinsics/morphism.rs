@@ -19,7 +19,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("map", Table, map_table, Morphism)
     ("pick", Table, pick_table, Morphism)
     ("ren", Table, ren_table, Morphism)
-    ("ren-with", ren_with, Morphism)
+    ("ren-with", Table, ren_with_table, Morphism)
     (rev, Morphism)
     (skip, Morphism)
     (sort, Morphism)
@@ -1089,7 +1089,7 @@ fn ren_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Ren-With -------------------------------------------------------------
-fn ren_with_help() -> HelpMessage {
+fn ren_with_table_help() -> HelpMessage {
     HelpMessage {
         desc: "rename column headers using a row as a seed
 each entry is fed into the expression, which returns a string
@@ -1118,10 +1118,8 @@ the default entry type required is a string"
     }
 }
 
-fn ren_with_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn ren_with_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab); // table -> table
 
     let row_idx = blk

@@ -929,7 +929,7 @@ fn ren_with_help_msg() {
         &x,
         "Help: `ren-with`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | rename column headers using a row as a seed
  | each entry is fed into the expression, which returns a string
  | the default entry type required is a string
