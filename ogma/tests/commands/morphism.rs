@@ -841,7 +841,7 @@ fn ren_help_msg() {
         &x,
         "Help: `ren`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | rename column headers
  | each binding takes the form `<col-ref> <name>`
  | `<col-ref>` can be a string or a column index number

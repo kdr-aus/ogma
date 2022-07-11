@@ -18,7 +18,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("grp-by", Table, grpby_table, Morphism)
     ("map", Table, map_table, Morphism)
     ("pick", Table, pick_table, Morphism)
-    (ren, Morphism)
+    ("ren", Table, ren_table, Morphism)
     ("ren-with", ren_with, Morphism)
     (rev, Morphism)
     (skip, Morphism)
@@ -991,7 +991,7 @@ fn pick_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Ren ------------------------------------------------------------------
-fn ren_help() -> HelpMessage {
+fn ren_table_help() -> HelpMessage {
     HelpMessage {
         desc: "rename column headers
 each binding takes the form `<col-ref> <name>`
@@ -1016,10 +1016,8 @@ each binding takes the form `<col-ref> <name>`
     }
 }
 
-fn ren_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn ren_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab); // table -> table
 
     enum Ref {
