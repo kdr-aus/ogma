@@ -1035,12 +1035,20 @@ fn rev_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `rev`
+        r#"Help: `rev`
 --> shell:0
- | ---- Input Type: <any> ----
- | reverse the order of the input
- | for String inputs; character ordering is reversed
- | for Table inputs; row or col ordering is reversed
+ | ---- Input Type: String ----
+ | reverse the order of characters
+ | 
+ | Usage:
+ |  => rev
+ | 
+ | Examples:
+ |  reverse string character ordering
+ |  => \ '!dlrow ,olleH' | rev
+ | 
+ | ---- Input Type: Table ----
+ | reverse the order of table rows or columns
  | 
  | Usage:
  |  => rev
@@ -1051,10 +1059,7 @@ fn rev_help_msg() {
  | Examples:
  |  reverse table row ordering
  |  => ls | rev
- | 
- |  reverse string character ordering
- |  => \\ '!dlrow ,olleH' | rev
-"
+"#
     );
 }
 

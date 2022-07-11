@@ -20,7 +20,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("pick", Table, pick_table, Morphism)
     ("ren", Table, ren_table, Morphism)
     ("ren-with", Table, ren_with_table, Morphism)
-    (rev, Morphism)
+
+    ("rev", Str, rev_str, Morphism)
+    ("rev", Table, rev_table, Morphism)
+
     (skip, Morphism)
     (sort, Morphism)
     ("sort-by", sortby, Morphism)
@@ -1174,18 +1177,10 @@ fn ren_with_table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Reverse --------------------------------------------------------------
-fn rev_help() -> HelpMessage {
+fn rev_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "reverse the order of the input
-for String inputs; character ordering is reversed
-for Table inputs; row or col ordering is reversed"
-            .into(),
-        flags: vec![("cols", "reverse table column ordering")],
+        desc: "reverse the order of characters".into(),
         examples: vec![
-            HelpExample {
-                desc: "reverse table row ordering",
-                code: "ls | rev",
-            },
             HelpExample {
                 desc: "reverse string character ordering",
                 code: "\\ '!dlrow ,olleH' | rev",
@@ -1195,15 +1190,35 @@ for Table inputs; row or col ordering is reversed"
     }
 }
 
-fn rev_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => blk.eval_o(|input, cx| {
+fn rev_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+        blk.eval_o(|input, cx| {
             Str::try_from(input)
                 .map(|s| s.chars().rev().collect::<String>())
                 .map(Str::from)
                 .and_then(|x| cx.done_o(x))
-        }),
-        Ty::Tab => {
+        })
+}
+
+fn rev_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "reverse the order of table rows or columns".into(),
+        flags: vec![("cols", "reverse table column ordering")],
+        examples: vec![
+            HelpExample {
+                desc: "reverse table row ordering",
+                code: "ls | rev",
+            },
+        ],
+        ..HelpMessage::new("rev")
+    }
+}
+
+fn rev_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
+
             let cols = blk.get_flag("cols").is_some();
             blk.eval_o(move |input, cx| {
                 let mut table: Table = input.try_into()?;
@@ -1214,9 +1229,6 @@ fn rev_intrinsic(mut blk: Block) -> Result<Step> {
                 }
                 cx.done_o(table)
             })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
 }
 
 // ------ Skip -----------------------------------------------------------------
