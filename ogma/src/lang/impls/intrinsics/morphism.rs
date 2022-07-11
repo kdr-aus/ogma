@@ -15,7 +15,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     ("fold", Table, fold_table, Morphism)
     ("fold-while", Table, fold_while_table, Morphism)
     ("grp", Table, grp_table, Morphism)
-    ("grp-by", grpby, Morphism)
+    ("grp-by", Table, grpby_table, Morphism)
     (map, Morphism)
     (pick, Morphism)
     (ren, Morphism)
@@ -710,7 +710,7 @@ where
 // expression, then groups the resulting values (and by proxy; the table)
 // grouping the values uses `cmp` definitions
 // the actual implementation is a bit more complex; we must create a pseudo-env to eval `cmp`
-fn grpby_help() -> HelpMessage {
+fn grpby_table_help() -> HelpMessage {
     HelpMessage {
         desc: "group table using an expression
 the result of the expression must define a `cmp` implementation
@@ -731,10 +731,8 @@ this can be used to group user-defined types"
     }
 }
 
-fn grpby_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn grpby_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
     // the expression which will be grouped on

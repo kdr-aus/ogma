@@ -579,7 +579,7 @@ fn grpby_help_msg() {
         &x,
         "Help: `grp-by`
 --> shell:0
- | ---- Input Type: <any> ----
+ | ---- Input Type: Table ----
  | group table using an expression
  | the result of the expression must define a `cmp` implementation
  | this can be used to group user-defined types
