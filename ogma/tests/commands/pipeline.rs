@@ -752,15 +752,23 @@ fn nth_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `nth`
+        r#"Help: `nth`
 --> shell:0
- | ---- Input Type: <any> ----
- | retrieve the nth element of a data structure
- | String: retrieves the nth character
- | Table: retrieves the nth row and applies the expression
+ | ---- Input Type: String ----
+ | retrieves the nth character of a string
  | 
  | Usage:
- |  => nth index [expr]
+ |  => nth index
+ | 
+ | Examples:
+ |  get the 10th character of a string
+ |  => \ 'Hello, world!' | nth 10
+ | 
+ | ---- Input Type: Table ----
+ | retrieves the nth row and applies the expression
+ | 
+ | Usage:
+ |  => nth index expr
  | 
  | Examples:
  |  get the first row of a table
@@ -768,10 +776,7 @@ fn nth_help_msg() {
  | 
  |  get the 2nd last row of a table
  |  => nth {len | - 2} {get col-name}
- | 
- |  get the 10th character of a string
- |  => \\ 'Hello, world!' | nth 10
-"
+"#
     );
 }
 

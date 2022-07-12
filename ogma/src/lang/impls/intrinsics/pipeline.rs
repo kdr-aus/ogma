@@ -19,7 +19,10 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         ("len", Table, len_table, Pipeline)
 
         (let, Pipeline)
-        (nth, Pipeline)
+
+        ("nth", Str, nth_str, Pipeline)
+        ("nth", Table, nth_table, Pipeline)
+
         (rand, Pipeline)
         (range, Pipeline)
         ("Table", table, Pipeline)
@@ -446,25 +449,14 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Nth ------------------------------------------------------------------
-fn nth_help() -> HelpMessage {
+fn nth_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "retrieve the nth element of a data structure
-String: retrieves the nth character
-Table: retrieves the nth row and applies the expression"
+        desc: "retrieves the nth character of a string"
             .into(),
         params: vec![
             HelpParameter::Required("index".into()),
-            HelpParameter::Optional("expr".into()),
         ],
         examples: vec![
-            HelpExample {
-                desc: "get the first row of a table",
-                code: "nth 0 {get col-name}",
-            },
-            HelpExample {
-                desc: "get the 2nd last row of a table",
-                code: "nth {len | - 2} {get col-name}",
-            },
             HelpExample {
                 desc: "get the 10th character of a string",
                 code: "\\ 'Hello, world!' | nth 10",
@@ -474,36 +466,10 @@ Table: retrieves the nth row and applies the expression"
     }
 }
 
-fn nth_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            let n = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
-            let oty = expr.out_ty().clone();
-            blk.eval(oty, move |table, cx| {
-                // nth is adj by one to account for header
-                let nth = n
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                let table = Table::try_from(table)?;
-                if nth + 1 >= table.rows_len() {
-                    return Err(Error::eval(
-                        &n.tag,
-                        "index is outside table bounds",
-                        format!("this resolves to `{}`", nth),
-                        None,
-                    ));
-                }
+fn nth_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
 
-                let trow = TableRow::new(table, Default::default(), nth + 1);
-                expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
-            })
-        }
-        Ty::Str => {
             let n = blk
                 .next_arg()?
                 .supplied(None)?
@@ -527,10 +493,60 @@ fn nth_intrinsic(mut blk: Block) -> Result<Step> {
                     .map(Str::from)
                     .and_then(|x| cx.done_o(x))
             })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+}
+
+fn nth_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "retrieves the nth row and applies the expression"
+            .into(),
+        params: vec![
+            HelpParameter::Required("index".into()),
+            HelpParameter::Required("expr".into()),
+        ],
+        examples: vec![
+            HelpExample {
+                desc: "get the first row of a table",
+                code: "nth 0 {get col-name}",
+            },
+            HelpExample {
+                desc: "get the 2nd last row of a table",
+                code: "nth {len | - 2} {get col-name}",
+            },
+        ],
+        ..HelpMessage::new("nth")
     }
 }
+
+fn nth_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+
+            let n = blk
+                .next_arg()?
+                .supplied(None)?
+                .returns(Ty::Num)?
+                .concrete()?;
+            let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
+            let oty = expr.out_ty().clone();
+
+            blk.eval(oty, move |table, cx| {
+                // nth is adj by one to account for header
+                let nth = n
+                    .resolve(|| table.clone(), &cx)
+                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+                let table = Table::try_from(table)?;
+                if nth + 1 >= table.rows_len() {
+                    return Err(Error::eval(
+                        &n.tag,
+                        "index is outside table bounds",
+                        format!("this resolves to `{}`", nth),
+                        None,
+                    ));
+                }
+
+                let trow = TableRow::new(table, Default::default(), nth + 1);
+                expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
+            })
+        }
 
 // ------ Rand -----------------------------------------------------------------
 fn rand_help() -> HelpMessage {
