@@ -141,7 +141,7 @@ impl Implementations {
             .map(|(t, x)| err::help_as_error(x, t))
             .reduce(|mut acc, x| {
                 if let Some((a, b)) = acc.traces.get_mut(0).zip(x.traces.get(0)) {
-                    if !a.source.ends_with("\n") {
+                    if !a.source.ends_with('\n') {
                         a.source += "\n";
                     }
                     a.source += "\n";
