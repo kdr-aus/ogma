@@ -26,7 +26,12 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         (rand, Pipeline)
         (range, Pipeline)
         ("Table", table, Pipeline)
+
+        ("to-str", bool, to_str_bool, Pipeline)
+        ("to-str", Number, to_str_num, Pipeline)
+        ("to-str", Str, to_str_str, Pipeline)
         ("to-str", to_str, Pipeline)
+
         ("Tuple", tuple, Pipeline)
     };
 }
@@ -284,12 +289,10 @@ fn in_intrinsic(mut blk: Block) -> Result<Step> {
 fn len_str_help() -> HelpMessage {
     HelpMessage {
         desc: "return the number of characters in a string".into(),
-        examples: vec![
-            HelpExample {
-                desc: "length of a string",
-                code: "\\ 'Hello, 🌎!' | len",
-            },
-        ],
+        examples: vec![HelpExample {
+            desc: "length of a string",
+            code: "\\ 'Hello, 🌎!' | len",
+        }],
         ..HelpMessage::new("len")
     }
 }
@@ -299,11 +302,11 @@ fn len_str_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_output(Ty::Num);
 
     blk.eval_o(|i, cx| {
-            Str::try_from(i)
-                .map(|s| s.chars().count())
-                .map(Number::from)
-                .and_then(|x| cx.done_o(x))
-        })
+        Str::try_from(i)
+            .map(|s| s.chars().count())
+            .map(Number::from)
+            .and_then(|x| cx.done_o(x))
+    })
 }
 
 fn len_table_help() -> HelpMessage {
@@ -330,19 +333,19 @@ fn len_table_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Num);
 
-            let cols = blk.get_flag("cols").is_some();
-            blk.eval_o(move |t, cx| {
-                Table::try_from(t)
-                    .map(|t| {
-                        if cols {
-                            t.cols_len()
-                        } else {
-                            t.rows_len().saturating_sub(1)
-                        }
-                    })
-                    .map(Number::from)
-                    .and_then(|x| cx.done_o(x))
+    let cols = blk.get_flag("cols").is_some();
+    blk.eval_o(move |t, cx| {
+        Table::try_from(t)
+            .map(|t| {
+                if cols {
+                    t.cols_len()
+                } else {
+                    t.rows_len().saturating_sub(1)
+                }
             })
+            .map(Number::from)
+            .and_then(|x| cx.done_o(x))
+    })
 }
 
 // ------ Let ------------------------------------------------------------------
@@ -451,17 +454,12 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
 // ------ Nth ------------------------------------------------------------------
 fn nth_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "retrieves the nth character of a string"
-            .into(),
-        params: vec![
-            HelpParameter::Required("index".into()),
-        ],
-        examples: vec![
-            HelpExample {
-                desc: "get the 10th character of a string",
-                code: "\\ 'Hello, world!' | nth 10",
-            },
-        ],
+        desc: "retrieves the nth character of a string".into(),
+        params: vec![HelpParameter::Required("index".into())],
+        examples: vec![HelpExample {
+            desc: "get the 10th character of a string",
+            code: "\\ 'Hello, world!' | nth 10",
+        }],
         ..HelpMessage::new("nth")
     }
 }
@@ -470,35 +468,34 @@ fn nth_str_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Str)?;
     blk.assert_output(Ty::Str);
 
-            let n = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let nth = n
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                Str::try_from(string)
-                    .and_then(|s| {
-                        s.chars().nth(nth).ok_or_else(|| {
-                            Error::eval(
-                                &n.tag,
-                                "index is outside string bounds",
-                                format!("this resolves to `{}`", nth),
-                                None,
-                            )
-                        })
-                    })
-                    .map(Str::from)
-                    .and_then(|x| cx.done_o(x))
+    let n = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o::<_, Str>(move |string, cx| {
+        let nth = n
+            .resolve(|| string.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+        Str::try_from(string)
+            .and_then(|s| {
+                s.chars().nth(nth).ok_or_else(|| {
+                    Error::eval(
+                        &n.tag,
+                        "index is outside string bounds",
+                        format!("this resolves to `{}`", nth),
+                        None,
+                    )
+                })
             })
+            .map(Str::from)
+            .and_then(|x| cx.done_o(x))
+    })
 }
 
 fn nth_table_help() -> HelpMessage {
     HelpMessage {
-        desc: "retrieves the nth row and applies the expression"
-            .into(),
+        desc: "retrieves the nth row and applies the expression".into(),
         params: vec![
             HelpParameter::Required("index".into()),
             HelpParameter::Required("expr".into()),
@@ -520,33 +517,33 @@ fn nth_table_help() -> HelpMessage {
 fn nth_table_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Tab)?;
 
-            let n = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
-            let oty = expr.out_ty().clone();
+    let n = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    let expr = blk.next_arg()?.supplied(Ty::TabRow)?.concrete()?;
+    let oty = expr.out_ty().clone();
 
-            blk.eval(oty, move |table, cx| {
-                // nth is adj by one to account for header
-                let nth = n
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
-                let table = Table::try_from(table)?;
-                if nth + 1 >= table.rows_len() {
-                    return Err(Error::eval(
-                        &n.tag,
-                        "index is outside table bounds",
-                        format!("this resolves to `{}`", nth),
-                        None,
-                    ));
-                }
-
-                let trow = TableRow::new(table, Default::default(), nth + 1);
-                expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
-            })
+    blk.eval(oty, move |table, cx| {
+        // nth is adj by one to account for header
+        let nth = n
+            .resolve(|| table.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &n.tag))?;
+        let table = Table::try_from(table)?;
+        if nth + 1 >= table.rows_len() {
+            return Err(Error::eval(
+                &n.tag,
+                "index is outside table bounds",
+                format!("this resolves to `{}`", nth),
+                None,
+            ));
         }
+
+        let trow = TableRow::new(table, Default::default(), nth + 1);
+        expr.resolve(|| trow.into(), &cx).and_then(|v| cx.done(v))
+    })
+}
 
 // ------ Rand -----------------------------------------------------------------
 fn rand_help() -> HelpMessage {
@@ -579,6 +576,14 @@ rand has four ways of calling:
 
 fn rand_intrinsic(mut blk: Block) -> Result<Step> {
     let args = blk.args_len();
+
+    // assert the return types
+    if args == 3 {
+        blk.assert_output(Ty::Tab);
+    } else {
+        blk.assert_output(Ty::Num);
+    };
+
     let mut next_num = || {
         blk.next_arg()
             .and_then(|x| x.supplied(None))
@@ -730,6 +735,8 @@ fn table_help() -> HelpMessage {
 }
 
 fn table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Tab);
+
     // table takes zero or more arguments that resolve to Str (header name)
     let mut names = Vec::with_capacity(blk.args_len());
     for _ in 0..blk.args_len() {
@@ -751,9 +758,23 @@ fn table_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ To Str ---------------------------------------------------------------
-fn to_str_help() -> HelpMessage {
+fn to_str_bool_help() -> HelpMessage {
     HelpMessage {
-        desc: "convert the input into a string".into(),
+        desc: "return a boolean as 'true' or 'false'".into(),
+        ..HelpMessage::new("to-str")
+    }
+}
+
+fn to_str_bool_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Bool)?;
+    blk.assert_output(Ty::Str);
+
+    blk.eval_o(|v, c| c.done_o(Str::from(bool::try_from(v)?.to_string())))
+}
+
+fn to_str_num_help() -> HelpMessage {
+    HelpMessage {
+        desc: "format the number as a string".into(),
         params: vec![HelpParameter::Optional("fmt".into())],
         examples: vec![HelpExample {
             desc: "format a number as a percentage",
@@ -763,21 +784,19 @@ fn to_str_help() -> HelpMessage {
     }
 }
 
-fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
+fn to_str_num_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Num)?;
     blk.assert_output(Ty::Str);
 
-    match blk.in_ty() {
-        Ty::Bool => blk.eval_o(|v, c| c.done_o(Str::from(bool::try_from(v)?.to_string()))),
-        Ty::Num => {
-            let fmt = if blk.args_len() == 0 {
-                None
-            } else {
-                let f = blk
-                    .next_arg()?
-                    .supplied(None)?
-                    .returns(Ty::Str)?
-                    .concrete()?;
-                Some(f.extract_literal::<Str>()?.parse::<numfmt::Formatter>().map_err(|e| {
+    let fmt = if blk.args_len() == 0 {
+        None
+    } else {
+        let f = blk
+            .next_arg()?
+            .supplied(None)?
+            .returns(Ty::Str)?
+            .concrete()?;
+        Some(f.extract_literal::<Str>()?.parse::<numfmt::Formatter>().map_err(|e| {
                     Error {
                         cat: err::Category::Parsing,
                         desc: format!("invalid format string: {}", e),
@@ -787,26 +806,49 @@ fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
                         hard: true,
                     }
                 })?)
-            };
+    };
 
-            blk.eval_o(move |v, cx| {
-                let n = Number::try_from(v)?;
-                let s = fmt
-                    .clone()
-                    .as_mut()
-                    .map(|f| f.fmt(n.as_f64()).to_string())
-                    .unwrap_or_else(|| n.to_string());
-                cx.done_o(Str::from(s))
-            })
-        }
-        Ty::Str => blk.eval_o(|v, c| c.done_o(Str::try_from(v)?)),
-        _ => blk.eval_o(|v, cx| {
-            cx.done_o(print::fmt_cell(
-                &Entry::from(v),
-                &mut numfmt::Formatter::default(),
-            ))
-        }),
+    blk.eval_o(move |v, cx| {
+        let n = Number::try_from(v)?;
+        let s = fmt
+            .clone()
+            .as_mut()
+            .map(|f| f.fmt(n.as_f64()).to_string())
+            .unwrap_or_else(|| n.to_string());
+        cx.done_o(Str::from(s))
+    })
+}
+
+fn to_str_str_help() -> HelpMessage {
+    HelpMessage {
+        desc: "pass through the string value".into(),
+        ..HelpMessage::new("to-str")
     }
+}
+
+fn to_str_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+
+    blk.eval_o(|v, c| c.done_o(Str::try_from(v)?))
+}
+
+fn to_str_help() -> HelpMessage {
+    HelpMessage {
+        desc: "convert the input into a string".into(),
+        ..HelpMessage::new("to-str")
+    }
+}
+
+fn to_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_output(Ty::Str);
+
+    blk.eval_o(|v, cx| {
+        cx.done_o(print::fmt_cell(
+            &Entry::from(v),
+            &mut numfmt::Formatter::default(),
+        ))
+    })
 }
 
 // ------ Tuple ----------------------------------------------------------------

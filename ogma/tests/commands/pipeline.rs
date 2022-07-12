@@ -995,18 +995,36 @@ fn to_str_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `to-str`
+        r#"Help: `to-str`
 --> shell:0
  | ---- Input Type: <any> ----
  | convert the input into a string
+ | 
+ | Usage:
+ |  => to-str
+ | 
+ | ---- Input Type: Bool ----
+ | return a boolean as 'true' or 'false'
+ | 
+ | Usage:
+ |  => to-str
+ | 
+ | ---- Input Type: Number ----
+ | format the number as a string
  | 
  | Usage:
  |  => to-str [fmt]
  | 
  | Examples:
  |  format a number as a percentage
- |  => \\ 0.4123 | to-str '[.2%]'
-"
+ |  => \ 0.4123 | to-str '[.2%]'
+ | 
+ | ---- Input Type: String ----
+ | pass through the string value
+ | 
+ | Usage:
+ |  => to-str
+"#
     );
 }
 
