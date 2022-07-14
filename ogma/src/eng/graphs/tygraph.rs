@@ -13,12 +13,15 @@ pub struct Node {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Knowledge {
-    Unknown,
+    Unknown, // TODO remove this in favour of _reducing_ types set
     Any,
     Known(Type),
     Obliged(Type),
-    Inferred(Type),
+    Inferred(TypesSet),
 }
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TypesSet(HashSet<Type>);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Flow {
@@ -435,6 +438,10 @@ impl TypeGraph {
             })
         }
 
+        fn add_inferred(k: &mut Knowledge, ty: Type) -> R {
+            k.contains(&ty).then(|| Ok(false)).unwrap_or_else
+        }
+
         fn apply<F>(tg: &mut TypeGraph, node: NodeIndex, setfn: F) -> R
         where
             F: FnOnce(&mut Node) -> R,
@@ -553,6 +560,9 @@ impl Knowledge {
         matches!(self, Knowledge::Any)
     }
 
+    pub fn contains(&self, ty: &Type) -> bool {
+    }
+
     /// Checks that the this knowledge can 'flow' into the knowledged at `into`.
     ///
     /// Flow is driven by two aspects:
@@ -635,5 +645,21 @@ impl fmt::Display for Knowledge {
             Any => write!(f, "Any"),
             Unknown => write!(f, "Unknown"),
         }
+    }
+}
+
+impl fmt::Display for TypesSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut trail = false;
+        write!(f, "{{")?;
+        for x in self.0.iter() {
+            if trail {
+                write!(f, ", ")?;
+            }
+            trail = true;
+            write!(f, "{x}")?;
+        }
+
+        write!(f, "}}")
     }
 }
