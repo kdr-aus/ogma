@@ -4,7 +4,9 @@ use std::io::{self, Write};
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
+        ("ls", Table, ls_table, Io)
         (ls, Io)
+
         (open, Io)
         (save, Io)
     };
@@ -33,12 +35,39 @@ fn scrub_filepath(path: &str, cx: &Context) -> io::Result<std::path::PathBuf> {
 }
 
 // ------ List -----------------------------------------------------------------
+fn ls_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "list out the headers of the table".into(),
+        examples: vec![HelpExample {
+            desc: "list headers in table",
+            code: "open table.csv | ls",
+        }],
+        ..HelpMessage::new("ls")
+    }
+}
+
+fn ls_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Tab)?;
+    blk.assert_output(Type::Tab); // always outputs a table
+
+    let blk_tag = blk.blk_tag().clone();
+    blk.eval_o(move |input, cx| {
+        Table::try_from(input)
+            .and_then(|t| {
+                t.row(0)
+                    .ok_or_else(|| Error::empty_table("", &blk_tag))
+                    .map(|r| once(o("header")).chain(r.cloned()).map(|x| vec![x]))
+                    .map(|x| x.collect::<Vec<_>>())
+            })
+            .map(::table::Table::from)
+            .map(Table::from)
+            .and_then(|x| cx.done_o(x))
+    })
+}
+
 fn ls_help() -> HelpMessage {
     HelpMessage {
-        desc: "list out aspects of the input
-input is Nil; outputs the filesystem contents in the current working dir
-input is Table; outputs the headers as a table"
-            .into(),
+        desc: "list out the filesystem contents in the current working dir".into(),
         params: vec![HelpParameter::Optional("path".into())],
         examples: vec![
             HelpExample {
@@ -49,10 +78,6 @@ input is Table; outputs the headers as a table"
                 desc: "list directory items in `path`",
                 code: "ls path/to",
             },
-            HelpExample {
-                desc: "list headers in table",
-                code: "open table.csv | ls",
-            },
         ],
         ..HelpMessage::new("ls")
     }
@@ -60,43 +85,28 @@ input is Table; outputs the headers as a table"
 
 fn ls_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_output(Type::Tab); // always outputs a table
-    let blk_tag = blk.blk_tag().clone();
-    match blk.in_ty() {
-        Ty::Tab => blk.eval_o(move |input, cx| {
-            Table::try_from(input)
-                .and_then(|t| {
-                    t.row(0)
-                        .ok_or_else(|| Error::empty_table("", &blk_tag))
-                        .map(|r| once(o("header")).chain(r.cloned()).map(|x| vec![x]))
-                        .map(|x| x.collect::<Vec<_>>())
-                })
-                .map(::table::Table::from)
-                .map(Table::from)
-                .and_then(|x| cx.done_o(x))
-        }),
-        _ => {
-            let path = if blk.args_len() > 0 {
-                Some(
-                    blk.next_arg()?
-                        .supplied(Type::Nil)?
-                        .returns(Type::Str)?
-                        .concrete()?,
-                )
-            } else {
-                None
-            };
 
-            blk.eval_o(move |_, cx| {
-                if let Some(path) = &path {
-                    let path: Str = path.resolve(|| Value::Nil, &cx)?.try_into()?;
-                    make_dir_table(cx.wd.join(path.as_str()), &blk_tag)
-                } else {
-                    make_dir_table(cx.wd, &blk_tag)
-                }
-                .and_then(|x| cx.done_o(x))
-            })
+    let blk_tag = blk.blk_tag().clone();
+    let path = if blk.args_len() > 0 {
+        Some(
+            blk.next_arg()?
+                .supplied(Type::Nil)?
+                .returns(Type::Str)?
+                .concrete()?,
+        )
+    } else {
+        None
+    };
+
+    blk.eval_o(move |_, cx| {
+        if let Some(path) = &path {
+            let path: Str = path.resolve(|| Value::Nil, &cx)?.try_into()?;
+            make_dir_table(cx.wd.join(path.as_str()), &blk_tag)
+        } else {
+            make_dir_table(cx.wd, &blk_tag)
         }
-    }
+        .and_then(|x| cx.done_o(x))
+    })
 }
 
 fn make_dir_table<P: AsRef<std::path::Path>>(dir: P, blk_tag: &Tag) -> Result<Table> {

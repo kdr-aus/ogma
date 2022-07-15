@@ -118,16 +118,16 @@ fn list_defs() {
 │ name           ┆ category    ┆ input  ┆ location ┆ line ┆ code                       │
 ╞════════════════╪═════════════╪════════╪══════════╪══════╪════════════════════════════╡
 │ !=             ┆ cmp         ┆ -      ┆ <ogma>   ┆ -    ┆ != (rhs) { eq $rhs | not } │
-│ *              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
+│ *              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ String ┆ <ogma>   ┆ -    ┆ -                          │
 │ +              ┆ arithmetic  ┆ Table  ┆ <ogma>   ┆ -    ┆ -                          │
-│ 63 rows elided ┆ ...         ┆ ...    ┆ ...      ┆ ...  ┆ ...                        │
-│ take           ┆ morphism    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
-│ to-str         ┆ pipeline    ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
+│ 85 rows elided ┆ ...         ┆ ...    ┆ ...      ┆ ...  ┆ ...                        │
+│ to-str         ┆ pipeline    ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
+│ to-str         ┆ pipeline    ┆ String ┆ <ogma>   ┆ -    ┆ -                          │
 │ typify         ┆ diagnostics ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
-│ ×              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
-│ ÷              ┆ arithmetic  ┆ -      ┆ <ogma>   ┆ -    ┆ -                          │
+│ ×              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
+│ ÷              ┆ arithmetic  ┆ Number ┆ <ogma>   ┆ -    ┆ -                          │
 └────────────────┴─────────────┴────────┴──────────┴──────┴────────────────────────────┘
 "
         );

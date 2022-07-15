@@ -239,31 +239,35 @@ fn get_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `get`
+        r#"Help: `get`
 --> shell:0
  | ---- Input Type: <any> ----
  | extract a value out of a data structure
- | optionally specify a default value if the get type does not match
  | 
  | Usage:
- |  => get field [default]
- | 
- | Flags:
- |  --<type>: assert that the entry is of type. defaults to Num if not specified
+ |  => get field
  | 
  | Examples:
  |  get the x field of a user defined Point type
  |  => Point 1 3 | get x
  | 
+ | ---- Input Type: TableRow ----
+ | extract a value out of a column in a table row.
+ | optionally specify a default value if the get type does not match
+ | 
+ | Usage:
+ |  => get field [default]
+ | 
+ | Examples:
  |  get the entry of a table row under the column 'size'
  |  => ls | filter { get size | > 100 }
  | 
- |  get all files in the directory, using the --Str flag
- |  => ls | filter { get type --Str | = 'file' }
+ |  get all files in the directory, requiring 'type' to return a string
+ |  => ls | filter { get:Str type | = 'file' }
  | 
  |  sum the size of files, using a default of zero
- |  => ls | fold 0 { + {\\$row | get size 0} }
-"
+ |  => ls | fold 0 { + {\$row | get size 0} }
+"#
     );
 }
 
@@ -400,6 +404,41 @@ fn input_backslash_str() {
 
 // ------ Last -----------------------------------------------------------------
 #[test]
+fn last_help_msg() {
+    let src = "last --help";
+    let x = print_help(src, &Definitions::new());
+    assert_eq!(
+        &x,
+        r#"Help: `last`
+--> shell:0
+ | ---- Input Type: String ----
+ | user defined implementation in <ogma>
+ | `def last Str () { nth {len | - 1} }`
+ | get the last character of a string
+ | 
+ | Usage:
+ |  => last
+ | 
+ | Examples:
+ |  get the last character
+ |  => \ 'Hello' | last
+ | 
+ | ---- Input Type: Table ----
+ | user defined implementation in <ogma>
+ | `def last Table (expr:Expr) { nth {len | - 1} $expr }`
+ | apply the expression to the last row in a table
+ | 
+ | Usage:
+ |  => last expr:Expr
+ | 
+ | Examples:
+ |  fetch the last value in a column 'foo'
+ |  => last {get:Str 'foo'}
+"#
+    );
+}
+
+#[test]
 fn last_testing() {
     let defs = &Definitions::new();
 
@@ -421,11 +460,21 @@ fn len_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `len`
+        r#"Help: `len`
 --> shell:0
- | ---- Input Type: <any> ----
- | return the length of a table or string (chars)
- | table length **does not include header row**
+ | ---- Input Type: String ----
+ | return the number of characters in a string
+ | 
+ | Usage:
+ |  => len
+ | 
+ | Examples:
+ |  length of a string
+ |  => \ 'Hello, 🌎!' | len
+ | 
+ | ---- Input Type: Table ----
+ | return the number of rows or columns in a table.
+ | length **does not include header row**
  | 
  | Usage:
  |  => len
@@ -439,10 +488,7 @@ fn len_help_msg() {
  | 
  |  columns in the ls table
  |  => ls | len --cols
- | 
- |  length of a string
- |  => \\ 'Hello, 🌎!' | len
-"
+"#
     );
 }
 
@@ -706,15 +752,23 @@ fn nth_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `nth`
+        r#"Help: `nth`
 --> shell:0
- | ---- Input Type: <any> ----
- | retrieve the nth element of a data structure
- | String: retrieves the nth character
- | Table: retrieves the nth row and applies the expression
+ | ---- Input Type: String ----
+ | retrieves the nth character of a string
  | 
  | Usage:
- |  => nth index [expr]
+ |  => nth index
+ | 
+ | Examples:
+ |  get the 10th character of a string
+ |  => \ 'Hello, world!' | nth 10
+ | 
+ | ---- Input Type: Table ----
+ | retrieves the nth row and applies the expression
+ | 
+ | Usage:
+ |  => nth index expr
  | 
  | Examples:
  |  get the first row of a table
@@ -722,10 +776,7 @@ fn nth_help_msg() {
  | 
  |  get the 2nd last row of a table
  |  => nth {len | - 2} {get col-name}
- | 
- |  get the 10th character of a string
- |  => \\ 'Hello, world!' | nth 10
-"
+"#
     );
 }
 
@@ -944,18 +995,36 @@ fn to_str_help_msg() {
     let x = print_help(src, &Definitions::new());
     assert_eq!(
         &x,
-        "Help: `to-str`
+        r#"Help: `to-str`
 --> shell:0
  | ---- Input Type: <any> ----
  | convert the input into a string
+ | 
+ | Usage:
+ |  => to-str
+ | 
+ | ---- Input Type: Bool ----
+ | return a boolean as 'true' or 'false'
+ | 
+ | Usage:
+ |  => to-str
+ | 
+ | ---- Input Type: Number ----
+ | format the number as a string
  | 
  | Usage:
  |  => to-str [fmt]
  | 
  | Examples:
  |  format a number as a percentage
- |  => \\ 0.4123 | to-str '[.2%]'
-"
+ |  => \ 0.4123 | to-str '[.2%]'
+ | 
+ | ---- Input Type: String ----
+ | pass through the string value
+ | 
+ | Usage:
+ |  => to-str
+"#
     );
 }
 

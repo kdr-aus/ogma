@@ -3,28 +3,40 @@ use std::{cell::RefCell, cmp, collections::BTreeMap, mem, rc::Rc};
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
-    (append, Morphism)
-    ("append-row", append_row, Morphism)
-    (dedup, Morphism)
-    (filter, Morphism)
-    (fold, Morphism)
-    ("fold-while", fold_while, Morphism)
-    (grp, Morphism)
-    ("grp-by", grpby, Morphism)
-    (map, Morphism)
-    (pick, Morphism)
-    (ren, Morphism)
-    ("ren-with", ren_with, Morphism)
-    (rev, Morphism)
-    (skip, Morphism)
-    (sort, Morphism)
-    ("sort-by", sortby, Morphism)
-    (take, Morphism)
+    ("append", Table, append_table, Morphism)
+    ("append-row", Table, append_row, Morphism)
+
+    ("dedup", Str, dedup_str, Morphism)
+    ("dedup", Table, dedup_table, Morphism)
+
+    ("filter", Str, filter_str, Morphism)
+    ("filter", Table, filter_table, Morphism)
+
+    ("fold", Table, fold_table, Morphism)
+    ("fold-while", Table, fold_while_table, Morphism)
+    ("grp", Table, grp_table, Morphism)
+    ("grp-by", Table, grpby_table, Morphism)
+    ("map", Table, map_table, Morphism)
+    ("pick", Table, pick_table, Morphism)
+    ("ren", Table, ren_table, Morphism)
+    ("ren-with", Table, ren_with_table, Morphism)
+
+    ("rev", Str, rev_str, Morphism)
+    ("rev", Table, rev_table, Morphism)
+
+    ("skip", Str, skip_str, Morphism)
+    ("skip", Table, skip_table, Morphism)
+
+    ("sort", Table, sort_table, Morphism)
+    ("sort-by", Table, sortby_table, Morphism)
+
+    ("take", Str, take_str, Morphism)
+    ("take", Table, take_table, Morphism)
     };
 }
 
 // ------ Append ---------------------------------------------------------------
-fn append_help() -> HelpMessage {
+fn append_table_help() -> HelpMessage {
     HelpMessage{
         desc: "add new columns onto a table using one or more expressions
 each expression adds a new column, populated by row with the result of the expression
@@ -45,10 +57,9 @@ tags can be optionally specified to name the columns".into(),
     }
 }
 
-fn append_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn append_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
 
     let len = blk.args_len();
     if len == 0 {
@@ -134,10 +145,8 @@ the row is populated with the expression results",
 }
 
 fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
-    blk.assert_output(Ty::Tab); // table -> table
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
 
     let len = blk.args_len();
     let mut cols = Vec::with_capacity(len);
@@ -168,13 +177,47 @@ fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Dedup ----------------------------------------------------------------
-fn dedup_help() -> HelpMessage {
+fn dedup_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "deduplicate items
-for Tables consectutive repeated rows are removed if the cells in
-specified columns match. if no columns are specified the whole row must match.
-if the table is sorted, this removes all duplicates.
-for Strs duplicate characters are removed."
+        desc: "de-duplicate consecutive characters from a string".into(),
+        examples: vec![HelpExample {
+            desc: "reduce the string 'aabbcc' to 'abc'",
+            code: "\\ 'aabbcc' | dedup",
+        }],
+        ..HelpMessage::new("dedup")
+    }
+}
+
+fn dedup_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+
+    blk.eval_o(move |string, cx| {
+        let string: Str = string.try_into()?;
+
+        let mut x = None;
+        let s: Str = string
+            .chars()
+            .filter(|&c| match x {
+                Some(x) if c == x => false,
+                _ => {
+                    x = Some(c);
+                    true
+                }
+            })
+            .collect::<String>()
+            .into();
+
+        cx.done_o(s)
+    })
+}
+
+fn dedup_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "de-duplicate consecutive repeated rows.
+rows are removed if the cells in the specified columns match.
+if no columns are specified the whole row must match.
+if the table is sorted, this removes all duplicates."
             .into(),
         params: vec![HelpParameter::Required("col-name..".into())],
         examples: vec![
@@ -191,17 +234,10 @@ for Strs duplicate characters are removed."
     }
 }
 
-fn dedup_intrinsic(blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => dedup_str(blk),
-        Ty::Tab => dedup_table(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
-}
+fn dedup_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
 
-/// Assumes already check that input is Table.
-fn dedup_table(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Ty::Tab); // table -> table
     let colnames = match blk.args_len() {
         0 => None,
         _ => Some(ColNameArgs::build(&mut blk)?),
@@ -224,35 +260,57 @@ fn dedup_table(mut blk: Block) -> Result<Step> {
     })
 }
 
-/// Assumes already check that input is Str.
-fn dedup_str(blk: Block) -> Result<Step> {
-    blk.eval_o(move |string, cx| {
-        let string: Str = string.try_into()?;
+// ------ Filter ---------------------------------------------------------------
+fn filter_str_help() -> HelpMessage {
+    HelpMessage {
+        desc: "filter a string based on if a character matches a predicate".into(),
+        params: vec![HelpParameter::Required("<predicate>".into())],
+        examples: vec![HelpExample {
+            desc: "filtering a string",
+            code: "\\ 'Hello, world!' | filter != ' '",
+        }],
+        ..HelpMessage::new("filter")
+    }
+}
 
-        let mut x = None;
-        let s: Str = string
-            .chars()
-            .filter(|&c| match x {
-                Some(x) if c == x => false,
-                _ => {
-                    x = Some(c);
+fn filter_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+
+    let predicate = blk
+        .next_arg()?
+        .supplied(Ty::Str)?
+        .returns(Ty::Bool)?
+        .concrete()?;
+
+    blk.eval_o(move |input, cx| {
+        let mut string = Str::try_from(input)?;
+        let s = string.to_mut();
+        let r = predicate.resolver_sync(&cx);
+        let mut e = None;
+        s.retain(|c| {
+            r(Value::Str(c.into()))
+                .and_then(bool::try_from)
+                .unwrap_or_else(|err| {
+                    e = Some(err);
                     true
-                }
-            })
-            .collect::<String>()
-            .into();
+                })
+        });
 
-        cx.done_o(s)
+        drop(r);
+
+        match e {
+            Some(e) => Err(e),
+            None => cx.done_o(string),
+        }
     })
 }
 
-// ------ Filter ---------------------------------------------------------------
-fn filter_help() -> HelpMessage {
+fn filter_table_help() -> HelpMessage {
     HelpMessage {
-        desc: "filter incoming data using a predicate
+        desc: "filter table using a predicate
 filter can be used with a column header and a type flag
-filtering columns is achievable with the --cols flag
-filtering on a string supplies one character at a time"
+filtering columns is achievable with the --cols flag"
             .into(),
         params: vec![
             HelpParameter::Optional("col-name".into()),
@@ -285,29 +343,20 @@ filtering on a string supplies one character at a time"
                 desc: "filter table columns",
                 code: "\\ table.csv | filter --cols or { = 'foo' } { = bar }",
             },
-            HelpExample {
-                desc: "filtering a string",
-                code: "\\ 'Hello, world!' | filter != ' '",
-            },
         ],
         ..HelpMessage::new("filter")
     }
 }
 
-fn filter_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => filter_string(blk),
-        Ty::Tab => {
-            blk.assert_output(Ty::Tab); // filtering Table -> Table
+fn filter_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab); // filtering Table -> Table
 
-            let cols = blk.get_flag("cols").is_some();
-            if cols {
-                filter_table_columns(blk)
-            } else {
-                FilterTable::filter(blk)
-            }
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+    let cols = blk.get_flag("cols").is_some();
+    if cols {
+        filter_table_columns(blk)
+    } else {
+        FilterTable::filter(blk)
     }
 }
 
@@ -466,40 +515,8 @@ fn filter_table_columns(mut blk: Block) -> Result<Step> {
     })
 }
 
-fn filter_string(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Type::Str);
-
-    let predicate = blk
-        .next_arg()?
-        .supplied(Ty::Str)?
-        .returns(Ty::Bool)?
-        .concrete()?;
-
-    blk.eval_o(move |input, cx| {
-        let mut string = Str::try_from(input)?;
-        let s = string.to_mut();
-        let r = predicate.resolver_sync(&cx);
-        let mut e = None;
-        s.retain(|c| {
-            r(Value::Str(c.into()))
-                .and_then(bool::try_from)
-                .unwrap_or_else(|err| {
-                    e = Some(err);
-                    true
-                })
-        });
-
-        drop(r);
-
-        match e {
-            Some(e) => Err(e),
-            None => cx.done_o(string),
-        }
-    })
-}
-
 // ------ Fold -----------------------------------------------------------------
-fn fold_help() -> HelpMessage {
+fn fold_table_help() -> HelpMessage {
     HelpMessage {
         desc: "fold (reduce) table into single value
 fold takes a seed value and an accumulator expression
@@ -523,39 +540,36 @@ the variable $row is available to query the table row"
     }
 }
 
-fn fold_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
-            let out_ty = seed.out_ty().clone();
-            blk.assert_output(out_ty.clone());
+fn fold_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
 
-            let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
-            let acc_expr = blk
-                .next_arg()?
-                .supplied(out_ty.clone())? // accumulator supplies seed type
-                .returns(out_ty.clone())? // and must return seed type!
-                .concrete()?;
+    let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
+    let out_ty = seed.out_ty().clone();
+    blk.assert_output(out_ty.clone());
 
-            blk.eval(out_ty, move |table, mut cx| {
-                let table: Table = table.try_into()?;
-                let colmap = types::TableRowColMap::default();
-                let mut x = seed.resolve(|| Value::Nil, &cx)?;
-                for idx in 1..table.rows_len() {
-                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-                    row_var.set_data(&mut cx.env, trow.into());
-                    x = acc_expr.resolve(|| x, &cx)?;
-                }
+    let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    let acc_expr = blk
+        .next_arg()?
+        .supplied(out_ty.clone())? // accumulator supplies seed type
+        .returns(out_ty.clone())? // and must return seed type!
+        .concrete()?;
 
-                cx.done(x)
-            })
+    blk.eval(out_ty, move |table, mut cx| {
+        let table: Table = table.try_into()?;
+        let colmap = types::TableRowColMap::default();
+        let mut x = seed.resolve(|| Value::Nil, &cx)?;
+        for idx in 1..table.rows_len() {
+            let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+            row_var.set_data(&mut cx.env, trow.into());
+            x = acc_expr.resolve(|| x, &cx)?;
         }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
+
+        cx.done(x)
+    })
 }
 
 // ------ Fold-While -----------------------------------------------------------
-fn fold_while_help() -> HelpMessage {
+fn fold_while_table_help() -> HelpMessage {
     HelpMessage {
         desc: "fold (reduce) table into single value while a predicate remains true
 fold-while is similar to fold with an added predicate check on each iteration
@@ -575,57 +589,54 @@ fold-while will stop iterating once the predicate returns false"
     }
 }
 
-fn fold_while_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
-            let out_ty = seed.out_ty().clone();
-            blk.assert_output(out_ty.clone());
+fn fold_while_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
 
-            // predicate and predicate row variable
-            let row_var_predicate = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
-            let acc_predicate = blk
-                .next_arg()?
-                .supplied(out_ty.clone())?
-                .returns(Ty::Bool)?
-                .concrete()?;
-            // expr and expr row variable
-            let row_var_expr = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
-            let acc_expr = blk
-                .next_arg()?
-                .supplied(out_ty.clone())?
-                .returns(out_ty.clone())?
-                .concrete()?;
+    let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
+    let out_ty = seed.out_ty().clone();
+    blk.assert_output(out_ty.clone());
 
-            blk.eval(out_ty, move |table, mut cx| {
-                let table: Table = table.try_into()?;
-                let colmap = types::TableRowColMap::default();
-                let mut x = seed.resolve(|| Value::Nil, &cx)?;
-                for idx in 1..table.rows_len() {
-                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-                    row_var_predicate.set_data(&mut cx.env, trow.into());
+    // predicate and predicate row variable
+    let row_var_predicate = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    let acc_predicate = blk
+        .next_arg()?
+        .supplied(out_ty.clone())?
+        .returns(Ty::Bool)?
+        .concrete()?;
+    // expr and expr row variable
+    let row_var_expr = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    let acc_expr = blk
+        .next_arg()?
+        .supplied(out_ty.clone())?
+        .returns(out_ty.clone())?
+        .concrete()?;
 
-                    let met = acc_predicate
-                        .resolve(|| x.clone(), &cx)
-                        .and_then(bool::try_from)?;
-                    if !met {
-                        break;
-                    }
+    blk.eval(out_ty, move |table, mut cx| {
+        let table: Table = table.try_into()?;
+        let colmap = types::TableRowColMap::default();
+        let mut x = seed.resolve(|| Value::Nil, &cx)?;
+        for idx in 1..table.rows_len() {
+            let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+            row_var_predicate.set_data(&mut cx.env, trow.into());
 
-                    let trow = TableRow::new(table.clone(), colmap.clone(), idx);
-                    row_var_expr.set_data(&mut cx.env, trow.into());
-                    x = acc_expr.resolve(|| x, &cx)?;
-                }
+            let met = acc_predicate
+                .resolve(|| x.clone(), &cx)
+                .and_then(bool::try_from)?;
+            if !met {
+                break;
+            }
 
-                cx.done(x)
-            })
+            let trow = TableRow::new(table.clone(), colmap.clone(), idx);
+            row_var_expr.set_data(&mut cx.env, trow.into());
+            x = acc_expr.resolve(|| x, &cx)?;
         }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
+
+        cx.done(x)
+    })
 }
 
 // ------ Grouping -------------------------------------------------------------
-fn grp_help() -> HelpMessage {
+fn grp_table_help() -> HelpMessage {
     HelpMessage {
         desc: "group a table by column headers
 each value under the header is stringified and
@@ -647,10 +658,8 @@ to group on a derived value see `grp-by`"
     }
 }
 
-fn grp_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn grp_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
     let colnames = ColNameArgs::build(&mut blk)?;
@@ -708,7 +717,7 @@ where
 // expression, then groups the resulting values (and by proxy; the table)
 // grouping the values uses `cmp` definitions
 // the actual implementation is a bit more complex; we must create a pseudo-env to eval `cmp`
-fn grpby_help() -> HelpMessage {
+fn grpby_table_help() -> HelpMessage {
     HelpMessage {
         desc: "group table using an expression
 the result of the expression must define a `cmp` implementation
@@ -729,10 +738,8 @@ this can be used to group user-defined types"
     }
 }
 
-fn grpby_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn grpby_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
     // the expression which will be grouped on
@@ -813,7 +820,7 @@ where
 }
 
 // ------ Map ------------------------------------------------------------------
-fn map_help() -> HelpMessage {
+fn map_table_help() -> HelpMessage {
     HelpMessage {
         desc: "replace entry in column with result of an expression
 `map` provides the variable `$row` which is the TableRow
@@ -841,11 +848,10 @@ the input into the expression is the value of the entry"
     }
 }
 
-fn map_intrinsic(blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => MapTable::map(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
+fn map_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
+    MapTable::map(blk)
 }
 
 struct MapTable {
@@ -858,8 +864,6 @@ struct MapTable {
 
 impl MapTable {
     fn map(mut blk: Block) -> Result<Step> {
-        blk.assert_output(Ty::Tab);
-
         let colarg = blk
             .next_arg()?
             .supplied(Ty::Nil)?
@@ -933,7 +937,7 @@ impl MapTable {
 }
 
 // ------ Pick -----------------------------------------------------------------
-fn pick_help() -> HelpMessage {
+fn pick_table_help() -> HelpMessage {
     HelpMessage {
         desc: "pick out columns to keep in a table, in order".into(),
         params: vec![HelpParameter::Required("col-name..".into())],
@@ -952,16 +956,7 @@ fn pick_help() -> HelpMessage {
     }
 }
 
-fn pick_intrinsic(mut blk: Block) -> Result<Step> {
-    blk.assert_output(Type::Tab); // always return a table
-
-    match blk.in_ty() {
-        Ty::Tab => pick_table_columns(blk),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
-}
-
-fn pick_table_columns(mut blk: Block) -> Result<Step> {
+fn pick_table_intrinsic(mut blk: Block) -> Result<Step> {
     let addflag = blk.get_flag("add").is_some();
     let trailflag = blk.get_flag("trail").is_some();
     //
@@ -1003,7 +998,7 @@ fn pick_table_columns(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Ren ------------------------------------------------------------------
-fn ren_help() -> HelpMessage {
+fn ren_table_help() -> HelpMessage {
     HelpMessage {
         desc: "rename column headers
 each binding takes the form `<col-ref> <name>`
@@ -1028,10 +1023,8 @@ each binding takes the form `<col-ref> <name>`
     }
 }
 
-fn ren_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn ren_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab); // table -> table
 
     enum Ref {
@@ -1103,7 +1096,7 @@ fn ren_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Ren-With -------------------------------------------------------------
-fn ren_with_help() -> HelpMessage {
+fn ren_with_table_help() -> HelpMessage {
     HelpMessage {
         desc: "rename column headers using a row as a seed
 each entry is fed into the expression, which returns a string
@@ -1132,10 +1125,8 @@ the default entry type required is a string"
     }
 }
 
-fn ren_with_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn ren_with_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab); // table -> table
 
     let row_idx = blk
@@ -1190,61 +1181,62 @@ fn ren_with_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Reverse --------------------------------------------------------------
-fn rev_help() -> HelpMessage {
+fn rev_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "reverse the order of the input
-for String inputs; character ordering is reversed
-for Table inputs; row or col ordering is reversed"
-            .into(),
-        flags: vec![("cols", "reverse table column ordering")],
-        examples: vec![
-            HelpExample {
-                desc: "reverse table row ordering",
-                code: "ls | rev",
-            },
-            HelpExample {
-                desc: "reverse string character ordering",
-                code: "\\ '!dlrow ,olleH' | rev",
-            },
-        ],
+        desc: "reverse the order of characters".into(),
+        examples: vec![HelpExample {
+            desc: "reverse string character ordering",
+            code: "\\ '!dlrow ,olleH' | rev",
+        }],
         ..HelpMessage::new("rev")
     }
 }
 
-fn rev_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Str => blk.eval_o(|input, cx| {
-            Str::try_from(input)
-                .map(|s| s.chars().rev().collect::<String>())
-                .map(Str::from)
-                .and_then(|x| cx.done_o(x))
-        }),
-        Ty::Tab => {
-            let cols = blk.get_flag("cols").is_some();
-            blk.eval_o(move |input, cx| {
-                let mut table: Table = input.try_into()?;
-                if cols {
-                    table.make_mut().reverse_cols_par();
-                } else {
-                    table.make_mut().reverse_rows();
-                }
-                cx.done_o(table)
-            })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+fn rev_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+    blk.eval_o(|input, cx| {
+        Str::try_from(input)
+            .map(|s| s.chars().rev().collect::<String>())
+            .map(Str::from)
+            .and_then(|x| cx.done_o(x))
+    })
+}
+
+fn rev_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "reverse the order of table rows or columns".into(),
+        flags: vec![("cols", "reverse table column ordering")],
+        examples: vec![HelpExample {
+            desc: "reverse table row ordering",
+            code: "ls | rev",
+        }],
+        ..HelpMessage::new("rev")
     }
 }
 
+fn rev_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab);
+
+    let cols = blk.get_flag("cols").is_some();
+    blk.eval_o(move |input, cx| {
+        let mut table: Table = input.try_into()?;
+        if cols {
+            table.make_mut().reverse_cols_par();
+        } else {
+            table.make_mut().reverse_rows();
+        }
+        cx.done_o(table)
+    })
+}
+
 // ------ Skip -----------------------------------------------------------------
-fn skip_help() -> HelpMessage {
+fn skip_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "skip the first n elements of a data structure".into(),
+        desc: "skip the first n characters of a string".into(),
         params: vec![HelpParameter::Required("count".into())],
         examples: vec![
-            HelpExample {
-                desc: "skip the first 10 rows of a table",
-                code: "skip 10",
-            },
             HelpExample {
                 desc: "skip the first 5 characters of a string",
                 code: "\\ 'Hello, world!' | skip 5",
@@ -1258,57 +1250,69 @@ fn skip_help() -> HelpMessage {
     }
 }
 
-fn skip_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            blk.assert_output(Ty::Tab); // table -> table
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |table, cx| {
-                let count = count
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                let mut table = Table::try_from(table)?;
-                if let Some(t) = table.get_mut() {
-                    t.retain_rows(|i, _| i == 0 || i > count);
-                } else {
-                    let rows = table
-                        .rows()
-                        .take(1)
-                        .chain(table.rows().skip(count + 1))
-                        .map(|x| x.cloned());
-                    let mut t = ::table::Table::new();
-                    t.add_rows(rows);
-                    table = t.into();
-                }
-                cx.done_o(table)
-            })
-        }
-        Ty::Str => {
-            blk.assert_output(Ty::Str); // str -> str
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let count = count
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                Str::try_from(string)
-                    .map(|s| s.chars().skip(count).collect::<Str>())
-                    .and_then(|x| cx.done_o(x))
-            })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+fn skip_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str); // str -> str
+
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o::<_, Str>(move |string, cx| {
+        let count = count
+            .resolve(|| string.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        Str::try_from(string)
+            .map(|s| s.chars().skip(count).collect::<Str>())
+            .and_then(|x| cx.done_o(x))
+    })
+}
+
+fn skip_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "skip the first n rows of a table".into(),
+        params: vec![HelpParameter::Required("count".into())],
+        examples: vec![HelpExample {
+            desc: "skip the first 10 rows of a table",
+            code: "skip 10",
+        }],
+        ..HelpMessage::new("skip")
     }
 }
 
+fn skip_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab); // table -> table
+
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |table, cx| {
+        let count = count
+            .resolve(|| table.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        let mut table = Table::try_from(table)?;
+        if let Some(t) = table.get_mut() {
+            t.retain_rows(|i, _| i == 0 || i > count);
+        } else {
+            let rows = table
+                .rows()
+                .take(1)
+                .chain(table.rows().skip(count + 1))
+                .map(|x| x.cloned());
+            let mut t = ::table::Table::new();
+            t.add_rows(rows);
+            table = t.into();
+        }
+        cx.done_o(table)
+    })
+}
+
 // ------ Sorting --------------------------------------------------------------
-fn sort_help() -> HelpMessage {
+fn sort_table_help() -> HelpMessage {
     HelpMessage {
         desc: "sort a table by column headers
 each header sorts the rows lowest to highest in a canonical fashion,
@@ -1330,12 +1334,10 @@ this sorts different value types, but NOT user-defined types. see `sort-by`"
     }
 }
 
-fn sort_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
-
+fn sort_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
+
     let colnames = ColNameArgs::build(&mut blk)?;
     blk.eval_o(move |table, cx| {
         let mut table: Table = table.try_into()?;
@@ -1398,7 +1400,7 @@ fn entry_discriminant(e: &Entry<Value>) -> u8 {
 // expression, then sorts the resulting values (and by proxy; the table)
 // sorting the values uses `cmp` definitions
 // the actual implementation is a bit more complex; we must create a pseudo-env to eval `cmp`
-fn sortby_help() -> HelpMessage {
+fn sortby_table_help() -> HelpMessage {
     HelpMessage {
         desc: "sort table using an expression
 the result of the expression must define a `cmp` implementation
@@ -1419,10 +1421,8 @@ this can be used to sort user-defined types"
     }
 }
 
-fn sortby_intrinsic(mut blk: Block) -> Result<Step> {
-    if blk.in_ty() != &Ty::Tab {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
+fn sortby_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
 
     // the expression which will be sorted on
@@ -1491,15 +1491,11 @@ fn reorder_table(mut table: Table, order: SortIdx) -> Table {
 }
 
 // ------ Take -----------------------------------------------------------------
-fn take_help() -> HelpMessage {
+fn take_str_help() -> HelpMessage {
     HelpMessage {
-        desc: "take the first n elements of a data structure".into(),
+        desc: "take the first n characters of a string".into(),
         params: vec![HelpParameter::Required("count".into())],
         examples: vec![
-            HelpExample {
-                desc: "take the first 10 rows of a table",
-                code: "take 10",
-            },
             HelpExample {
                 desc: "take the first 5 characters of a string",
                 code: "\\ 'Hello, world!' | take 5",
@@ -1513,51 +1509,63 @@ fn take_help() -> HelpMessage {
     }
 }
 
-fn take_intrinsic(mut blk: Block) -> Result<Step> {
-    match blk.in_ty() {
-        Ty::Tab => {
-            blk.assert_output(Ty::Tab); // table -> table
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |table, cx| {
-                let count = count
-                    .resolve(|| table.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                let mut table = Table::try_from(table)?;
-                if let Some(t) = table.get_mut() {
-                    t.retain_rows(|i, _| i == 0 || i <= count);
-                } else {
-                    let rows = table
-                        .rows()
-                        .take(1)
-                        .chain(table.rows().skip(1).take(count))
-                        .map(|x| x.cloned());
-                    let mut t = ::table::Table::new();
-                    t.add_rows(rows);
-                    table = t.into();
-                }
-                cx.done_o(table)
-            })
-        }
-        Ty::Str => {
-            blk.assert_output(Ty::Str);
-            let count = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o::<_, Str>(move |string, cx| {
-                let count = count
-                    .resolve(|| string.clone(), &cx)
-                    .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
-                Str::try_from(string)
-                    .map(|s| s.chars().take(count).collect::<Str>())
-                    .and_then(|x| cx.done_o(x))
-            })
-        }
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
+fn take_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Str);
+
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o::<_, Str>(move |string, cx| {
+        let count = count
+            .resolve(|| string.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        Str::try_from(string)
+            .map(|s| s.chars().take(count).collect::<Str>())
+            .and_then(|x| cx.done_o(x))
+    })
+}
+
+fn take_table_help() -> HelpMessage {
+    HelpMessage {
+        desc: "take the first n rows of a table".into(),
+        params: vec![HelpParameter::Required("count".into())],
+        examples: vec![HelpExample {
+            desc: "take the first 10 rows of a table",
+            code: "take 10",
+        }],
+        ..HelpMessage::new("take")
     }
+}
+
+fn take_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Tab)?;
+    blk.assert_output(Ty::Tab); // table -> table
+
+    let count = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |table, cx| {
+        let count = count
+            .resolve(|| table.clone(), &cx)
+            .and_then(|v| cnv_num_to_uint::<usize>(v, &count.tag))?;
+        let mut table = Table::try_from(table)?;
+        if let Some(t) = table.get_mut() {
+            t.retain_rows(|i, _| i == 0 || i <= count);
+        } else {
+            let rows = table
+                .rows()
+                .take(1)
+                .chain(table.rows().skip(1).take(count))
+                .map(|x| x.cloned());
+            let mut t = ::table::Table::new();
+            t.add_rows(rows);
+            table = t.into();
+        }
+        cx.done_o(table)
+    })
 }

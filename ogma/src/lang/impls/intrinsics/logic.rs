@@ -4,7 +4,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
         (and, Logic)
         (if, Logic)
-        (not, Logic)
+        ("not", bool, not_bool, Logic)
         (or, Logic)
     };
 }
@@ -110,9 +110,9 @@ fn if_intrinsic(mut blk: Block) -> Result<Step> {
 }
 
 // ------ Not ------------------------------------------------------------------
-fn not_help() -> HelpMessage {
+fn not_bool_help() -> HelpMessage {
     HelpMessage {
-        desc: "negates a boolean value.\ninput must be a Bool".into(),
+        desc: "negates a boolean value".into(),
         examples: vec![HelpExample {
             desc: "1 is NOT greater than 2",
             code: "\\ 1 | > 2 | not",
@@ -121,13 +121,11 @@ fn not_help() -> HelpMessage {
     }
 }
 
-fn not_intrinsic(mut blk: Block) -> Result<Step> {
+fn not_bool_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Bool)?;
     blk.assert_output(Ty::Bool); // takes a bool, returns a bool
 
-    match blk.in_ty() {
-        Ty::Bool => blk.eval_o(|val, cx| bool::try_from(val).and_then(|x| cx.done_o(!x))),
-        x => Err(Error::wrong_op_input_type(x, blk.op_tag())),
-    }
+    blk.eval_o(|val, cx| bool::try_from(val).and_then(|x| cx.done_o(!x)))
 }
 
 // ------ Or -------------------------------------------------------------------

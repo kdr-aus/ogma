@@ -5,19 +5,58 @@ use super::*;
 fn cmp_help_test() {
     let defs = &Definitions::new();
     let x = process_w_nil("cmp --help", defs).unwrap_err().to_string();
+    println!("{x}");
     assert_eq!(
         &x,
         "Help: `cmp`
 --> shell:0
  | ---- Input Type: <any> ----
- | compare <rhs> to input
+ | compare <rhs> to input.
  | 
  | Usage:
  |  => cmp rhs
  | 
+ | ---- Input Type: Bool ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Bool
+ | 
+ | ---- Input Type: Nil ----
+ | compare <rhs> to input. Nil types are always equal.
+ | 
+ | Usage:
+ |  => cmp rhs:Nil
+ | 
+ | ---- Input Type: Number ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Num
+ | 
  | Examples:
  |  compare 2 to 1
  |  => \\ 1 | cmp 2
+ | 
+ | ---- Input Type: Ord ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Ord
+ | 
+ | Examples:
+ |  compare Ord::Eq to Ord::Lt == Ord::Gt
+ |  => Ord::Eq | cmp Ord::Lt
+ | 
+ | ---- Input Type: String ----
+ | compare <rhs> to input.
+ | 
+ | Usage:
+ |  => cmp rhs:Str
+ | 
+ | Examples:
+ |  compare 'aabb' to 'bbaa'
+ |  => \\ 'aabb' | cmp bbaa
 "
     );
 }
@@ -160,9 +199,10 @@ fn cmp_tablerow() {
 fn eq_help_test() {
     let defs = &Definitions::new();
     let x = process_w_nil("eq --help", defs).unwrap_err().to_string();
+    println!("{x}");
     assert_eq!(
         &x,
-        "Help: `eq`
+        r#"Help: `eq`
 --> shell:0
  | ---- Input Type: <any> ----
  | returns if <rhs> is equal to input
@@ -172,11 +212,56 @@ fn eq_help_test() {
  | 
  | Examples:
  |  does 2 equal 1
- |  => \\ 1 | eq 2
+ |  => \ 1 | eq 2
  | 
  |  1 equals 1
- |  => \\ 1 | eq 1
-"
+ |  => \ 1 | eq 1
+ | 
+ | ---- Input Type: Bool ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Bool
+ | 
+ | ---- Input Type: Nil ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Nil
+ | 
+ | ---- Input Type: Number ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Num
+ | 
+ | Examples:
+ |  does 2 equal 1
+ |  => \ 1 | eq 2
+ | 
+ |  1 equals 1
+ |  => \ 1 | eq 1
+ | 
+ | ---- Input Type: Ord ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Ord
+ | 
+ | Examples:
+ |  does Ord::Gt equal Ord::Gt
+ |  => Ord::Gt | eq Ord::Gt
+ | 
+ | ---- Input Type: String ----
+ | returns if <rhs> is equal to input
+ | 
+ | Usage:
+ |  => eq rhs:Str
+ | 
+ | Examples:
+ |  does 'ab' equal 'cd'
+ |  => \ 'ab' | eq 'cd'
+"#
     );
 }
 

@@ -10,9 +10,7 @@ fn ls_help_msg() {
         "Help: `ls`
 --> shell:0
  | ---- Input Type: <any> ----
- | list out aspects of the input
- | input is Nil; outputs the filesystem contents in the current working dir
- | input is Table; outputs the headers as a table
+ | list out the filesystem contents in the current working dir
  | 
  | Usage:
  |  => ls [path]
@@ -24,6 +22,13 @@ fn ls_help_msg() {
  |  list directory items in `path`
  |  => ls path/to
  | 
+ | ---- Input Type: Table ----
+ | list out the headers of the table
+ | 
+ | Usage:
+ |  => ls
+ | 
+ | Examples:
  |  list headers in table
  |  => open table.csv | ls
 "

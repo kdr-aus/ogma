@@ -3,18 +3,71 @@ use std::cmp;
 
 pub fn add_intrinsics(impls: &mut Implementations) {
     add! { impls,
+        ("cmp", (), cmp_nil, Cmp)
+        ("cmp", bool, cmp_bool, Cmp)
+        ("cmp", Number, cmp_num, Cmp)
+        ("cmp", Str, cmp_str, Cmp)
+        ("cmp", cmp::Ordering, cmp_ord, Cmp)
         (cmp, Cmp)
+
+        ("eq", (), eq_nil, Cmp)
+        ("eq", bool, eq_bool, Cmp)
+        ("eq", Number, eq_num, Cmp)
+        ("eq", Str, eq_str, Cmp)
+        ("eq", cmp::Ordering, eq_ord, Cmp)
         (eq, Cmp)
+
         (max, Cmp)
         (min, Cmp)
     };
 }
 
 // ------ Cmp ------------------------------------------------------------------
-fn cmp_help() -> HelpMessage {
+fn cmp_nil_help() -> HelpMessage {
     HelpMessage {
-        desc: "compare <rhs> to input".into(),
-        params: vec![HelpParameter::Required("rhs".into())],
+        desc: "compare <rhs> to input. Nil types are always equal.".into(),
+        params: vec![HelpParameter::Required("rhs:Nil".into())],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_nil_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Nil)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+    blk.next_arg()?
+        .supplied(None)?
+        .returns(Ty::Nil)?
+        .concrete()?; // we don't use rhs but we do req its existence
+    blk.eval_o(|_, cx| cx.done_o(cmp::Ordering::Equal))
+}
+
+fn cmp_bool_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Bool".into())],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_bool_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Bool)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Bool)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: bool = lhs.try_into()?;
+        let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
+        cx.done_o(lhs.cmp(&rhs))
+    })
+}
+
+fn cmp_num_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Num".into())],
         examples: vec![HelpExample {
             desc: "compare 2 to 1",
             code: "\\ 1 | cmp 2",
@@ -23,63 +76,88 @@ fn cmp_help() -> HelpMessage {
     }
 }
 
+fn cmp_num_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Num)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: Number = lhs.try_into()?;
+        let rhs: Number = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
+        cx.done_o(lhs.cmp(&rhs))
+    })
+}
+
+fn cmp_str_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Str".into())],
+        examples: vec![HelpExample {
+            desc: "compare 'aabb' to 'bbaa'",
+            code: "\\ 'aabb' | cmp bbaa",
+        }],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Type::Str)?;
+    blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Str)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: Str = lhs.try_into()?;
+        let rhs: Str = rhs.resolve(|| lhs.clone().into(), &cx)?.try_into()?;
+        cx.done_o(lhs.cmp(&rhs))
+    })
+}
+
+fn cmp_ord_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs:Ord".into())],
+        examples: vec![HelpExample {
+            desc: "compare Ord::Eq to Ord::Lt == Ord::Gt",
+            code: "Ord::Eq | cmp Ord::Lt",
+        }],
+        ..HelpMessage::new("cmp")
+    }
+}
+
+fn cmp_ord_intrinsic(mut blk: Block) -> Result<Step> {
+    let ordty = cmp::Ordering::as_type();
+    blk.assert_input(&ordty)?;
+    blk.assert_output(ordty.clone()); // all 'cmp's return an Ord
+
+    let rhs = blk.next_arg()?.supplied(None)?.returns(ordty)?.concrete()?;
+    // cmp Ord to Ord returns another Ord
+    blk.eval_o(move |lhs, cx| {
+        let lhs_variant = lhs.variant_idx().expect("Ord type");
+        let rhs = rhs.resolve(|| lhs, &cx)?.variant_idx().expect("Ord type");
+        cx.done_o(lhs_variant.cmp(&rhs))
+    })
+}
+
+fn cmp_help() -> HelpMessage {
+    HelpMessage {
+        desc: "compare <rhs> to input.".into(),
+        params: vec![HelpParameter::Required("rhs".into())],
+        ..HelpMessage::new("cmp")
+    }
+}
+
 fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_output(cmp::Ordering::as_type()); // all 'cmp's return an Ord
 
     match blk.in_ty() {
-        Ty::Nil => {
-            blk.next_arg()?
-                .supplied(None)?
-                .returns(Ty::Nil)?
-                .concrete()?; // we don't use rhs but we do req its existence
-            blk.eval_o(|_, cx| cx.done_o(cmp::Ordering::Equal))
-        }
-        Ty::Bool => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Bool)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: bool = lhs.try_into()?;
-                let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
-                cx.done_o(lhs.cmp(&rhs))
-            })
-        }
-        Ty::Num => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: Number = lhs.try_into()?;
-                let rhs: Number = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
-                cx.done_o(lhs.cmp(&rhs))
-            })
-        }
-        Ty::Str => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Str)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: Str = lhs.try_into()?;
-                let rhs: Str = rhs.resolve(|| lhs.clone().into(), &cx)?.try_into()?;
-                cx.done_o(lhs.cmp(&rhs))
-            })
-        }
-        Ty::Def(x) if x.as_ref() == "Ord" => {
-            let ordty = Type::Def(types::ORD.get());
-            let rhs = blk.next_arg()?.supplied(None)?.returns(ordty)?.concrete()?;
-            // cmp Ord to Ord returns another Ord
-            blk.eval_o(move |lhs, cx| {
-                let lhs_variant = lhs.variant_idx().expect("Ord type");
-                let rhs = rhs.resolve(|| lhs, &cx)?.variant_idx().expect("Ord type");
-                cx.done_o(lhs_variant.cmp(&rhs))
-            })
-        }
         Ty::Def(x) if x.is_tuple() => {
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),
@@ -102,7 +180,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
                 .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();
-            let exp_ty = Ty::Def(types::ORD.get());
+            let exp_ty = cmp::Ordering::as_type();
 
             if oty != &exp_ty {
                 Err(Error::unexp_code_injection_output_ty(
@@ -152,6 +230,137 @@ fn build_tuple_cmp_code(els: usize) -> (&'static str, String) {
 }
 
 // ------ Eq -------------------------------------------------------------------
+fn eq_nil_help() -> HelpMessage {
+    HelpMessage {
+        desc: "returns if <rhs> is equal to input".into(),
+        params: vec![HelpParameter::Required("rhs:Nil".into())],
+        ..HelpMessage::new("eq")
+    }
+}
+
+fn eq_nil_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Nil)?;
+    blk.assert_output(Ty::Bool); // equals always returns a boolean value (at least our intrinsic does)
+
+    // we don't use rhs but we do req its existence
+    blk.next_arg()?
+        .supplied(None)?
+        .returns(Ty::Nil)?
+        .concrete()?;
+    blk.eval_o(|_, cx| cx.done_o(true))
+}
+
+fn eq_bool_help() -> HelpMessage {
+    HelpMessage {
+        desc: "returns if <rhs> is equal to input".into(),
+        params: vec![HelpParameter::Required("rhs:Bool".into())],
+        ..HelpMessage::new("eq")
+    }
+}
+
+fn eq_bool_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Bool)?;
+    blk.assert_output(Ty::Bool); // equals always returns a boolean value (at least our intrinsic does)
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Bool)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: bool = lhs.try_into()?;
+        let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
+        cx.done_o(lhs.eq(&rhs))
+    })
+}
+
+fn eq_num_help() -> HelpMessage {
+    HelpMessage {
+        desc: "returns if <rhs> is equal to input".into(),
+        params: vec![HelpParameter::Required("rhs:Num".into())],
+        examples: vec![
+            HelpExample {
+                desc: "does 2 equal 1",
+                code: "\\ 1 | eq 2",
+            },
+            HelpExample {
+                desc: "1 equals 1",
+                code: "\\ 1 | eq 1",
+            },
+        ],
+        ..HelpMessage::new("eq")
+    }
+}
+
+fn eq_num_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Num)?;
+    blk.assert_output(Ty::Bool); // equals always returns a boolean value (at least our intrinsic does)
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Num)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: Number = lhs.try_into()?;
+        let rhs: Number = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
+        cx.done_o(lhs.eq(&rhs))
+    })
+}
+
+fn eq_str_help() -> HelpMessage {
+    HelpMessage {
+        desc: "returns if <rhs> is equal to input".into(),
+        params: vec![HelpParameter::Required("rhs:Str".into())],
+        examples: vec![HelpExample {
+            desc: "does 'ab' equal 'cd'",
+            code: "\\ 'ab' | eq 'cd'",
+        }],
+        ..HelpMessage::new("eq")
+    }
+}
+
+fn eq_str_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_input(&Ty::Str)?;
+    blk.assert_output(Ty::Bool); // equals always returns a boolean value (at least our intrinsic does)
+
+    let rhs = blk
+        .next_arg()?
+        .supplied(None)?
+        .returns(Ty::Str)?
+        .concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs: Str = lhs.try_into()?;
+        let rhs: Str = rhs.resolve(|| lhs.clone().into(), &cx)?.try_into()?;
+        cx.done_o(lhs.eq(&rhs))
+    })
+}
+
+fn eq_ord_help() -> HelpMessage {
+    HelpMessage {
+        desc: "returns if <rhs> is equal to input".into(),
+        params: vec![HelpParameter::Required("rhs:Ord".into())],
+        examples: vec![HelpExample {
+            desc: "does Ord::Gt equal Ord::Gt",
+            code: "Ord::Gt | eq Ord::Gt",
+        }],
+        ..HelpMessage::new("eq")
+    }
+}
+
+fn eq_ord_intrinsic(mut blk: Block) -> Result<Step> {
+    let ordty = cmp::Ordering::as_type();
+    blk.assert_input(&ordty)?;
+    blk.assert_output(Ty::Bool); // equals always returns a boolean value (at least our intrinsic does)
+
+    let rhs = blk.next_arg()?.supplied(None)?.returns(ordty)?.concrete()?;
+    blk.eval_o(move |lhs, cx| {
+        let lhs_variant = lhs.variant_idx().expect("Ord type");
+        let rhs = rhs.resolve(|| lhs, &cx)?.variant_idx().expect("Ord type");
+        cx.done_o(lhs_variant.eq(&rhs))
+    })
+}
+
 fn eq_help() -> HelpMessage {
     HelpMessage {
         desc: "returns if <rhs> is equal to input".into(),
@@ -174,59 +383,6 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_output(Ty::Bool); // equals always returns a boolean value (at least our intrinsic does)
 
     match blk.in_ty() {
-        Ty::Nil => {
-            // we don't use rhs but we do req its existence
-            blk.next_arg()?
-                .supplied(None)?
-                .returns(Ty::Nil)?
-                .concrete()?;
-            blk.eval_o(|_, cx| cx.done_o(true))
-        }
-        Ty::Bool => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Bool)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: bool = lhs.try_into()?;
-                let rhs: bool = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
-                cx.done_o(lhs.eq(&rhs))
-            })
-        }
-        Ty::Num => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Num)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: Number = lhs.try_into()?;
-                let rhs: Number = rhs.resolve(|| lhs.into(), &cx)?.try_into()?;
-                cx.done_o(lhs.eq(&rhs))
-            })
-        }
-        Ty::Str => {
-            let rhs = blk
-                .next_arg()?
-                .supplied(None)?
-                .returns(Ty::Str)?
-                .concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs: Str = lhs.try_into()?;
-                let rhs: Str = rhs.resolve(|| lhs.clone().into(), &cx)?.try_into()?;
-                cx.done_o(lhs.eq(&rhs))
-            })
-        }
-        Ty::Def(x) if x.as_ref() == "Ord" => {
-            let ordty = Type::Def(types::ORD.get());
-            let rhs = blk.next_arg()?.supplied(None)?.returns(ordty)?.concrete()?;
-            blk.eval_o(move |lhs, cx| {
-                let lhs_variant = lhs.variant_idx().expect("Ord type");
-                let rhs = rhs.resolve(|| lhs, &cx)?.variant_idx().expect("Ord type");
-                cx.done_o(lhs_variant.eq(&rhs))
-            })
-        }
         Ty::Def(x) if x.is_tuple() => {
             let els = match x.structure() {
                 types::TypeVariant::Product(x) => x.len(),

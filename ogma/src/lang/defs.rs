@@ -24,10 +24,16 @@ impl Default for Definitions {
 impl Definitions {
     /// Create the new, base set of definitions.
     pub fn new() -> Self {
-        // take the default impls first, these do not have the derive impls
+        // build the std types first, will need them for the impls
+        let (types, tydefs) = types::Types::init_std();
+
+        // these do not have the derive impls
         let mut impls = Default::default();
-        // build the std types off this
-        let types = types::Types::init(&mut impls);
+
+        // add in the initialisation impls for tydefs
+        for x in tydefs {
+            lang::impls::add_typedef_init_impls(&mut impls, x);
+        }
 
         let mut definitions = Self { impls, types };
 
@@ -126,8 +132,8 @@ impl Definitions {
             OperationCategory::Pipeline,
             "apply the expression to the last row in a table",
             vec![HelpExample {
-                desc: "fetch value in column in table",
-                code: "last {get 'foo' --Str}",
+                desc: "fetch the last value in a column 'foo'",
+                code: "last {get:Str 'foo'}",
             }],
         );
         add_derived_impl(
