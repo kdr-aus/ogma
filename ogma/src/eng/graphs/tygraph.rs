@@ -85,9 +85,9 @@ pub enum Conflict {
         dst: Type,
     },
     UnmatchedInferred {
-        src: Type,
+        src: TypesSet,
         /// Inferred.
-        dst: Type,
+        dst: TypesSet,
     },
     /// Types match, but trying to flow an inferred node into stronger garauntee nodes such as
     /// `Known` or `Obliged`.
@@ -438,10 +438,6 @@ impl TypeGraph {
             })
         }
 
-        fn add_inferred(k: &mut Knowledge, ty: Type) -> R {
-            k.contains(&ty).then(|| Ok(false)).unwrap_or_else
-        }
-
         fn apply<F>(tg: &mut TypeGraph, node: NodeIndex, setfn: F) -> R
         where
             F: FnOnce(&mut Node) -> R,
@@ -461,7 +457,9 @@ impl TypeGraph {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Obliged(ty)))
             }
             Chg::InferInput(node, ty) => {
-                apply(self, node, |n| set(&mut n.input, Knowledge::Inferred(ty)))
+                // TODO: should this return an error? usually `set` is called, which tests with
+                // `can_flow`
+                apply(self, node, |n| Ok(n.input.add_inferred(ty)))
             }
             Chg::AnyInput(node) => {
                 // Only set the input to be Any if the there is no knowledge about the type
@@ -478,7 +476,8 @@ impl TypeGraph {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
             }
             Chg::InferOutput(node, ty) => {
-                apply(self, node, |n| set(&mut n.output, Knowledge::Inferred(ty)))
+                // TODO: see InferInput
+                apply(self, node, |n| Ok(n.output.add_inferred(ty)))
             }
             Chg::AddEdge { src, dst, flow } => {
                 // TODO edges_connecting is not implemented yet for StableGraph
@@ -545,7 +544,8 @@ impl Knowledge {
     pub fn ty(&self) -> Option<&Type> {
         use Knowledge::*;
         match self {
-            Known(ty) | Inferred(ty) | Obliged(ty) => Some(ty),
+            Known(ty) | Obliged(ty) => Some(ty),
+            Inferred(ts) => ts.only(),
             _ => None,
         }
     }
@@ -560,7 +560,22 @@ impl Knowledge {
         matches!(self, Knowledge::Any)
     }
 
-    pub fn contains(&self, ty: &Type) -> bool {
+    /// Adds `ty` into the `Inferred` [`TypesSet`].
+    ///
+    /// Returns if `self` was actually changed, since this is dependent on the state of the
+    /// knowledge.
+    pub fn add_inferred(&mut self, ty: Type) -> bool {
+        use Knowledge::*;
+        match self {
+            Known(_) | Obliged(_) => false,
+            Inferred(ts) => ts.insert(ty),
+            Any | Unknown => {
+                let mut set = TypesSet::empty();
+                set.insert(ty);
+                *self = Inferred(set);
+                true
+            }
+        }
     }
 
     /// Checks that the this knowledge can 'flow' into the knowledged at `into`.
@@ -586,12 +601,14 @@ impl Knowledge {
             // A known source can flow into an unknown or any dest
             (Known(_), Unknown | Any) => Ok(()),
             // A known source can flow into itself or lower ranked items if the types match
-            (Known(t1), Known(t2) | Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
+            (Known(t1), Known(t2) | Obliged(t2)) if t1 == t2 => Ok(()),
+            (Known(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An obliged source can flow into an unknown or any dest
             (Obliged(_), Unknown | Any) => Ok(()),
             // An obliged source can flow into itself or lower ranked items if the types match
-            (Obliged(t1), Obliged(t2) | Inferred(t2)) if t1 == t2 => Ok(()),
+            (Obliged(t1), Obliged(t2)) if t1 == t2 => Ok(()),
+            (Obliged(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An inferred source can flow into an unknown or any dest
             (Inferred(_), Unknown | Any) => Ok(()),
@@ -621,13 +638,18 @@ impl Knowledge {
             // NOTE: this would need to clear _all_ Inferred type graph entries.
             // NOTE: probably do this later if it is found that unreasonable errors are being
             // returned.
-            (Known(t1) | Inferred(t1), Inferred(t2)) if t1 != t2 => Err(UnmatchedInferred {
-                src: t1.clone(),
-                dst: t2.clone(),
+            (Known(t1), Inferred(ts)) if !ts.contains(t1) => Err(UnmatchedInferred {
+                src: TypesSet::single(t1.clone()),
+                dst: ts.clone(),
+            }),
+            // Cannot flow if inferred sets are disjoint
+            (Inferred(ts1), Inferred(ts2)) if ts1.is_disjoint(ts2) => Err(UnmatchedInferred {
+                src: ts1.clone(),
+                dst: ts2.clone(),
             }),
             // Cannot flow if trying to flow an Inferred into an Obliged or Known,
             // even if the types match.
-            (Inferred(t1), Known(t2) | Obliged(t2)) if t1 == t2 => Err(OverpoweringInferred),
+            (Inferred(ts), Known(t2) | Obliged(t2)) if ts.contains(t2) => Err(OverpoweringInferred),
 
             (a, b) => todo!("have not handled flow: {:?} -> {:?}", a, b),
         }
@@ -645,6 +667,64 @@ impl fmt::Display for Knowledge {
             Any => write!(f, "Any"),
             Unknown => write!(f, "Unknown"),
         }
+    }
+}
+
+impl TypesSet {
+    /// Return an empty set.
+    pub fn empty() -> Self {
+        TypesSet(Default::default())
+    }
+
+    /// Initialise a set with a single element: `ty`.
+    pub fn single(ty: Type) -> Self {
+        let mut s = Self::empty();
+        s.insert(ty);
+        s
+    }
+
+    /// The number of types in the set.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns if there are no types in the set.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The set contains `ty`.
+    pub fn contains(&self, ty: &Type) -> bool {
+        self.0.contains(ty)
+    }
+
+    /// Insert a type into the set.
+    ///
+    /// Returns `true` if the set was changed (`ty` did not exist in set), and `false` if the set
+    /// was unchanged (`ty` already existed in set).
+    pub fn insert(&mut self, ty: Type) -> bool {
+        self.0.insert(ty)
+    }
+
+    /// If there is only a single element in the set, returns a reference to it.
+    /// Otherwise returns `None`.
+    pub fn only(&self) -> Option<&Type> {
+        if self.len() == 1 {
+            self.0.iter().next()
+        } else {
+            None
+        }
+    }
+
+    /// Returns if this set shares no elements with `other`.
+    pub fn is_disjoint(&self, other: &Self) -> bool {
+        self.0.is_disjoint(&other.0)
+    }
+
+    /// Returns if this set intersects with another.
+    /// That is, `self` shares one or more elements with `other`.
+    pub fn intersects(&self, other: &Self) -> bool {
+        !self.is_disjoint(other)
     }
 }
 

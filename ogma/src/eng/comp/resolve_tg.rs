@@ -176,11 +176,15 @@ impl<'d> Compiler<'d> {
                     "trying to apply type inference to already known type".to_string(),
                 )
             }
-            ConflictingKnown { src, dst: _ }
-            | UnmatchedObligation { src, dst: _ }
-            | UnmatchedInferred { src, dst: _ } => Trace::from_tag(
+            ConflictingKnown { src, dst: _ } | UnmatchedObligation { src, dst: _ } => {
+                Trace::from_tag(
+                    node,
+                    format!("this node is trying to have a type `{src}` applied to it"),
+                )
+            }
+            UnmatchedInferred { src, dst: _ } => Trace::from_tag(
                 node,
-                format!("this node is trying to have a type `{}` applied to it", src),
+                format!("this node could have any of these types applied to it: {src}"),
             ),
         };
 

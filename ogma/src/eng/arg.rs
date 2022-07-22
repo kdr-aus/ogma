@@ -296,9 +296,11 @@ impl From<&Knowledge> for Kn {
         match kn {
             Knowledge::Unknown => Kn::Unknown,
             Knowledge::Any => Kn::Any,
-            Knowledge::Known(t) | Knowledge::Obliged(t) | Knowledge::Inferred(t) => {
-                Kn::Ty(t.clone())
-            }
+            Knowledge::Known(t) | Knowledge::Obliged(t) => Kn::Ty(t.clone()),
+            Knowledge::Inferred(ts) => match ts.only() {
+                Some(t) => Kn::Ty(t.clone()),
+                None => todo!("look how many types: {ts}"),
+            },
         }
     }
 }
