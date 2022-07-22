@@ -13,3 +13,4 @@
 - `ogma` crate API documentation is now published at https://kdr-aus.github.io/ogma/ogma/ (https://github.com/kdr-aus/ogma/commit/cf5cc7979c399b609e2e0605ffe176e70e474ac2)
 - Improve help messages and back end def input type matching
     (https://github.com/kdr-aus/ogma/pull/141)
+- Introduce `TypesSet`s into the inferencer (https://github.com/kdr-aus/ogma/pull/144)
