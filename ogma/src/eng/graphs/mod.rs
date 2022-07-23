@@ -123,7 +123,7 @@ mod tests {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
         let (ag, _) = astgraph::init(expr, defs).unwrap();
-        let tg = TypeGraph::build(&ag);
+        let tg = TypeGraph::build(&ag, defs.types());
         (ag, tg)
     }
 

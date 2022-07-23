@@ -35,7 +35,7 @@ pub fn compile_with_seed_vars(
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
     let (ag, chgs) = astgraph::init(expr, defs)?; // flatten and expand expr/defs
-    let tg = TypeGraph::build(&ag);
+    let tg = TypeGraph::build(&ag, defs.types());
     let lg = LocalsGraph::build(&ag);
 
     let mut compiler = Box::new(Compiler {

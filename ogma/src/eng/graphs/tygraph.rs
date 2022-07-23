@@ -1,7 +1,8 @@
 use super::*;
+use crate::lang::types::Types;
 use astgraph::*;
 use petgraph::prelude::*;
-use std::ops::Deref;
+use std::{ops::Deref, rc::Rc};
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
 
@@ -21,7 +22,7 @@ pub enum Knowledge {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct TypesSet(HashSet<Type>);
+pub struct TypesSet(Rc<HashSet<Type>>);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Flow {
@@ -114,11 +115,13 @@ impl Deref for TypeGraph {
 
 impl TypeGraph {
     /// Builds a type graph based off the ast graph.
-    pub fn build(ast_graph: &AstGraph) -> Self {
+    pub fn build(ast_graph: &AstGraph, tys: &Types) -> Self {
+        let full = TypesSet::full(tys);
+
         let mut g = TypeGraph(ast_graph.map(
             |_, _| Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Unknown,
+                input: Knowledge::Inferred(full.clone()),
+                output: Knowledge::Inferred(full.clone()),
             },
             |_, _| Flow::OI,
         ));
@@ -145,17 +148,17 @@ impl TypeGraph {
                 Expr(_) => None,
             };
 
-            if let Some(ty) = ty.map(Knowledge::Known) {
+            if let Some(ty) = ty {
                 let current = self
                     .0
                     .node_weight_mut(nidx)
                     .expect("Type and Ast graphs should have same indices");
                 assert!(
-                    matches!(current.output, Knowledge::Unknown),
-                    "overwriting a non-unknown type node"
+                    matches!(&current.output, Knowledge::Inferred(ts) if ts.contains(&ty)),
+                    "only overwrite inferred with the type in the set"
                 );
                 current.input = Knowledge::Any; // all these nodes take any input
-                current.output = ty;
+                current.output = Knowledge::Known(ty);
             }
         }
 
@@ -673,7 +676,19 @@ impl fmt::Display for Knowledge {
 impl TypesSet {
     /// Return an empty set.
     pub fn empty() -> Self {
+        //         ::lazy_static::lazy_static! {
+        //             pub static ref EMPTY: Rc<HashSet<Type>> = Rc::new(HashSet::default());
+        //         }
         TypesSet(Default::default())
+    }
+
+    /// Return a full set of types.
+    fn full(tys: &Types) -> Self {
+        let mut s = Self::empty();
+        for t in tys.iter().map(|(_, x)| x.clone()) {
+            s.insert(t);
+        }
+        s
     }
 
     /// Initialise a set with a single element: `ty`.
@@ -703,7 +718,7 @@ impl TypesSet {
     /// Returns `true` if the set was changed (`ty` did not exist in set), and `false` if the set
     /// was unchanged (`ty` already existed in set).
     pub fn insert(&mut self, ty: Type) -> bool {
-        self.0.insert(ty)
+        Rc::make_mut(&mut self.0).insert(ty)
     }
 
     /// If there is only a single element in the set, returns a reference to it.
