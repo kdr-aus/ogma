@@ -714,8 +714,8 @@ impl Knowledge {
             // An inferred source can flow into itself if the types match
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
 
-            // An any source can flow into an Any or Unknown dest
-            (Any, Any | Unknown) => Ok(()),
+            // An any source can flow into an Any or Unknown, or Inferred dest
+            (Any, Any | Unknown | Inferred(_)) => Ok(()),
 
             // Cannot flow if two known unmatching types
             (Known(t1), Known(t2)) if t1 != t2 => Err(ConflictingKnown {

@@ -251,8 +251,8 @@ impl<'d> Compiler<'d> {
                 None => continue,
             };
 
-            // output type is unknown
-            if !self.tg[node].output.is_unknown() {
+            // output type is varied
+            if !self.tg[node].output.is_multiple() {
                 continue;
             }
 
