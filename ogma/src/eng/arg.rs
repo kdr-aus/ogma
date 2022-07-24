@@ -1,5 +1,8 @@
 use super::*;
-use graphs::{tygraph::Knowledge, *};
+use graphs::{
+    tygraph::{Knowledge, TypesSet},
+    *,
+};
 use std::convert::TryInto;
 
 // ###### ARG BUILDER ##########################################################
@@ -89,6 +92,20 @@ impl<'a> ArgBuilder<'a> {
                 // error out
                 Err(Error::unexp_arg_input_ty(&ty, tg, self.tag()))
             }
+            Kn::Tys(ts) if ts.contains(&ty) => {
+                // the set supports `ty`, so we tell the TG that this input can be upgraded
+                debug_assert!(
+                    ts.len() > 1,
+                    "expecting TypesSet to not be empty or a single set"
+                );
+                self.chgs
+                    .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
+                Err(Error::unknown_arg_input_type(self.tag()))
+            }
+            Kn::Tys(ts) => {
+                // `ty` does not exist in the support types set, this is a hard error
+                todo!()
+            }
             Kn::Unknown => {
                 // There is currently no knowledge about the input type
                 // add to the TG that this node will be supplied a type `ty`
@@ -118,6 +135,20 @@ impl<'a> ArgBuilder<'a> {
                 // error out
                 Err(Error::unexp_arg_output_ty(&ty, tg, self.tag()))
             }
+            Kn::Tys(ts) if ts.contains(&ty) => {
+                // the set supports `ty`, so we tell the TG that this output can be upgraded
+                debug_assert!(
+                    ts.len() > 1,
+                    "expecting TypesSet to not be empty or a single set"
+                );
+                self.chgs
+                    .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
+                Err(Error::unknown_arg_output_type(self.tag()))
+            }
+            Kn::Tys(ts) => {
+                // `ty` does not exist in the support types set, this is a hard error
+                todo!()
+            }
             Kn::Unknown => {
                 // There is currently no knowledge about the output type
                 // add to the TG that this node is obliged to return the output type
@@ -132,7 +163,7 @@ impl<'a> ArgBuilder<'a> {
     pub fn return_ty(&self) -> Option<&Type> {
         match &self.out_ty {
             Kn::Ty(t) => Some(t),
-            Kn::Any | Kn::Unknown => None,
+            Kn::Tys(_) | Kn::Any | Kn::Unknown => None,
         }
     }
 
@@ -151,8 +182,8 @@ impl<'a> ArgBuilder<'a> {
         let out_ty = self.out_ty.take();
 
         match (in_ty, out_ty) {
-            (Unknown | Any, _) => Err(Error::unknown_arg_input_type(&tag)),
-            (_, Unknown | Any) => Err(Error::unknown_arg_output_type(&tag)),
+            (Unknown | Any | Tys(_), _) => Err(Error::unknown_arg_input_type(&tag)),
+            (_, Unknown | Any | Tys(_)) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
                 let hold = Box::new(self.map_astnode_into_hold()?);
 
@@ -282,6 +313,7 @@ enum Kn {
     Unknown,
     Any,
     Ty(Type),
+    Tys(TypesSet),
 }
 
 impl Kn {
@@ -299,7 +331,7 @@ impl From<&Knowledge> for Kn {
             Knowledge::Known(t) | Knowledge::Obliged(t) => Kn::Ty(t.clone()),
             Knowledge::Inferred(ts) => match ts.only() {
                 Some(t) => Kn::Ty(t.clone()),
-                None => todo!("look how many types: {ts}"),
+                None => Kn::Tys(ts.clone()),
             },
         }
     }

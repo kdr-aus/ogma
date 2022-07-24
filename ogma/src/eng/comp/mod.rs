@@ -117,7 +117,7 @@ impl<'d> Compiler<'d> {
             self.resolve_tg()?;
 
             // NOTE turn on for debugging.
-            // self._write_debug_report("debug-compiler.md");
+            self._write_debug_report("debug-compiler.md");
 
             if self.populate_compiled_expressions() {
                 continue;
@@ -337,7 +337,7 @@ impl<'d> Compiler<'d> {
                 // not already compiled
                 !self.compiled_ops.contains_key(&op.index())
             // and the input has a type
-            && !self.tg[op.0].input.is_unknown()
+            && self.tg[op.0].input.has_ty()
             })
             .collect::<Vec<_>>();
 
@@ -407,7 +407,11 @@ impl<'d> Compiler<'d> {
             }
         }
 
+        dbg!(&chgs);
+
         let chgd = self.apply_graph_chgs(chgs.into_iter())?;
+
+        dbg!(chgd);
 
         (goto_resolve | chgd)
             .then(|| ())

@@ -25,27 +25,28 @@ impl<'d> Compiler<'d> {
         // 3. have unknown inputs
         let infer_nodes = self.ag.sinks(|n| {
             // 1. op variants
-            self.ag[n].op().is_some()
+            self.ag[n].op().is_some() &&
             // 2. not compiled
-            && !self.compiled_ops.contains_key(&n.index())
-            // 3. unknown input
-            && self.tg[n].input.is_unknown()
+            !self.compiled_ops.contains_key(&n.index()) &&
+            // 3. has multiple valid types
+            self.tg[n].input.is_multiple()
         });
 
-        let mut err = None;
         let mut chgs = Vec::new();
 
+        // TODO
+        // I see a few issues with this type of ineference
+        // 1. It tries all types, it should only try the types reduced in the set
+        // 2. Compilation failure does not mean invalid type, failure could occurs because of some
+        //    other requirement (think unsealed variables)
+        // 3. If compilation failure were to ditctate the type to use, we could just reduce the
+        //    types set even further, rather than going through ambiguous error typing.
+
         for op in infer_nodes.into_iter().map(OpNode) {
-            match input_via_block_compilation(op, self) {
-                Ok(ty) => chgs.push(InferInput(op.idx(), ty.clone())),
-                Err(e) => err = Some(e.input_op(op.blk_tag(self.ag()))),
-            }
+            trial_inferred_types(op, self, &mut chgs);
         }
 
-        match err {
-            Some(e) if chgs.is_empty() => Err(e),
-            _ => self.apply_graph_chgs(chgs.into_iter().map(Into::into)),
-        }
+        self.apply_graph_chgs(chgs.into_iter().map(Into::into))
     }
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
@@ -149,6 +150,7 @@ fn input_via_block_compilation(
     op: OpNode,
     compiler: &Compiler,
 ) -> std::result::Result<Type, Error> {
+    // TODO this should be changed to use the nodes inferred types, not all types
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
     let types = compiler.defs.types().iter();
@@ -177,6 +179,28 @@ fn input_via_block_compilation(
     }
 
     inferred.ok_or(Error::NoTypes)
+}
+
+/// Tries to compile the `op` with each type in the inferred types set.
+/// Unsuccesful compilations will add a `RemoveInput` change into the `chgs`.
+fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
+    let _sink1 = &mut Default::default();
+    let _sink2 = &mut Default::default();
+
+    let set = compiler.tg[op.idx()]
+        .input
+        .tys()
+        .expect("`op` is expected to be an inferred input node with multiple types");
+
+    for ty in set.iter() {
+        let compiled = compiler
+            .compile_block(op, ty.clone(), _sink1, _sink2)
+            .is_ok();
+
+        if !compiled {
+            chgs.push(RemoveInput(op.into(), ty.clone()).into());
+        }
+    }
 }
 
 fn input_via_expr_compilation<'a>(

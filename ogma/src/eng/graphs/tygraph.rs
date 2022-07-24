@@ -21,7 +21,7 @@ pub enum Knowledge {
     Inferred(TypesSet),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TypesSet(Rc<HashSet<Type>>);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -42,6 +42,7 @@ pub enum Chg {
     KnownInput(NodeIndex, Type),
     ObligeInput(NodeIndex, Type),
     InferInput(NodeIndex, Type),
+    RemoveInput(NodeIndex, Type),
     AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
@@ -59,6 +60,7 @@ impl Chg {
             Chg::KnownInput(i, _) => i,
             Chg::ObligeInput(i, _) => i,
             Chg::InferInput(i, _) => i,
+            Chg::RemoveInput(i, _) => i,
             Chg::AnyInput(i) => i,
             Chg::KnownOutput(i, _) => i,
             Chg::ObligeOutput(i, _) => i,
@@ -351,15 +353,18 @@ impl TypeGraph {
             .filter(|e| !completed_indices.contains(&e.index()))
             .collect::<Vec<_>>();
 
+        dbg!(&completed_indices);
+
         for edge in edges {
             let flow = &self[edge];
             let (from_idx, to_idx) = self
                 .edge_endpoints(edge)
                 .expect("edge would exist in graph");
+            dbg!(edge, (from_idx, to_idx));
             let from = &self[from_idx];
-            let to = &self.0[to_idx];
-            let known_out = from.output.ty().is_some();
-            let known_in = from.input.ty().is_some();
+            let to = &self[to_idx];
+            let known_out = from.output.has_ty();
+            let known_in = from.input.has_ty();
             let any_in = from.input.is_any();
 
             let reserr = |conflict| ResolutionError {
@@ -390,19 +395,13 @@ impl TypeGraph {
                     from.output.can_flow(&to.output).map_err(reserr)?;
                     Some((Update::ToOutput, from.output.clone()))
                 }
+
                 // Backpropagate flow if to.input:Obliged | Known -> from.input
                 Flow::II if matches!(to.input, Knowledge::Obliged(_) | Knowledge::Known(_)) => {
                     to.input.can_flow(&from.input).map_err(reserr)?;
                     Some((Update::FromInput, to.input.clone()))
                 }
-                // Backpropagate flow if to.input:Inferred -> from.input
-                // Only propagate if can_flow.
-                Flow::II
-                    if matches!(to.input, Knowledge::Inferred(_))
-                        && to.input.can_flow(&from.input).is_ok() =>
-                {
-                    Some((Update::FromInput, to.input.clone()))
-                }
+
                 // Flow input -> input, allowing Any to flow through
                 // NOTE: Any should only be allowed on input types
                 Flow::II if any_in => {
@@ -425,6 +424,64 @@ impl TypeGraph {
         }
 
         Ok(chgd)
+    }
+
+    /// Reduces the inferred types sets to be the intersection between two sets joined by an edge.
+    ///
+    /// Returns if the graph was changed.
+    /// If an intersection results in an empty set, an error is returned.
+    pub fn intersect_inferred_sets(&mut self, completed_indices: &IndexSet) -> Result<bool> {
+        let edges = self
+            .edge_indices()
+            .filter(|e| !completed_indices.contains(&e.index()))
+            .collect::<Vec<_>>();
+
+        let mut chgd = false;
+
+        for edge in edges {
+            let flow = &self[edge];
+            let (from_idx, to_idx) = self
+                .edge_endpoints(edge)
+                .expect("edge would exist in graph");
+            let from = &self[from_idx];
+            let to = &self[to_idx];
+
+            todo!();
+
+            match flow {
+                Flow::II => {}
+                Flow::OI => {}
+                Flow::IO => {}
+                Flow::OO => {}
+            }
+        }
+
+        Ok(chgd)
+    }
+
+    /// Upgrades any inferred knowledge which only have a single type to be `Obliged` to that type.
+    pub fn upgrade_singleton_inferred_sets(&mut self) -> bool {
+        let mut chgd = false;
+
+        for n in self.0.node_weights_mut() {
+            match &n.input {
+                Knowledge::Inferred(x) if x.is_single() => {
+                    n.input = Knowledge::Obliged(x.only().expect("will exist").clone());
+                    chgd = true;
+                }
+                _ => (),
+            }
+
+            match &n.output {
+                Knowledge::Inferred(x) if x.is_single() => {
+                    n.output = Knowledge::Obliged(x.only().expect("will exist").clone());
+                    chgd = true;
+                }
+                _ => (),
+            }
+        }
+
+        chgd
     }
 
     /// Apply the `chg` to the graph. Returns if the graph is actually altered (if the `chg` has
@@ -460,10 +517,12 @@ impl TypeGraph {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Obliged(ty)))
             }
             Chg::InferInput(node, ty) => {
+                todo!("likely remove this, since no need to specify an 'inferred' change");
                 // TODO: should this return an error? usually `set` is called, which tests with
                 // `can_flow`
                 apply(self, node, |n| Ok(n.input.add_inferred(ty)))
             }
+            Chg::RemoveInput(node, ty) => apply(self, node, |n| Ok(n.input.rm_inferred(&ty))),
             Chg::AnyInput(node) => {
                 // Only set the input to be Any if the there is no knowledge about the type
                 if self[node].input.ty().is_none() {
@@ -479,6 +538,7 @@ impl TypeGraph {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
             }
             Chg::InferOutput(node, ty) => {
+                todo!("likely remove this, since no need to specify an 'inferred' change");
                 // TODO: see InferInput
                 apply(self, node, |n| Ok(n.output.add_inferred(ty)))
             }
@@ -536,9 +596,19 @@ impl Node {
 impl Knowledge {
     /// If the type is known, returns `Some`.
     pub fn known(&self) -> Option<&Type> {
+        // TODO: remove?
         match self {
             Knowledge::Known(ty) => Some(ty),
             _ => None,
+        }
+    }
+
+    /// Returns if there is a single known type.
+    pub fn has_ty(&self) -> bool {
+        match self {
+            Knowledge::Known(_) | Knowledge::Obliged(_) => true,
+            Knowledge::Inferred(ts) => ts.is_single(),
+            _ => false,
         }
     }
 
@@ -549,6 +619,20 @@ impl Knowledge {
         match self {
             Known(ty) | Obliged(ty) => Some(ty),
             Inferred(ts) => ts.only(),
+            _ => None,
+        }
+    }
+
+    /// Returns if there are _more than one_ valid types (in the inferred state).
+    pub fn is_multiple(&self) -> bool {
+        matches!(self, Knowledge::Inferred(ts) if ts.len() > 1)
+    }
+
+    /// If the knowledge is an inferred [`TypesSet`], returns a reference to it.
+    /// **Note that it only returns `Some` if the types set has _more than one element_.**
+    pub fn tys(&self) -> Option<&TypesSet> {
+        match self {
+            Knowledge::Inferred(x) if x.len() > 1 => Some(x),
             _ => None,
         }
     }
@@ -578,6 +662,18 @@ impl Knowledge {
                 *self = Inferred(set);
                 true
             }
+        }
+    }
+
+    /// Removes `ty` from the `Inferred` [`TypesSet`].
+    ///
+    /// Returns if `self` was actually changed, since this is dependent on the state of the
+    /// knowledge.
+    pub fn rm_inferred(&mut self, ty: &Type) -> bool {
+        use Knowledge::*;
+        match self {
+            Known(_) | Obliged(_) | Any | Unknown => false,
+            Inferred(ts) => ts.remove(ty),
         }
     }
 
@@ -708,6 +804,11 @@ impl TypesSet {
         self.len() == 0
     }
 
+    /// Returns if there is only a single type in the set.
+    pub fn is_single(&self) -> bool {
+        self.len() == 1
+    }
+
     /// The set contains `ty`.
     pub fn contains(&self, ty: &Type) -> bool {
         self.0.contains(ty)
@@ -721,10 +822,17 @@ impl TypesSet {
         Rc::make_mut(&mut self.0).insert(ty)
     }
 
+    /// Remove a type from the set.
+    ///
+    /// Returns `true` if the set was changed (`ty` existed in the set).
+    pub fn remove(&mut self, ty: &Type) -> bool {
+        Rc::make_mut(&mut self.0).remove(ty)
+    }
+
     /// If there is only a single element in the set, returns a reference to it.
     /// Otherwise returns `None`.
     pub fn only(&self) -> Option<&Type> {
-        if self.len() == 1 {
+        if self.is_single() {
             self.0.iter().next()
         } else {
             None
@@ -740,6 +848,18 @@ impl TypesSet {
     /// That is, `self` shares one or more elements with `other`.
     pub fn intersects(&self, other: &Self) -> bool {
         !self.is_disjoint(other)
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Type> {
+        self.0.iter()
+    }
+}
+
+/// Clone is fast -- it is a reference count increment.
+impl Clone for TypesSet {
+    /// Clone is fast -- it is a reference count increment.
+    fn clone(&self) -> Self {
+        TypesSet(Rc::clone(&self.0))
     }
 }
 

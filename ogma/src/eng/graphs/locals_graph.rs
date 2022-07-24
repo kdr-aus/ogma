@@ -17,6 +17,7 @@ struct Vars {
 
 type LocalsGraphInner = petgraph::stable_graph::StableGraph<Vars, (), petgraph::Directed, u32>;
 
+#[derive(Debug)]
 pub enum Chg {
     NewVar {
         name: Str,

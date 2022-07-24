@@ -49,6 +49,7 @@ impl From<DefNode> for CmdNode {
     }
 }
 
+#[derive(Debug)]
 pub enum Chg {
     Tg(tygraph::Chg),
     Lg(locals_graph::Chg),

@@ -5,10 +5,17 @@ impl<'d> Compiler<'d> {
     /// Resolve the type graph.
     pub fn resolve_tg(&mut self) -> Result<()> {
         loop {
-            match self.tg.flow_types(&mut self.flowed_edges) {
-                Ok(true) => (), // keep going!
-                Ok(false) => break Ok(()),
-                Err(reserr) => break Err(self.ty_resolution_err(reserr)),
+            // self.tg.intersect_inferred_sets(&self.flowed_edges)?;
+
+            self.tg.upgrade_singleton_inferred_sets();
+
+            let x = self
+                .tg
+                .flow_types(&mut self.flowed_edges)
+                .map_err(|e| self.ty_resolution_err(e))?;
+
+            if !x {
+                break Ok(());
             }
         }
     }
