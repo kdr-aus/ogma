@@ -5,7 +5,7 @@ impl<'d> Compiler<'d> {
     /// Resolve the type graph.
     pub fn resolve_tg(&mut self) -> Result<()> {
         loop {
-            // self.tg.intersect_inferred_sets(&self.flowed_edges)?;
+            self.tg.intersect_inferred_sets(&self.flowed_edges)?;
 
             self.tg.upgrade_singleton_inferred_sets();
 

@@ -230,9 +230,6 @@ fn test_compile_types<'a>(
     breakon: ExprNode,
     output: bool,
 ) -> std::result::Result<Compiler_<'a>, Error> {
-    // TODO: only used the types in Inferred types set
-    // NOTE - the types are returned in arbitary order
-    // if we wanted to make this deterministic we could sort on name
     let types = if output {
         compiler.tg()[node].output.tys()
     } else {

@@ -481,6 +481,14 @@ impl TypeGraph {
     /// Returns if the graph was changed.
     /// If an intersection results in an empty set, an error is returned.
     pub fn intersect_inferred_sets(&mut self, completed_indices: &IndexSet) -> Result<bool> {
+        fn int(a: &Knowledge, b: &Knowledge) -> Option<TypesSet> {
+            match (a, b) {
+                (Knowledge::Inferred(a), Knowledge::Inferred(b)) => 
+                    Some(a.intersection(b)).filter(|i| i != a),
+                _ => None
+            }
+        }
+
         let edges = self
             .edge_indices()
             .filter(|e| !completed_indices.contains(&e.index()))
@@ -496,13 +504,39 @@ impl TypeGraph {
             let from = &self[from_idx];
             let to = &self[to_idx];
 
-            todo!();
-
             match flow {
-                Flow::II => {}
-                Flow::OI => {}
-                Flow::IO => {}
-                Flow::OO => {}
+                Flow::II => match int(&from.input, &to.input) {
+                    Some(i) => {
+                        self.g[from_idx].input = i.clone().into();
+                        self.g[to_idx].input = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                }
+                Flow::IO => match int(&from.input, &to.output) {
+                    Some(i) => {
+                        self.g[from_idx].input = i.clone().into();
+                        self.g[to_idx].output = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                }
+                Flow::OI => match int(&from.output, &to.input) {
+                    Some(i) => {
+                        self.g[from_idx].output = i.clone().into();
+                        self.g[to_idx].input = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                }
+                Flow::OO => match int(&from.output, &to.output) {
+                    Some(i) => {
+                        self.g[from_idx].output = i.clone().into();
+                        self.g[to_idx].output = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                }
             }
         }
 
@@ -910,6 +944,14 @@ impl TypesSet {
     /// That is, `self` shares one or more elements with `other`.
     pub fn intersects(&self, other: &Self) -> bool {
         !self.is_disjoint(other)
+    }
+
+    pub fn intersection(&self, other: &Self) -> Self {
+        if self == other {
+            self.clone()
+        } else {
+            TypesSet(Rc::new(self.0.intersection(&other.0).cloned().collect()))
+        }
     }
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Type> {
