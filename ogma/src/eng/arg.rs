@@ -523,6 +523,6 @@ mod tests {
 
         assert_eq!(size_of::<Argument>(), 48);
         assert_eq!(size_of::<Hold>(), 64);
-        assert_eq!(size_of::<arg::ArgBuilder>(), 72);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 88);
     }
 }

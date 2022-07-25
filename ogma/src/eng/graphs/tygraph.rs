@@ -779,7 +779,7 @@ impl TypesSet {
     }
 
     /// Return a full set of types.
-    fn full(tys: &Types) -> Self {
+    pub fn full(tys: &Types) -> Self {
         let mut s = Self::empty();
         for t in tys.iter().map(|(_, x)| x.clone()) {
             s.insert(t);
@@ -876,5 +876,11 @@ impl fmt::Display for TypesSet {
         }
 
         write!(f, "}}")
+    }
+}
+
+impl From<TypesSet> for Knowledge {
+    fn from(ts: TypesSet) -> Self {
+        Knowledge::Inferred(ts)
     }
 }
