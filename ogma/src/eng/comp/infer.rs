@@ -244,7 +244,7 @@ fn test_compile_types<'a>(
         let chg = if output {
             ObligeOutput(node, ty.clone())
         } else {
-            InferInput(node, ty.clone())
+            ObligeInput(node, ty.clone())
         };
 
         let x = compiler
