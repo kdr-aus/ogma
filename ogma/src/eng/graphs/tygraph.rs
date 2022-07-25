@@ -6,6 +6,8 @@ use std::{iter, ops::Deref, rc::Rc};
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
 
+pub type AnonTypes = TypesSet;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Node {
     pub input: Knowledge,
@@ -112,31 +114,42 @@ pub struct ResolutionError {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct TypeGraph(TypeGraphInner);
+pub struct TypeGraph {
+    g: TypeGraphInner,
+    anon_tys: AnonTypes,
+}
 
 // NOTE that we do not expose a mutable deref, keep mutation contained in this module.
 impl Deref for TypeGraph {
     type Target = TypeGraphInner;
     fn deref(&self) -> &TypeGraphInner {
-        &self.0
+        &self.g
     }
 }
 
 impl TypeGraph {
+    pub fn anon_tys(&self) -> &AnonTypes {
+        &self.anon_tys
+    }
+
     /// Builds a type graph based off the ast graph.
     pub fn build(ast_graph: &AstGraph, tys: &Types) -> Self {
         let full = TypesSet::full(tys);
 
-        let mut g = TypeGraph(ast_graph.map(
+        let mut g = ast_graph.map(
             |_, _| Node {
                 input: Knowledge::Inferred(full.clone()),
                 output: Knowledge::Inferred(full.clone()),
             },
             |_, _| Flow::OI,
-        ));
+        );
 
-        g.0.clear_edges(); // remove all the edges
-        g
+        g.clear_edges(); // remove all the edges
+
+        Self {
+            g,
+            anon_tys: AnonTypes::empty(),
+        }
     }
 
     /// Apply _known_ types from the AST nodes.
@@ -159,7 +172,7 @@ impl TypeGraph {
 
             if let Some(ty) = ty {
                 let current = self
-                    .0
+                    .g
                     .node_weight_mut(nidx)
                     .expect("Type and Ast graphs should have same indices");
                 assert!(
@@ -178,7 +191,7 @@ impl TypeGraph {
             .map(|e| (e, ag.edge_endpoints(e).expect("should exist").1))
         {
             if let Some(ty) = ag[e].keyed().cloned() {
-                self.0[node].input = Knowledge::Known(ty);
+                self.g[node].input = Knowledge::Known(ty);
             }
         }
     }
@@ -215,7 +228,7 @@ impl TypeGraph {
         for &expr in &exprs {
             if let Some(op) = op_neighbors(expr).last() {
                 // last, since this would have been the first op to add
-                self.0.add_edge(expr, op, Flow::II); // input -> input
+                self.g.add_edge(expr, op, Flow::II); // input -> input
             }
         }
 
@@ -223,7 +236,7 @@ impl TypeGraph {
         for &expr in &exprs {
             if let Some(op) = op_neighbors(expr).next() {
                 // first, since this would have been the last op to add
-                self.0.add_edge(op, expr, Flow::OO); // output -> output
+                self.g.add_edge(op, expr, Flow::OO); // output -> output
             }
         }
 
@@ -233,7 +246,7 @@ impl TypeGraph {
             let tos = op_neighbors(expr); // starts at last op
 
             for (from, to) in froms.zip(tos) {
-                self.0.add_edge(from, to, Flow::OI); // output -> input
+                self.g.add_edge(from, to, Flow::OI); // output -> input
             }
         }
 
@@ -246,8 +259,8 @@ impl TypeGraph {
             _ => None,
         }) {
             let op = poundi.op(ag);
-            self.0.add_edge(op.idx(), poundi.idx(), Flow::II); // op -> arg: II
-            self.0.add_edge(op.idx(), poundi.idx(), Flow::IO); // op -> arg: IO
+            self.g.add_edge(op.idx(), poundi.idx(), Flow::II); // op -> arg: II
+            self.g.add_edge(op.idx(), poundi.idx(), Flow::IO); // op -> arg: IO
         }
 
         // defs
@@ -265,9 +278,9 @@ impl TypeGraph {
         let expr = defnode.expr(ag).idx();
 
         // flow the input of the Def into the expression
-        self.0.add_edge(def, expr, Flow::II);
+        self.g.add_edge(def, expr, Flow::II);
         // flow the output of the expression into the Def
-        self.0.add_edge(expr, def, Flow::OO);
+        self.g.add_edge(expr, def, Flow::OO);
 
         let is_keyed_none = ag[ag.find_edge(op, def).expect("edge from op to def")].keyed_none();
         let all_defs = ag
@@ -280,13 +293,13 @@ impl TypeGraph {
         // can only link op to def if there is no type key
         if is_keyed_none {
             // flow the input of the op into the input of this Def
-            self.0.add_edge(op, def, Flow::II);
+            self.g.add_edge(op, def, Flow::II);
         }
 
         // can only link def to op if there is no type key or if only def
         if is_keyed_none || is_only_def {
             // flow the output of the Def into the Op
-            self.0.add_edge(def, op, Flow::OO);
+            self.g.add_edge(def, op, Flow::OO);
         }
 
         if all_defs.iter().all(|n| ag[*n].def().is_some()) {
@@ -329,15 +342,43 @@ impl TypeGraph {
 
             if !self.contains_edge(op.idx(), arg.idx()) {
                 chgd = true;
-                self.0.add_edge(op.idx(), arg.idx(), Flow::II);
+                self.g.add_edge(op.idx(), arg.idx(), Flow::II);
             }
         }
 
         chgd
     }
 
+    /// Reduces inferred types sets given the viable input types for linked definitions.
+    pub fn reduce_inferred_sets_given_def_constraints(&mut self, ag: &AstGraph) {
+        for op in ag.op_nodes()
+        {
+            // only reduce where multiple inputs
+            if !self[op.idx()].input.is_multiple() {
+                continue;
+            }
+
+            let keys = op.cmds(ag)
+                .fold(Some(TypesSet::empty()), |set, cmd| {
+                    let e = &ag[ag.find_edge(op.idx(), cmd.idx()).unwrap()];
+                    match (set, e.keyed()) {
+                        (Some(mut s), Some(t)) => {
+                            s.insert(t.clone());
+                            Some(s)
+                        },
+                        // if keyed on `None`, then we cannot reduce set
+                        _ => None
+                    }
+                });
+
+            if let Some(contrained) = keys {
+                self.g[op.idx()].input = contrained.into();
+            }
+        }
+    }
+
     pub fn set_root_input_ty(&mut self, ty: Type) {
-        if let Some(n) = self.0.node_weight_mut(0.into()) {
+        if let Some(n) = self.g.node_weight_mut(0.into()) {
             n.input = Knowledge::Known(ty);
         }
     }
@@ -381,6 +422,8 @@ impl TypeGraph {
                 conflict,
             };
 
+            dbg!(&flow);
+
             let x = match flow {
                 // Directed flow of input -> input
                 Flow::II if known_in => {
@@ -420,9 +463,9 @@ impl TypeGraph {
 
             if let Some((update, with)) = x {
                 match update {
-                    Update::ToInput => self.0[to_idx].input = with,
-                    Update::ToOutput => self.0[to_idx].output = with,
-                    Update::FromInput => self.0[from_idx].input = with,
+                    Update::ToInput => self.g[to_idx].input = with,
+                    Update::ToOutput => self.g[to_idx].output = with,
+                    Update::FromInput => self.g[from_idx].input = with,
                 }
 
                 completed_indices.insert(edge.index());
@@ -499,7 +542,7 @@ impl TypeGraph {
         where
             F: FnOnce(&mut Node) -> R,
         {
-            if let Some(node) = tg.0.node_weight_mut(node) {
+            if let Some(node) = tg.g.node_weight_mut(node) {
                 setfn(node)
             } else {
                 Ok(false)
@@ -543,12 +586,12 @@ impl TypeGraph {
                 // TODO edges_connecting is not implemented yet for StableGraph
                 // can be replicated with a filter
                 let chgd = self
-                    .0
+                    .g
                     .edges(src)
                     .filter(|e| e.target() == dst)
                     .all(|e| e.weight() != &flow);
                 if chgd {
-                    self.0.add_edge(src, dst, flow);
+                    self.g.add_edge(src, dst, flow);
                 }
                 Ok(chgd)
             }
@@ -562,13 +605,15 @@ impl TypeGraph {
                     chgd |= x;
                 }
 
+                self.anon_tys.insert(ty);
+
                 Ok(chgd)
             }
         }
     }
 
     fn iter_kn_mut(&mut self) -> impl Iterator<Item = &mut Knowledge> {
-        self.0.node_weights_mut().flat_map(|n| {
+        self.g.node_weights_mut().flat_map(|n| {
             let Node { input, output } = n;
             iter::once(input).chain(iter::once(output))
         })
@@ -869,6 +914,12 @@ impl TypesSet {
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Type> {
         self.0.iter()
+    }
+}
+
+impl Default for TypesSet {
+    fn default() -> Self {
+        Self::empty()
     }
 }
 

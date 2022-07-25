@@ -1,5 +1,6 @@
 //! Evaluation.
 use super::*;
+use graphs::tygraph::AnonTypes;
 
 // ###### CONTEXT ##############################################################
 #[derive(Clone)]
@@ -168,7 +169,12 @@ impl CodeInjector<Build> {
         self.data.locals.add(name.into(), ty, Tag::default())
     }
 
-    pub fn compile(self, in_ty: Type, defs: &Definitions) -> Result<CodeInjector<Eval>> {
+    pub fn compile(
+        self,
+        in_ty: Type,
+        defs: &Definitions,
+        anon_tys: &AnonTypes,
+    ) -> Result<CodeInjector<Eval>> {
         let CodeInjector {
             data: Build { expr, locals },
             args,
@@ -177,7 +183,7 @@ impl CodeInjector<Build> {
         let FullCompilation {
             eval_stack: stack,
             env,
-        } = comp::compile_with_seed_vars(expr, defs, in_ty, locals)?;
+        } = comp::compile_with_seed_vars(expr, defs, in_ty, anon_tys, locals)?;
 
         Ok(CodeInjector {
             args,

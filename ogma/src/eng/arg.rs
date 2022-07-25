@@ -103,8 +103,12 @@ impl<'a> ArgBuilder<'a> {
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
             Kn::Tys(ts) => {
-                // `ty` does not exist in the support types set, this is a hard error
-                todo!()
+                // `ty` does not exist in the support types set, return just a soft error
+                // TODO: this would be good to be a hard error since it might give more informative error
+                // messages, or at least make the error more verbose
+                // a problem is that anonymous types might not be added yet, so it can't be known
+                // if it would succeed later
+                Err(Error::unknown_arg_input_type(self.tag()))
             }
             Kn::Unknown => {
                 // There is currently no knowledge about the input type
@@ -146,8 +150,9 @@ impl<'a> ArgBuilder<'a> {
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
             Kn::Tys(ts) => {
-                // `ty` does not exist in the support types set, this is a hard error
-                todo!()
+                // `ty` does not exist in the support types set
+                // NOTE: see the comment above
+                Err(Error::unknown_arg_output_type(self.tag()))
             }
             Kn::Unknown => {
                 // There is currently no knowledge about the output type

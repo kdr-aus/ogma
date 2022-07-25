@@ -233,11 +233,15 @@ fn test_compile_types<'a>(
     // TODO: only used the types in Inferred types set
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
-    let types = compiler.defs.types().iter();
+    let types = if output {
+        compiler.tg()[node].output.tys()
+    } else {
+        compiler.tg()[node].input.tys()
+    }.expect("only testing inferred types set");
 
     let mut inferred = None;
 
-    for (_name, ty) in types {
+    for ty in types.iter() {
         let mut compiler: Compiler_ = compiler.clone();
         compiler.inference_depth += 1;
 

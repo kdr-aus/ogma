@@ -4,7 +4,7 @@ use super::*;
 use astgraph::{AstGraph, AstNode};
 use graphs::*;
 use locals_graph::LocalsGraph;
-use tygraph::TypeGraph;
+use tygraph::{TypeGraph, AnonTypes};
 
 mod infer;
 mod params;
@@ -24,6 +24,7 @@ where
         expr,
         defs,
         input_ty.into().unwrap_or(Type::Nil),
+        &Default::default(),
         Default::default(),
     )
 }
@@ -32,6 +33,7 @@ pub fn compile_with_seed_vars(
     expr: ast::Expression,
     defs: &Definitions,
     input_ty: Type,
+    anon_tys: &AnonTypes,
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
     let (ag, chgs) = astgraph::init(expr, defs)?; // flatten and expand expr/defs
@@ -54,7 +56,11 @@ pub fn compile_with_seed_vars(
     // initialise TG
     compiler.init_tg(input_ty);
     // apply initial annotated types
-    compiler.apply_graph_chgs(chgs.into_iter().map(Into::into))?;
+    let chgs = chgs.into_iter()
+        // also apply anonymous types
+        .chain(anon_tys.iter().map(|t| tygraph::Chg::AnonTy(t.clone())))
+        .map(Into::into);
+    compiler.apply_graph_chgs(chgs)?;
 
     compiler.lg.seed(seed_vars);
 
@@ -101,10 +107,16 @@ impl<'d> Compiler<'d> {
         &self.ag
     }
 
+    /// A [`TypeGraph`] reference.
+    pub fn tg(&self) -> &TypeGraph {
+        &self.tg
+    }
+
     fn init_tg(&mut self, root_ty: Type) {
         // apply ast known types and link edges
         self.tg.apply_ast_types(&self.ag);
         self.tg.apply_ast_edges(&self.ag);
+        self.tg.reduce_inferred_sets_given_def_constraints(&self.ag);
 
         self.tg.set_root_input_ty(root_ty); // set the root input
     }
