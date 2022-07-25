@@ -147,8 +147,14 @@ impl<'d> Compiler<'d> {
 
         chgs.map(|c| match c {
             Tg(c) => {
+                if c.is_anon_ty() {
+                    let x = self.tg.apply_chg(c);
+                    debug_assert!(x.is_ok(), "anon type applications should never fail");
+                    Ok(x.unwrap())
+                } else {
                 let node = c.node();
                 self.tg.apply_chg(c).map_err(|e| self.conflict_err(node, e))
+                }
             }
             Lg(c) => Ok(self.lg.apply_chg(c)),
         })

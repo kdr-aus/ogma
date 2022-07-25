@@ -69,6 +69,13 @@ impl<'a> Block<'a> {
             .push(graphs::tygraph::Chg::KnownOutput(self.node.idx(), ty).into());
     }
 
+    /// Inserts a new, anonymous type into the compiler.
+    ///
+    /// Note that this will not affect already resolved nodes, only inferred nodes.
+    pub fn insert_anon_type_into_compiler(&mut self, ty: Type) {
+        self.chgs.push(graphs::tygraph::Chg::AnonTy(ty).into());
+    }
+
     /// Gets the flag that matches a given name.
     ///
     /// If no name is given with `None`, _the first flag first is returned, if there is one._

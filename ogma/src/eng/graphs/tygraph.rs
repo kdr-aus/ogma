@@ -2,7 +2,7 @@ use super::*;
 use crate::lang::types::Types;
 use astgraph::*;
 use petgraph::prelude::*;
-use std::{ops::Deref, rc::Rc};
+use std::{iter, ops::Deref, rc::Rc};
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
 
@@ -52,9 +52,15 @@ pub enum Chg {
         dst: NodeIndex,
         flow: Flow,
     },
+    /// Adds an anonymous type into the type graph, updating all inferred nodes.
+    AnonTy(Type),
 }
 
 impl Chg {
+    pub fn is_anon_ty(&self) -> bool {
+        matches!(self, Chg::AnonTy(_))
+    }
+
     pub fn node(&self) -> NodeIndex {
         *match self {
             Chg::KnownInput(i, _) => i,
@@ -70,6 +76,7 @@ impl Chg {
                 dst: _,
                 flow: _,
             } => src,
+            Chg::AnonTy(_) => unreachable!("`Chg::node` is not available for `Chg::AnonTy`"),
         }
     }
 }
@@ -463,22 +470,12 @@ impl TypeGraph {
     pub fn upgrade_singleton_inferred_sets(&mut self) -> bool {
         let mut chgd = false;
 
-        for n in self.0.node_weights_mut() {
-            match &n.input {
-                Knowledge::Inferred(x) if x.is_single() => {
-                    n.input = Knowledge::Obliged(x.only().expect("will exist").clone());
-                    chgd = true;
-                }
-                _ => (),
-            }
-
-            match &n.output {
-                Knowledge::Inferred(x) if x.is_single() => {
-                    n.output = Knowledge::Obliged(x.only().expect("will exist").clone());
-                    chgd = true;
-                }
-                _ => (),
-            }
+        for n in self
+            .iter_kn_mut()
+            .filter(|x| matches!(x, Knowledge::Inferred(t) if t.is_single()))
+        {
+            *n = Knowledge::Obliged(n.ty().expect("will exist").clone());
+            chgd = true;
         }
 
         chgd
@@ -555,7 +552,26 @@ impl TypeGraph {
                 }
                 Ok(chgd)
             }
+            Chg::AnonTy(ty) => {
+                let mut chgd = false;
+                for n in self.iter_kn_mut().filter_map(|x| match x {
+                    Knowledge::Inferred(x) => Some(x),
+                    _ => None,
+                }) {
+                    let x = n.insert(ty.clone());
+                    chgd |= x;
+                }
+
+                Ok(chgd)
+            }
         }
+    }
+
+    fn iter_kn_mut(&mut self) -> impl Iterator<Item = &mut Knowledge> {
+        self.0.node_weights_mut().flat_map(|n| {
+            let Node { input, output } = n;
+            iter::once(input).chain(iter::once(output))
+        })
     }
 }
 
@@ -738,6 +754,7 @@ impl Knowledge {
             // NOTE: probably do this later if it is found that unreasonable errors are being
             // returned.
             (Known(t1), Inferred(ts)) if !ts.contains(t1) => Err(UnmatchedInferred {
+                // TODO: this should have a better error message if only a singleton set
                 src: TypesSet::single(t1.clone()),
                 dst: ts.clone(),
             }),
