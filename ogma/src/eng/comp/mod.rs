@@ -375,11 +375,11 @@ impl<'d> Compiler<'d> {
                     self.lg.seal_node(node.idx(), &self.ag);
                 }
                 Err(mut e) => {
-                    // only set the infer output if tygraph is showing unknown
+                    // only set the infer output if tygraph is showing that it has multiple options
                     if infer_output {
-                        let unknown = self.tg[node.idx()].output.is_unknown();
+                        let _unknown = self.tg[node.idx()].output.is_multiple();
                         debug_assert!(
-                            unknown,
+                            _unknown,
                             "if inferring the output node, expecting the TG output to be unknown"
                         );
                         self.output_infer_opnode = Some(node);

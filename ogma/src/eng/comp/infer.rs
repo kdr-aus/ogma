@@ -29,7 +29,9 @@ impl<'d> Compiler<'d> {
             // 2. not compiled
             !self.compiled_ops.contains_key(&n.index()) &&
             // 3. has multiple valid types
-            self.tg[n].input.is_multiple()
+            self.tg[n].input.is_multiple() &&
+            // 4. the node is sealed, ensuring all locals have been set
+            self.lg.sealed(n)
         });
 
         let mut chgs = Vec::new();
@@ -54,16 +56,18 @@ impl<'d> Compiler<'d> {
 
         // we get _shallowest_ expr nodes that:
         // 1. are not compiled,
-        // 2. have unknown input
+        // 2. have multiple input
         let infer_nodes = {
             let set = self
                 .ag
                 .expr_nodes()
                 // are not compiled
                 .filter(|n| !self.compiled_exprs.contains_key(&n.index()))
-                // have unknown input
-                .filter(|n| self.tg[n.idx()].input.is_unknown())
+                // have multiple input
+                .filter(|n| self.tg[n.idx()].input.is_multiple())
                 .collect::<HashSet<_>>();
+
+            dbg!(&set);
 
             set.iter()
                 .copied()
@@ -77,6 +81,8 @@ impl<'d> Compiler<'d> {
                 })
                 .collect::<Vec<_>>()
         };
+
+        dbg!(&infer_nodes);
 
         let mut success = false;
         let mut err = None;
@@ -115,8 +121,8 @@ impl<'d> Compiler<'d> {
             .output_infer_opnode
             // TAKE the infer node, since we are processing it.
             .take()
-            // BUT do not process if the output is NOT unknown
-            .filter(|n| self.tg[n.idx()].output.is_unknown())
+            // BUT do not process if the output is NOT multiple
+            .filter(|n| self.tg[n.idx()].output.is_multiple())
         {
             // infer output
             let x = output(opnode, self);
@@ -207,17 +213,13 @@ fn input_via_expr_compilation<'a>(
     expr: ExprNode,
     compiler: &Compiler_<'a>,
 ) -> std::result::Result<Compiler_<'a>, Error> {
-    //     let parent = expr.parent(compiler.ag());
-
     // NOTE: I believe this should break on success compilation of parent expr, not itself??
     // seem to be passing tests with this so keep it so...
     test_compile_types(compiler, expr.idx(), expr, false)
 }
 
 fn output<'a>(op: OpNode, compiler: &Compiler_<'a>) -> std::result::Result<Compiler_<'a>, Error> {
-    let ag = compiler.ag();
-    let brk = op.parent(ag);
-    //     let brk = brk.parent(ag).map(|x| x.parent(ag)).unwrap_or(brk);
+    let brk = op.parent(compiler.ag());
 
     test_compile_types(compiler, op.idx(), brk, true)
 }
@@ -228,6 +230,7 @@ fn test_compile_types<'a>(
     breakon: ExprNode,
     output: bool,
 ) -> std::result::Result<Compiler_<'a>, Error> {
+    // TODO: only used the types in Inferred types set
     // NOTE - the types are returned in arbitary order
     // if we wanted to make this deterministic we could sort on name
     let types = compiler.defs.types().iter();
@@ -239,7 +242,7 @@ fn test_compile_types<'a>(
         compiler.inference_depth += 1;
 
         let chg = if output {
-            InferOutput(node, ty.clone())
+            ObligeOutput(node, ty.clone())
         } else {
             InferInput(node, ty.clone())
         };
