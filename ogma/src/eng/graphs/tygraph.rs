@@ -351,25 +351,23 @@ impl TypeGraph {
 
     /// Reduces inferred types sets given the viable input types for linked definitions.
     pub fn reduce_inferred_sets_given_def_constraints(&mut self, ag: &AstGraph) {
-        for op in ag.op_nodes()
-        {
+        for op in ag.op_nodes() {
             // only reduce where multiple inputs
             if !self[op.idx()].input.is_multiple() {
                 continue;
             }
 
-            let keys = op.cmds(ag)
-                .fold(Some(TypesSet::empty()), |set, cmd| {
-                    let e = &ag[ag.find_edge(op.idx(), cmd.idx()).unwrap()];
-                    match (set, e.keyed()) {
-                        (Some(mut s), Some(t)) => {
-                            s.insert(t.clone());
-                            Some(s)
-                        },
-                        // if keyed on `None`, then we cannot reduce set
-                        _ => None
+            let keys = op.cmds(ag).fold(Some(TypesSet::empty()), |set, cmd| {
+                let e = &ag[ag.find_edge(op.idx(), cmd.idx()).unwrap()];
+                match (set, e.keyed()) {
+                    (Some(mut s), Some(t)) => {
+                        s.insert(t.clone());
+                        Some(s)
                     }
-                });
+                    // if keyed on `None`, then we cannot reduce set
+                    _ => None,
+                }
+            });
 
             if let Some(contrained) = keys {
                 self.g[op.idx()].input = contrained.into();
@@ -483,9 +481,10 @@ impl TypeGraph {
     pub fn intersect_inferred_sets(&mut self, completed_indices: &IndexSet) -> Result<bool> {
         fn int(a: &Knowledge, b: &Knowledge) -> Option<TypesSet> {
             match (a, b) {
-                (Knowledge::Inferred(a), Knowledge::Inferred(b)) => 
-                    Some(a.intersection(b)).filter(|i| i != a),
-                _ => None
+                (Knowledge::Inferred(a), Knowledge::Inferred(b)) => {
+                    Some(a.intersection(b)).filter(|i| i != a)
+                }
+                _ => None,
             }
         }
 
@@ -512,7 +511,7 @@ impl TypeGraph {
                         chgd = true;
                     }
                     None => (),
-                }
+                },
                 Flow::IO => match int(&from.input, &to.output) {
                     Some(i) => {
                         self.g[from_idx].input = i.clone().into();
@@ -520,7 +519,7 @@ impl TypeGraph {
                         chgd = true;
                     }
                     None => (),
-                }
+                },
                 Flow::OI => match int(&from.output, &to.input) {
                     Some(i) => {
                         self.g[from_idx].output = i.clone().into();
@@ -528,7 +527,7 @@ impl TypeGraph {
                         chgd = true;
                     }
                     None => (),
-                }
+                },
                 Flow::OO => match int(&from.output, &to.output) {
                     Some(i) => {
                         self.g[from_idx].output = i.clone().into();
@@ -536,7 +535,7 @@ impl TypeGraph {
                         chgd = true;
                     }
                     None => (),
-                }
+                },
             }
         }
 

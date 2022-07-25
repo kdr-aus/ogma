@@ -4,7 +4,7 @@ use super::*;
 use astgraph::{AstGraph, AstNode};
 use graphs::*;
 use locals_graph::LocalsGraph;
-use tygraph::{TypeGraph, AnonTypes};
+use tygraph::{AnonTypes, TypeGraph};
 
 mod infer;
 mod params;
@@ -56,7 +56,8 @@ pub fn compile_with_seed_vars(
     // initialise TG
     compiler.init_tg(input_ty);
     // apply initial annotated types
-    let chgs = chgs.into_iter()
+    let chgs = chgs
+        .into_iter()
         // also apply anonymous types
         .chain(anon_tys.iter().map(|t| tygraph::Chg::AnonTy(t.clone())))
         .map(Into::into);

@@ -115,21 +115,22 @@ impl<'d> Compiler<'d> {
             }
             (flow, UnmatchedInferred { src, dst }) => {
                 let from_trace = match flow {
-                    II | IO => Trace::from_tag(from, 
-                        src.only().map(|src| {
-                        format!("this node has input type `{}`", src)
-                        }).unwrap_or_else(||
-                        format!("this node supports input types: {}", src)
-                        )),
+                    II | IO => Trace::from_tag(
+                        from,
+                        src.only()
+                            .map(|src| format!("this node has input type `{}`", src))
+                            .unwrap_or_else(|| format!("this node supports input types: {}", src)),
+                    ),
                     OI | OO => Trace::from_tag(from, format!("this node returns a `{}`", src)),
                 };
                 let to_trace = match flow {
                     II | IO => Trace::from_tag(
                         to,
-                        dst.only().map(|dst| format!("but this node is inferred to use input `{}`", dst))
-                        .unwrap_or_else(||
-                        format!("but this node is inferred to use inputs: {}", dst))
-
+                        dst.only()
+                            .map(|dst| format!("but this node is inferred to use input `{}`", dst))
+                            .unwrap_or_else(|| {
+                                format!("but this node is inferred to use inputs: {}", dst)
+                            }),
                     ),
                     OI | OO => Trace::from_tag(
                         to,
@@ -205,9 +206,11 @@ impl<'d> Compiler<'d> {
             }
             UnmatchedInferred { src, dst: _ } => Trace::from_tag(
                 node,
-                src.only().map(|src| format!("this node has input type `{src}`"))
-                .unwrap_or_else(|| 
-                format!("this node could have any of these types applied to it: {src}"))
+                src.only()
+                    .map(|src| format!("this node has input type `{src}`"))
+                    .unwrap_or_else(|| {
+                        format!("this node could have any of these types applied to it: {src}")
+                    }),
             ),
         };
 
@@ -226,8 +229,9 @@ impl<'d> Compiler<'d> {
             }
             UnmatchedInferred { src: _, dst } => Some(Trace::from_tag(
                 node,
-                dst.only().map(|dst| format!("but it is inferred to use type `{dst}`"))
-                .unwrap_or_else(|| format!("but it is inferred to use only types: {dst}"))
+                dst.only()
+                    .map(|dst| format!("but it is inferred to use type `{dst}`"))
+                    .unwrap_or_else(|| format!("but it is inferred to use only types: {dst}")),
             )),
         };
 

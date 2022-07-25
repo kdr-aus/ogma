@@ -234,7 +234,8 @@ fn test_compile_types<'a>(
         compiler.tg()[node].output.tys()
     } else {
         compiler.tg()[node].input.tys()
-    }.expect("only testing inferred types set");
+    }
+    .expect("only testing inferred types set");
 
     let mut inferred = None;
 
