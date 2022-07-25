@@ -212,6 +212,7 @@ impl Error {
                 format!("`{}` not defined for input `{}`", op, tystr(inty)),
             ),
             help_msg: Some(hlp),
+            hard: true,
             ..Self::default()
         }
     }

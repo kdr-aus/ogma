@@ -832,8 +832,7 @@ impl Knowledge {
             // NOTE: this would need to clear _all_ Inferred type graph entries.
             // NOTE: probably do this later if it is found that unreasonable errors are being
             // returned.
-            (Known(t1), Inferred(ts)) if !ts.contains(t1) => Err(UnmatchedInferred {
-                // TODO: this should have a better error message if only a singleton set
+            (Known(t1) | Obliged(t1), Inferred(ts)) if !ts.contains(t1) => Err(UnmatchedInferred {
                 src: TypesSet::single(t1.clone()),
                 dst: ts.clone(),
             }),
@@ -976,16 +975,15 @@ impl Clone for TypesSet {
 impl fmt::Display for TypesSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut trail = false;
-        write!(f, "{{")?;
         for x in self.0.iter() {
             if trail {
-                write!(f, ", ")?;
+                write!(f, " ")?;
             }
             trail = true;
             write!(f, "{x}")?;
         }
 
-        write!(f, "}}")
+        Ok(())
     }
 }
 

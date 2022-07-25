@@ -412,11 +412,13 @@ fn not_defined_err_msg() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Unknown Command: operation `foo` not defined
+        "Typing Error: Type resolution failed. Conflicting inferred type
 --> shell:0
  | foo
- | ^^^ `foo` not defined for input `Nil`
---> help: `foo` is implemented for the following input types: Table Number
+ | ^^^ this node has input type `Nil`
+--> shell:0
+ | foo
+ | ^^^ but this node is inferred to use inputs: Table Number
 "
     );
 }
