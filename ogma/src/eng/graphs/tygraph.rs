@@ -16,7 +16,6 @@ pub struct Node {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Knowledge {
-    Unknown, // TODO remove this in favour of _reducing_ types set
     Any,
     Known(Type),
     Obliged(Type),
@@ -688,15 +687,6 @@ impl Node {
 }
 
 impl Knowledge {
-    /// If the type is known, returns `Some`.
-    pub fn known(&self) -> Option<&Type> {
-        // TODO: remove?
-        match self {
-            Knowledge::Known(ty) => Some(ty),
-            _ => None,
-        }
-    }
-
     /// Returns if there is a single known type.
     pub fn has_ty(&self) -> bool {
         match self {
@@ -731,11 +721,6 @@ impl Knowledge {
         }
     }
 
-    /// `Knowledge::Unknown` variant.
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, Knowledge::Unknown)
-    }
-
     /// `Knowledge::Any` variant.
     pub fn is_any(&self) -> bool {
         matches!(self, Knowledge::Any)
@@ -750,7 +735,7 @@ impl Knowledge {
         match self {
             Known(_) | Obliged(_) => false,
             Inferred(ts) => ts.insert(ty),
-            Any | Unknown => {
+            Any => {
                 let mut set = TypesSet::empty();
                 set.insert(ty);
                 *self = Inferred(set);
@@ -766,7 +751,7 @@ impl Knowledge {
     pub fn rm_inferred(&mut self, ty: &Type) -> bool {
         use Knowledge::*;
         match self {
-            Known(_) | Obliged(_) | Any | Unknown => false,
+            Known(_) | Obliged(_) | Any => false,
             Inferred(ts) => ts.remove(ty),
         }
     }
@@ -788,28 +773,25 @@ impl Knowledge {
         use Knowledge::*;
 
         match (self, into) {
-            // Unknown source cannot flow into anything!
-            (Unknown, _) => Err(UnknownSrc),
-
             // A known source can flow into an unknown or any dest
-            (Known(_), Unknown | Any) => Ok(()),
+            (Known(_), Any) => Ok(()),
             // A known source can flow into itself or lower ranked items if the types match
             (Known(t1), Known(t2) | Obliged(t2)) if t1 == t2 => Ok(()),
             (Known(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An obliged source can flow into an unknown or any dest
-            (Obliged(_), Unknown | Any) => Ok(()),
+            (Obliged(_), Any) => Ok(()),
             // An obliged source can flow into itself or lower ranked items if the types match
             (Obliged(t1), Obliged(t2)) if t1 == t2 => Ok(()),
             (Obliged(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An inferred source can flow into an unknown or any dest
-            (Inferred(_), Unknown | Any) => Ok(()),
+            (Inferred(_), Any) => Ok(()),
             // An inferred source can flow into itself if the types match
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
 
-            // An any source can flow into an Any or Unknown, or Inferred dest
-            (Any, Any | Unknown | Inferred(_)) => Ok(()),
+            // An any source can flow into an Any or Inferred dest
+            (Any, Any | Inferred(_)) => Ok(()),
 
             // Cannot flow if two known unmatching types
             (Known(t1), Known(t2)) if t1 != t2 => Err(ConflictingKnown {
@@ -858,7 +840,6 @@ impl fmt::Display for Knowledge {
             Obliged(t) => write!(f, "Obliged({})", t),
             Inferred(t) => write!(f, "Inferred({})", t),
             Any => write!(f, "Any"),
-            Unknown => write!(f, "Unknown"),
         }
     }
 }
@@ -866,9 +847,6 @@ impl fmt::Display for Knowledge {
 impl TypesSet {
     /// Return an empty set.
     pub fn empty() -> Self {
-        //         ::lazy_static::lazy_static! {
-        //             pub static ref EMPTY: Rc<HashSet<Type>> = Rc::new(HashSet::default());
-        //         }
         TypesSet(Default::default())
     }
 

@@ -102,21 +102,16 @@ impl<'a> ArgBuilder<'a> {
                     .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
-            Kn::Tys(ts) => {
-                // `ty` does not exist in the support types set, return just a soft error
-                // TODO: this would be good to be a hard error since it might give more informative error
-                // messages, or at least make the error more verbose
-                // a problem is that anonymous types might not be added yet, so it can't be known
-                // if it would succeed later
+            Kn::Tys(_ts) => {
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
-            Kn::Unknown => {
-                // There is currently no knowledge about the input type
-                // add to the TG that this node will be supplied a type `ty`
-                self.chgs
-                    .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
-                Err(Error::unknown_arg_input_type(self.tag()))
-            }
+//             Kn::Unknown => {
+//                 // There is currently no knowledge about the input type
+//                 // add to the TG that this node will be supplied a type `ty`
+//                 self.chgs
+//                     .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
+//                 Err(Error::unknown_arg_input_type(self.tag()))
+//             }
             Kn::Any => unreachable!("any is reset to Kn::Ty"),
         }
     }
@@ -154,13 +149,13 @@ impl<'a> ArgBuilder<'a> {
                 // NOTE: see the comment above
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
-            Kn::Unknown => {
-                // There is currently no knowledge about the output type
-                // add to the TG that this node is obliged to return the output type
-                self.chgs
-                    .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
-                Err(Error::unknown_arg_output_type(self.tag()))
-            }
+//             Kn::Unknown => {
+//                 // There is currently no knowledge about the output type
+//                 // add to the TG that this node is obliged to return the output type
+//                 self.chgs
+//                     .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
+//                 Err(Error::unknown_arg_output_type(self.tag()))
+//             }
             Kn::Any => unreachable!("logic error if output is Any type"),
         }
     }
@@ -168,7 +163,7 @@ impl<'a> ArgBuilder<'a> {
     pub fn return_ty(&self) -> Option<&Type> {
         match &self.out_ty {
             Kn::Ty(t) => Some(t),
-            Kn::Tys(_) | Kn::Any | Kn::Unknown => None,
+            Kn::Tys(_) | Kn::Any => None,
         }
     }
 
@@ -183,14 +178,14 @@ impl<'a> ArgBuilder<'a> {
 
         let tag = self.tag().clone();
 
-        let in_ty = self.in_ty.take();
-        let out_ty = self.out_ty.take();
+        let Self { node, in_ty, out_ty, compiler, blk_in_ty, chgs } = self;
+
 
         match (in_ty, out_ty) {
-            (Unknown | Any | Tys(_), _) => Err(Error::unknown_arg_input_type(&tag)),
-            (_, Unknown | Any | Tys(_)) => Err(Error::unknown_arg_output_type(&tag)),
+            (Any | Tys(_), _) => Err(Error::unknown_arg_input_type(&tag)),
+            (_, Any | Tys(_)) => Err(Error::unknown_arg_output_type(&tag)),
             (Ty(in_ty), Ty(out_ty)) => {
-                let hold = Box::new(self.map_astnode_into_hold()?);
+                let hold = Box::new(Self::map_astnode_into_hold(node, compiler)?);
 
                 if hold.ty().as_ref() == &out_ty {
                     Ok(Argument {
@@ -206,7 +201,7 @@ impl<'a> ArgBuilder<'a> {
         }
     }
 
-    fn map_astnode_into_hold(self) -> Result<Hold> {
+    fn map_astnode_into_hold(node: ArgNode, compiler: &Compiler) -> Result<Hold> {
         use astgraph::AstNode::*;
         use astgraph::PoundTy as Pt;
 
@@ -216,9 +211,9 @@ impl<'a> ArgBuilder<'a> {
             lg,
             compiled_exprs,
             ..
-        } = self.compiler;
+        } = compiler;
 
-        match &ag[self.node.idx()] {
+        match &ag[node.idx()] {
             Op { op: _, blk: _ } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
@@ -247,7 +242,7 @@ impl<'a> ArgBuilder<'a> {
             } => {
                 // The input literal is a single step which takes the input and passes it straight
                 // through
-                let out_ty = tg[self.node.idx()]
+                let out_ty = tg[node.idx()]
                     .output
                     .ty()
                     .cloned()
@@ -258,12 +253,12 @@ impl<'a> ArgBuilder<'a> {
                     f: Arc::new(|input, cx| cx.done(input)),
                 }]);
                 #[cfg(debug_assertions)]
-                stack.add_types(&tg[self.node.idx()]);
+                stack.add_types(&tg[node.idx()]);
 
                 Ok(Hold::Expr(stack))
             }
             Var(tag) => {
-                lg.get_checked(self.node.idx(), tag.str(), tag)
+                lg.get_checked(node.idx(), tag.str(), tag)
                     .and_then(|local| match local {
                         Local::Var(var) => Ok(Hold::Var(var.clone())),
                         Local::Ptr { .. } => {
@@ -272,7 +267,7 @@ impl<'a> ArgBuilder<'a> {
                     })
             }
             Expr(tag) => compiled_exprs
-                .get(&self.node.index())
+                .get(&node.index())
                 .cloned()
                 .map(Hold::Expr)
                 .ok_or_else(|| Error::incomplete_expr_compilation(tag)),
@@ -315,23 +310,14 @@ impl<'a> ArgBuilder<'a> {
 
 #[derive(Debug)]
 enum Kn {
-    Unknown,
     Any,
     Ty(Type),
     Tys(TypesSet),
 }
 
-impl Kn {
-    /// Replace this Kn with `Unknown` and return what was there.
-    fn take(&mut self) -> Self {
-        std::mem::replace(self, Kn::Unknown)
-    }
-}
-
 impl From<&Knowledge> for Kn {
     fn from(kn: &Knowledge) -> Self {
         match kn {
-            Knowledge::Unknown => Kn::Unknown,
             Knowledge::Any => Kn::Any,
             Knowledge::Known(t) | Knowledge::Obliged(t) => Kn::Ty(t.clone()),
             Knowledge::Inferred(ts) => match ts.only() {
