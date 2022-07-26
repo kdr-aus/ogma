@@ -153,7 +153,7 @@ impl<'a> ArgBuilder<'a> {
 
     /// Asserts that the arguments input and output types are known, and if so, returns a concrete
     /// [`Argument`] with the ability to evaluate.
-    pub fn concrete(mut self) -> Result<Argument> {
+    pub fn concrete(self) -> Result<Argument> {
         // assert that if this is a variable type, the variable exists.
         // This is done to ensure sane errors are returned
         self.assert_var_exists()?;
@@ -162,7 +162,7 @@ impl<'a> ArgBuilder<'a> {
 
         let tag = self.tag().clone();
 
-        let Self { node, in_ty, out_ty, compiler, blk_in_ty, chgs } = self;
+        let Self { node, in_ty, out_ty, compiler, .. } = self;
 
 
         match (in_ty, out_ty) {

@@ -276,36 +276,6 @@ impl Error {
         }
     }
 
-    pub fn input_op(&self, op: &Tag) -> crate::Error {
-        use crate::common::err::*;
-
-        let x = format!("try annotating input type: `{{:<type> {} ... }}`", op);
-
-        match self {
-            Self::NoTypes => crate::Error {
-                cat: Category::Semantics,
-                desc: "no input types suit compiling this op".into(),
-                traces: trace(op, x),
-                ..Default::default()
-            },
-            Self::Ambiguous { ty1, ty2 } => crate::Error {
-                cat: Category::Semantics,
-                desc: "ambiguous inference. more than one input type can compile op".into(),
-                traces: vec![
-                    Trace::from_tag(
-                        op,
-                        format!(
-                            "this op can be compiled with `{}` and `{}` as input types",
-                            ty1, ty2
-                        ),
-                    ),
-                    Trace::from_tag(op, x),
-                ],
-                ..Default::default()
-            },
-        }
-    }
-
     pub fn input_expr(&self, expr: &Tag) -> crate::Error {
         use crate::common::err::*;
 
