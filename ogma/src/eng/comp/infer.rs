@@ -32,7 +32,7 @@ impl<'d> Compiler<'d> {
             // 3. has multiple valid types
             self.tg[n].input.is_multiple() &&
             // 4. is sealed, or contains no variables
-            (self.lg.sealed(n) || !self.ag.detect_var(OpNode(n)))
+            ((self.lg.sealed(n) && false) || !self.ag.detect_var(OpNode(n)))
         });
 
         let mut chgs = Vec::new();

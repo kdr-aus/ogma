@@ -325,6 +325,12 @@ impl LocalsGraph {
         let mut stack = self.graph.neighbors(node).collect::<Vec<_>>();
 
         while let Some(n) = stack.pop() {
+            // if already sealed, it would have already gone through this process, so do not keep
+            // walking down.
+            if self.graph[n].sealed {
+                continue;
+            }
+
             self.graph[n].sealed = true; // seal flow targets
 
             // if flow target is an expression, seal the expr's first op as well
@@ -339,36 +345,6 @@ impl LocalsGraph {
                 stack.extend(self.graph.neighbors(n)
                         // do not filter the next op though
                     .filter(|&n| ag[n].op().is_none()));
-            }
-        }
-
-        return;
-
-        dbg!(node);
-        let mut wlkr = self.graph.neighbors(node).detach();
-        while let Some(n) = wlkr.next_node(&self.graph) {
-            dbg!(n);
-
-            self.graph[n].sealed = true; // seal flow targets
-
-            // if flow target is an expression, seal the expr's first op as well
-            if let Some(e) = ag[n].expr().map(|_| ExprNode(n)) {
-                self.graph[e.first_op(ag).idx()].sealed = true;
-            }
-
-            // if the flow target is an Op (ie next block), seal the **argument** nodes
-            // NOTE: this is done since an Op should not have variable definition power that would
-            // influence the op's arguments...
-            if ag[n].op().is_some() {
-                let mut wlkr = self.graph.neighbors(n).detach();
-                while let Some(n) = wlkr
-                    .next_node(&self.graph)
-                        // do not filter the next op though
-                    .filter(|&n| ag[n].op().is_none())
-                {
-                    dbg!(n);
-                    self.graph[n].sealed = true;
-                }
             }
         }
     }

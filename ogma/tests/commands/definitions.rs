@@ -437,7 +437,16 @@ fn variable_not_defined_in_def() {
 
     let x = process_w_table("foo", defs).unwrap_err().to_string();
     println!("{x}");
-    assert_eq!(&x, "");
+    assert_eq!(&x, "Semantics Error: variable `col` does not exist
+--> shell:33
+ | def foo Table () { append { get $col } }
+ |                                  ^^^ `col` not in scope
+--> shell:0
+ | foo
+ | ^^^ invoked here
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+");
 
     // from bug 137
     process_definition(
@@ -463,5 +472,14 @@ fn variable_not_defined_in_def() {
     .unwrap_err()
     .to_string();
     println!("{x}");
-    assert_eq!(&x, "");
+    assert_eq!(&x, r#"Semantics Error: variable `col` does not exist
+--> shell:37
+ |     | let { fold 0 + { \ $row | get $col} | / $len } $mean
+ |                                      ^^^ `col` not in scope
+--> shell:12
+ | | map value sim-characteristics
+ |             ^^^^^^^^^^^^^^^^^^^ invoked here
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#);
 }
