@@ -29,26 +29,16 @@ impl<'d> Compiler<'d> {
             // 2. not compiled
             !self.compiled_ops.contains_key(&n.index()) &&
             // 3. has multiple valid types
-            self.tg[n].input.is_multiple() &&
-            // 4. the node is sealed, ensuring all locals have been set
-            self.lg.sealed(n)
+            self.tg[n].input.is_multiple()
         });
 
         let mut chgs = Vec::new();
-
-        // TODO
-        // I see a few issues with this type of ineference
-        // 1. It tries all types, it should only try the types reduced in the set
-        // 2. Compilation failure does not mean invalid type, failure could occurs because of some
-        //    other requirement (think unsealed variables)
-        // 3. If compilation failure were to ditctate the type to use, we could just reduce the
-        //    types set even further, rather than going through ambiguous error typing.
 
         for op in infer_nodes.into_iter().map(OpNode) {
             trial_inferred_types(op, self, &mut chgs);
         }
 
-        self.apply_graph_chgs(chgs.into_iter().map(Into::into))
+        self.apply_graph_chgs(chgs.into_iter())
     }
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
@@ -198,14 +188,35 @@ fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
         .tys()
         .expect("`op` is expected to be an inferred input node with multiple types");
 
-    for ty in set.iter() {
-        let compiled = compiler
-            .compile_block(op, ty.clone(), _sink1, _sink2)
-            .is_ok();
+    let cmps = set
+        .iter()
+        .cloned()
+        .map(|ty| {
+            let compiled = compiler
+                .compile_block(op, ty.clone(), _sink1, _sink2)
+                .is_ok();
+            (compiled, ty)
+        })
+        .collect::<Vec<_>>();
 
-        if !compiled {
-            chgs.push(RemoveInput(op.into(), ty.clone()).into());
-        }
+    // apply changes
+    if cmps.iter().filter(|(x, _)| *x).count() == 1 {
+        // only a single compilation succeeded, going to use this as an indication that this type
+        // is the correct one (a bit of an assumption)
+        chgs.push(
+            cmps.into_iter()
+                .find_map(|(x, ty)| x.then(|| ObligeInput(op.into(), ty)))
+                .unwrap()
+                .into(),
+        );
+    } else if compiler.lg.sealed(op.idx()) {
+        // if it is sealed, there won't be any variable updates which means this is pretty much
+        // as good as it gets for compilation, reduce the inferred set to what compiled
+        chgs.extend(
+            cmps.into_iter()
+                .filter_map(|(x, ty)| (!x).then(|| RemoveInput(op.into(), ty)))
+                .map(Into::into),
+        );
     }
 }
 
