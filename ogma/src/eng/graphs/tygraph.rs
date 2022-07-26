@@ -767,7 +767,8 @@ impl Knowledge {
             // An obliged source can flow into an unknown or any dest
             (Obliged(_), Any) => Ok(()),
             // An obliged source can flow into itself or lower ranked items if the types match
-            (Obliged(t1), Obliged(t2)) if t1 == t2 => Ok(()),
+            // It can also flow into a Known type, again if the types agree
+            (Obliged(t1), Known(t2) | Obliged(t2)) if t1 == t2 => Ok(()),
             (Obliged(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An inferred source can flow into an unknown or any dest

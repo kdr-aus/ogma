@@ -22,14 +22,17 @@ impl<'d> Compiler<'d> {
         // we get _lowest_ nodes that are:
         // 1. Op variants,
         // 2. are not compiled,
-        // 3. have unknown inputs
+        // 3. have multiple inputs
+        // 4. is sealed, or contains no variables
         let infer_nodes = self.ag.sinks(|n| {
             // 1. op variants
             self.ag[n].op().is_some() &&
             // 2. not compiled
             !self.compiled_ops.contains_key(&n.index()) &&
             // 3. has multiple valid types
-            self.tg[n].input.is_multiple()
+            self.tg[n].input.is_multiple() &&
+            // 4. is sealed, or contains no variables
+            (self.lg.sealed(n) || !self.ag.detect_var(OpNode(n)))
         });
 
         let mut chgs = Vec::new();
@@ -143,46 +146,34 @@ enum Error {
 }
 
 /// Tries to compile the `op` with each type in the inferred types set.
-/// Unsuccesful compilations will add a `RemoveInput` change into the `chgs`.
+/// Pushes `RemoveInput` if failed.
 fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
     let _sink1 = &mut Default::default();
-    let _sink2 = &mut Default::default();
 
     let set = compiler.tg[op.idx()]
         .input
         .tys()
         .expect("`op` is expected to be an inferred input node with multiple types");
 
-    let cmps = set
+    let failed = set
         .iter()
         .cloned()
-        .map(|ty| {
+        .filter(|ty| {
+            let infer_output = &mut false;
             let compiled = compiler
-                .compile_block(op, ty.clone(), _sink1, _sink2)
+                .compile_block(op, ty.clone(), _sink1, infer_output)
                 .is_ok();
-            (compiled, ty)
+            // remove input if failed compilation, and
+            // does not infer output
+            // we keep in if infer_output is true, since we need more information about types
+            // before we can compile this block, and removing input inferences will just reduce it
+            // to an empty set.
+            !compiled && !*infer_output
         })
-        .collect::<Vec<_>>();
+        .map(|ty| RemoveInput(op.into(), ty))
+        .map(Into::into);
 
-    // apply changes
-    if cmps.iter().filter(|(x, _)| *x).count() == 1 {
-        // only a single compilation succeeded, going to use this as an indication that this type
-        // is the correct one (a bit of an assumption)
-        chgs.push(
-            cmps.into_iter()
-                .find_map(|(x, ty)| x.then(|| ObligeInput(op.into(), ty)))
-                .unwrap()
-                .into(),
-        );
-    } else if compiler.lg.sealed(op.idx()) {
-        // if it is sealed, there won't be any variable updates which means this is pretty much
-        // as good as it gets for compilation, reduce the inferred set to what compiled
-        chgs.extend(
-            cmps.into_iter()
-                .filter_map(|(x, ty)| (!x).then(|| RemoveInput(op.into(), ty)))
-                .map(Into::into),
-        );
-    }
+    chgs.extend(failed)
 }
 
 fn input_via_expr_compilation<'a>(

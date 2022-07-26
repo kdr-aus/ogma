@@ -635,6 +635,15 @@ impl AstGraph {
         self.node_indices()
             .filter_map(move |n| self[n].def().map(|_| DefNode(n)))
     }
+
+    /// Detect if there are variable references below `op`.
+    pub fn detect_var(&self, op: OpNode) -> bool {
+        op.debug_assert_is_op_node(self);
+
+        self.sinks(|n| self[n].var().is_some())
+            .into_iter()
+            .any(|var| petgraph::algo::has_path_connecting(&self.0, op.idx(), var, None))
+    }
 }
 
 #[cfg(debug_assertions)]
