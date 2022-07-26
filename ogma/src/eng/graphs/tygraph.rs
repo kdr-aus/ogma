@@ -42,12 +42,10 @@ pub enum Flow {
 pub enum Chg {
     KnownInput(NodeIndex, Type),
     ObligeInput(NodeIndex, Type),
-    InferInput(NodeIndex, Type),
     RemoveInput(NodeIndex, Type),
     AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
-    InferOutput(NodeIndex, Type),
     AddEdge {
         src: NodeIndex,
         dst: NodeIndex,
@@ -66,12 +64,10 @@ impl Chg {
         *match self {
             Chg::KnownInput(i, _) => i,
             Chg::ObligeInput(i, _) => i,
-            Chg::InferInput(i, _) => i,
             Chg::RemoveInput(i, _) => i,
             Chg::AnyInput(i) => i,
             Chg::KnownOutput(i, _) => i,
             Chg::ObligeOutput(i, _) => i,
-            Chg::InferOutput(i, _) => i,
             Chg::AddEdge {
                 src,
                 dst: _,
@@ -588,12 +584,6 @@ impl TypeGraph {
             Chg::ObligeInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Obliged(ty)))
             }
-            Chg::InferInput(node, ty) => {
-                todo!("likely remove this, since no need to specify an 'inferred' change");
-                // TODO: should this return an error? usually `set` is called, which tests with
-                // `can_flow`
-                apply(self, node, |n| Ok(n.input.add_inferred(ty)))
-            }
             Chg::RemoveInput(node, ty) => apply(self, node, |n| Ok(n.input.rm_inferred(&ty))),
             Chg::AnyInput(node) => {
                 // Only set the input to be Any if the there is no knowledge about the type
@@ -608,11 +598,6 @@ impl TypeGraph {
             }
             Chg::ObligeOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
-            }
-            Chg::InferOutput(node, ty) => {
-                todo!("likely remove this, since no need to specify an 'inferred' change");
-                // TODO: see InferInput
-                apply(self, node, |n| Ok(n.output.add_inferred(ty)))
             }
             Chg::AddEdge { src, dst, flow } => {
                 // TODO edges_connecting is not implemented yet for StableGraph

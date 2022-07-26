@@ -105,13 +105,6 @@ impl<'a> ArgBuilder<'a> {
             Kn::Tys(_ts) => {
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
-//             Kn::Unknown => {
-//                 // There is currently no knowledge about the input type
-//                 // add to the TG that this node will be supplied a type `ty`
-//                 self.chgs
-//                     .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
-//                 Err(Error::unknown_arg_input_type(self.tag()))
-//             }
             Kn::Any => unreachable!("any is reset to Kn::Ty"),
         }
     }
@@ -144,18 +137,9 @@ impl<'a> ArgBuilder<'a> {
                     .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
-            Kn::Tys(ts) => {
-                // `ty` does not exist in the support types set
-                // NOTE: see the comment above
+            Kn::Tys(_ts) => {
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
-//             Kn::Unknown => {
-//                 // There is currently no knowledge about the output type
-//                 // add to the TG that this node is obliged to return the output type
-//                 self.chgs
-//                     .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
-//                 Err(Error::unknown_arg_output_type(self.tag()))
-//             }
             Kn::Any => unreachable!("logic error if output is Any type"),
         }
     }
