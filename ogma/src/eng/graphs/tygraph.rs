@@ -394,14 +394,11 @@ impl TypeGraph {
             .filter(|e| !completed_indices.contains(&e.index()))
             .collect::<Vec<_>>();
 
-        dbg!(&completed_indices);
-
         for edge in edges {
             let flow = &self[edge];
             let (from_idx, to_idx) = self
                 .edge_endpoints(edge)
                 .expect("edge would exist in graph");
-            dbg!(edge, (from_idx, to_idx));
             let from = &self[from_idx];
             let to = &self[to_idx];
             let known_out = from.output.has_ty();
@@ -414,8 +411,6 @@ impl TypeGraph {
                 flow: *flow,
                 conflict,
             };
-
-            dbg!(&flow);
 
             let x = match flow {
                 // Directed flow of input -> input
