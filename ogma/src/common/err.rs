@@ -213,7 +213,6 @@ impl Error {
             ),
             help_msg: Some(hlp),
             hard: true,
-            ..Self::default()
         }
     }
 
