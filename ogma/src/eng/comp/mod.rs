@@ -130,7 +130,7 @@ impl<'d> Compiler<'d> {
             self.resolve_tg()?;
 
             // NOTE turn on for debugging.
-            self._write_debug_report("debug-compiler.md");
+            // self._write_debug_report("debug-compiler.md");
 
             if self.populate_compiled_expressions() {
                 continue;

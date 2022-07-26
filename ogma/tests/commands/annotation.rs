@@ -54,12 +54,11 @@ fn success_03() {
     );
     assert_eq!(x, Ok(Value::Num(123.into())));
 
-    // TODO: once . operator uses type inference, this should be turned back on.
-    //     let x = process_w_table(
-    //         "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
-    //         defs,
-    //     );
-    //     assert_eq!(x, Ok(Value::Str(Str::new(""))));
+    let x = process_w_table(
+        "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
+        defs,
+    );
+    assert_eq!(x, Ok(Value::Str(Str::new("b"))));
 }
 
 #[test]

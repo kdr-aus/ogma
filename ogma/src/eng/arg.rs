@@ -102,9 +102,7 @@ impl<'a> ArgBuilder<'a> {
                     .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
-            Kn::Tys(_ts) => {
-                Err(Error::unknown_arg_input_type(self.tag()))
-            }
+            Kn::Tys(_ts) => Err(Error::unknown_arg_input_type(self.tag())),
             Kn::Any => unreachable!("any is reset to Kn::Ty"),
         }
     }
@@ -137,9 +135,7 @@ impl<'a> ArgBuilder<'a> {
                     .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
-            Kn::Tys(_ts) => {
-                Err(Error::unknown_arg_output_type(self.tag()))
-            }
+            Kn::Tys(_ts) => Err(Error::unknown_arg_output_type(self.tag())),
             Kn::Any => unreachable!("logic error if output is Any type"),
         }
     }
@@ -162,8 +158,13 @@ impl<'a> ArgBuilder<'a> {
 
         let tag = self.tag().clone();
 
-        let Self { node, in_ty, out_ty, compiler, .. } = self;
-
+        let Self {
+            node,
+            in_ty,
+            out_ty,
+            compiler,
+            ..
+        } = self;
 
         match (in_ty, out_ty) {
             (Any | Tys(_), _) => Err(Error::unknown_arg_input_type(&tag)),
@@ -241,15 +242,14 @@ impl<'a> ArgBuilder<'a> {
 
                 Ok(Hold::Expr(stack))
             }
-            Var(tag) => {
-                lg.get_checked(node.idx(), tag.str(), tag)
-                    .and_then(|local| match local {
-                        Local::Var(var) => Ok(Hold::Var(var.clone())),
-                        Local::Ptr { .. } => {
-                            unreachable!("a param argument should shadow the referencer arg node")
-                        }
-                    })
-            }
+            Var(tag) => lg
+                .get_checked(node.idx(), tag.str(), tag)
+                .and_then(|local| match local {
+                    Local::Var(var) => Ok(Hold::Var(var.clone())),
+                    Local::Ptr { .. } => {
+                        unreachable!("a param argument should shadow the referencer arg node")
+                    }
+                }),
             Expr(tag) => compiled_exprs
                 .get(&node.index())
                 .cloned()
