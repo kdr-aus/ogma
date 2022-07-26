@@ -324,6 +324,27 @@ expected `String`, found `Number`
     assert_eq!(x, Ok(Value::Num((0 + 1 - 30 + 100 + 100 + 100).into())));
 }
 
+#[test]
+fn get_test_with_default_as_another_get() {
+    let defs = &Definitions::new();
+    let x = process_w_table("fold 0 { \\ $row | get snd { get first } }", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{}", x);
+    assert_eq!(
+        &x,
+        r#"Semantics Error: `get` does not support `Nil` input data
+--> shell:28
+ | fold 0 { \ $row | get snd { get first } }
+ |                             ^^^
+--> help: use `get --help` to view requirements. consider implementing `def get`
+"#
+    );
+
+    let x = process_w_table("fold 0 { \\ $row | get snd $row.first:Num }", defs);
+    assert_eq!(x, Ok(Value::Num(100.into())));
+}
+
 // ------ Input ----------------------------------------------------------------
 #[test]
 fn input_help_msg() {
