@@ -420,11 +420,7 @@ impl<'d> Compiler<'d> {
             }
         }
 
-        dbg!(&chgs);
-
         let chgd = self.apply_graph_chgs(chgs.into_iter())?;
-
-        dbg!(chgd);
 
         (goto_resolve | chgd)
             .then(|| ())

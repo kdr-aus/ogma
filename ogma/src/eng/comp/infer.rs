@@ -57,8 +57,6 @@ impl<'d> Compiler<'d> {
                 .filter(|n| self.tg[n.idx()].input.is_multiple())
                 .collect::<HashSet<_>>();
 
-            dbg!(&set);
-
             set.iter()
                 .copied()
                 // get shallowest node if it shows up in path only once
@@ -71,8 +69,6 @@ impl<'d> Compiler<'d> {
                 })
                 .collect::<Vec<_>>()
         };
-
-        dbg!(&infer_nodes);
 
         let mut success = false;
         let mut err = None;
