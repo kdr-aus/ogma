@@ -774,4 +774,22 @@ mod tests {
         assert_eq!(ExprNode(21.into()).parent(g), Some(OpNode(7.into())));
         assert_eq!(ExprNode(25.into()).parent(g), Some(OpNode(24.into())));
     }
+
+    #[test]
+    fn variable_detection() {
+        let (ag, _tg) = init_graphs("\\ 3 | let $a | + { - 4 } | - $a { > 3 }");
+
+        dbg!(&ag);
+
+        assert!(!ag.detect_var(OpNode(1.into()))); // \ 3
+        assert!(ag.detect_var(OpNode(3.into()))); // let
+        assert!(!ag.detect_var(OpNode(5.into()))); // +
+        assert!(ag.detect_var(OpNode(7.into()))); // - (second one)
+        assert!(!ag.detect_var(OpNode(10.into()))); // -
+        assert!(ag.detect_var(OpNode(12.into()))); // >
+        assert!(ag.detect_var(OpNode(23.into()))); // cmp $rhs
+        assert!(ag.detect_var(OpNode(25.into()))); // =
+        assert!(!ag.detect_var(OpNode(27.into()))); // Ord::Gt
+        assert!(ag.detect_var(OpNode(36.into()))); // eq $rhs
+    }
 }

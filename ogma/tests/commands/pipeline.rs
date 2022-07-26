@@ -474,6 +474,18 @@ fn last_testing() {
     assert_eq!(x, Ok(Value::Str("o".into())));
 }
 
+#[test]
+fn last_testing_bug_116() {
+    let defs = &Definitions::new();
+
+    let x = process_w_nil(
+        r#"ls | grp name | fold 0 { \$row | get value | last get:Num size }"#,
+        defs,
+    );
+    dbg!(&x);
+    assert!(matches!(x, Ok(Value::Num(_))));
+}
+
 // ------ Length ---------------------------------------------------------------
 #[test]
 fn len_help_msg() {
