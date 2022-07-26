@@ -142,41 +142,6 @@ enum Error {
     Ambiguous { ty1: Type, ty2: Type },
 }
 
-fn input_via_block_compilation(
-    op: OpNode,
-    compiler: &Compiler,
-) -> std::result::Result<Type, Error> {
-    // TODO this should be changed to use the nodes inferred types, not all types
-    // NOTE - the types are returned in arbitary order
-    // if we wanted to make this deterministic we could sort on name
-    let types = compiler.defs.types().iter();
-
-    let mut inferred = None;
-
-    let _sink1 = &mut Default::default();
-    let _sink2 = &mut Default::default();
-
-    for (_name, ty) in types {
-        let compiled = compiler
-            .compile_block(op, ty.clone(), _sink1, _sink2)
-            .is_ok();
-
-        if compiled {
-            match inferred.take() {
-                Some(ty1) => {
-                    return Err(Error::Ambiguous {
-                        ty1,
-                        ty2: ty.clone(),
-                    });
-                }
-                None => inferred = Some(ty.clone()),
-            }
-        }
-    }
-
-    inferred.ok_or(Error::NoTypes)
-}
-
 /// Tries to compile the `op` with each type in the inferred types set.
 /// Unsuccesful compilations will add a `RemoveInput` change into the `chgs`.
 fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
@@ -293,8 +258,6 @@ impl Error {
                 traces: trace(op, x),
                 ..Default::default()
             },
-            // TODO make this error better,
-            // give a code example of type annotation
             Self::Ambiguous { ty1, ty2 } => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one output type can compile op".into(),

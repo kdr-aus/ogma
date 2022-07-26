@@ -289,18 +289,7 @@ fn multiline_errs() {
     .unwrap_err()
     .to_string();
     println!("{}", x);
-    return;
 
-    // TODO turn this test back on
-    // Currently the error message asks to specify output type.
-    // This is not the issue, the error below is what is expected.
-    // The reasons is that the _op_ targeted inference is skipping `+` since it is not sealed yet
-    // **However**, it would be feasible to compile `+` with the inference of `Num` and get back
-    // the informative error message, there just needs to be a way to say whether sealing is
-    // required or not.
-    // A very obvious check would be if any of the arguments are variable types
-    // It gets more complicated as nested expresssions might be involved, but the recursive paths
-    // can be worked out and determined.
     assert_eq!(
         &x,
         "Typing Error: Type resolution failed. Conflicting obligation type
