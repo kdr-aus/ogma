@@ -18,6 +18,7 @@ pub(crate) use self::{
     annotate::types as annotate_types,
     arg::Argument,
     eval::{CodeInjector, Context, Eval},
+    graphs::tygraph::AnonTypes,
     var::{Environment, Local, Variable},
 };
 
@@ -128,11 +129,12 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        assert_eq!(size_of::<Compiler>(), 400); // oomph!
-                                                // NOTE
-                                                // Although block sizing is large, it would not really be a hot spot, and the cost of
-                                                // refactoring somewhat outweighs any benefit, without doing any proper profiling to
-                                                // support it.
+        assert_eq!(size_of::<Compiler>(), 408); // oomph! this is why we hide it behind Box<Compiler>
+
+        // NOTE
+        // Although block sizing is large, it would not really be a hot spot, and the cost of
+        // refactoring somewhat outweighs any benefit, without doing any proper profiling to
+        // support it.
         assert_eq!(size_of::<Block>(), 96 + size_of::<Option<Type>>()); // `output_ty` is only on debug builds
         assert_eq!(size_of::<Step>(), 32);
     }

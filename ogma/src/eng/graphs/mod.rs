@@ -49,6 +49,7 @@ impl From<DefNode> for CmdNode {
     }
 }
 
+#[derive(Debug)]
 pub enum Chg {
     Tg(tygraph::Chg),
     Lg(locals_graph::Chg),
@@ -123,7 +124,7 @@ mod tests {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
         let (ag, _) = astgraph::init(expr, defs).unwrap();
-        let tg = TypeGraph::build(&ag);
+        let tg = TypeGraph::build(&ag, defs.types());
         (ag, tg)
     }
 
@@ -192,8 +193,8 @@ mod tests {
 
         use tygraph::{Knowledge, Node};
         let def = || Node {
-            input: Knowledge::Unknown,
-            output: Knowledge::Unknown,
+            input: TypesSet::full(Definitions::new().types()).into(),
+            output: TypesSet::full(Definitions::new().types()).into(),
         };
 
         assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
@@ -291,8 +292,8 @@ mod tests {
         // Type graph nodes
         use tygraph::{Flow, Knowledge, Node};
         let def = || Node {
-            input: Knowledge::Unknown,
-            output: Knowledge::Unknown,
+            input: TypesSet::full(Definitions::new().types()).into(),
+            output: TypesSet::full(Definitions::new().types()).into(),
         };
 
         assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
@@ -439,8 +440,8 @@ mod tests {
         // Type graph nodes
         use tygraph::{Flow, Knowledge, Node};
         let def = || Node {
-            input: Knowledge::Unknown,
-            output: Knowledge::Unknown,
+            input: TypesSet::full(&Definitions::new().types()).into(),
+            output: TypesSet::full(&Definitions::new().types()).into(),
         };
 
         assert_eq!(tg.edge_count(), 9);
@@ -663,7 +664,7 @@ mod tests {
             tg.node_weight(idx),
             Some(&Node {
                 input: Knowledge::Known(Type::Nil),
-                output: Knowledge::Unknown
+                output: TypesSet::full(defs.types()).into(),
             })
         ); // 3
     }

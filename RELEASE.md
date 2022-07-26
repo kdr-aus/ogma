@@ -14,3 +14,5 @@
 - Improve help messages and back end def input type matching
     (https://github.com/kdr-aus/ogma/pull/141)
 - Introduce `TypesSet`s into the inferencer (https://github.com/kdr-aus/ogma/pull/144)
+- Fully move to `TypesSets` for more robust type inference
+    (https://github.com/kdr-aus/ogma/pull/145)

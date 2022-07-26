@@ -5,10 +5,17 @@ impl<'d> Compiler<'d> {
     /// Resolve the type graph.
     pub fn resolve_tg(&mut self) -> Result<()> {
         loop {
-            match self.tg.flow_types(&mut self.flowed_edges) {
-                Ok(true) => (), // keep going!
-                Ok(false) => break Ok(()),
-                Err(reserr) => break Err(self.ty_resolution_err(reserr)),
+            self.tg.intersect_inferred_sets(&self.flowed_edges)?;
+
+            self.tg.upgrade_singleton_inferred_sets();
+
+            let x = self
+                .tg
+                .flow_types(&mut self.flowed_edges)
+                .map_err(|e| self.ty_resolution_err(e))?;
+
+            if !x {
+                break Ok(());
             }
         }
     }
@@ -108,13 +115,22 @@ impl<'d> Compiler<'d> {
             }
             (flow, UnmatchedInferred { src, dst }) => {
                 let from_trace = match flow {
-                    II | IO => Trace::from_tag(from, format!("this node has input type `{}`", src)),
+                    II | IO => Trace::from_tag(
+                        from,
+                        src.only()
+                            .map(|src| format!("this node has input type `{}`", src))
+                            .unwrap_or_else(|| format!("this node supports input types: {}", src)),
+                    ),
                     OI | OO => Trace::from_tag(from, format!("this node returns a `{}`", src)),
                 };
                 let to_trace = match flow {
                     II | IO => Trace::from_tag(
                         to,
-                        format!("but this node is inferred to use input `{}`", dst),
+                        dst.only()
+                            .map(|dst| format!("but this node is inferred to use input `{}`", dst))
+                            .unwrap_or_else(|| {
+                                format!("but this node is inferred to use inputs: {}", dst)
+                            }),
                     ),
                     OI | OO => Trace::from_tag(
                         to,
@@ -140,8 +156,14 @@ impl<'d> Compiler<'d> {
 
         chgs.map(|c| match c {
             Tg(c) => {
-                let node = c.node();
-                self.tg.apply_chg(c).map_err(|e| self.conflict_err(node, e))
+                if c.is_anon_ty() {
+                    let x = self.tg.apply_chg(c);
+                    debug_assert!(x.is_ok(), "anon type applications should never fail");
+                    Ok(x.unwrap())
+                } else {
+                    let node = c.node();
+                    self.tg.apply_chg(c).map_err(|e| self.conflict_err(node, e))
+                }
             }
             Lg(c) => Ok(self.lg.apply_chg(c)),
         })
@@ -184,7 +206,11 @@ impl<'d> Compiler<'d> {
             }
             UnmatchedInferred { src, dst: _ } => Trace::from_tag(
                 node,
-                format!("this node could have any of these types applied to it: {src}"),
+                src.only()
+                    .map(|src| format!("this node has input type `{src}`"))
+                    .unwrap_or_else(|| {
+                        format!("this node could have any of these types applied to it: {src}")
+                    }),
             ),
         };
 
@@ -203,7 +229,9 @@ impl<'d> Compiler<'d> {
             }
             UnmatchedInferred { src: _, dst } => Some(Trace::from_tag(
                 node,
-                format!("but it is already inferred to use type `{}`", dst),
+                dst.only()
+                    .map(|dst| format!("but it is inferred to use type `{dst}`"))
+                    .unwrap_or_else(|| format!("but it is inferred to use only types: {dst}")),
             )),
         };
 

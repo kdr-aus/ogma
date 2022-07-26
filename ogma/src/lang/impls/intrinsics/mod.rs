@@ -4,7 +4,7 @@ use ::libs::{divvy::Str, rayon::prelude::*};
 use ::paste::paste;
 use ::table::Entry;
 use ast::{Location, Tag};
-use eng::{Block, Context, Step};
+use eng::{AnonTypes, Block, Context, Step};
 use lang::{help::*, impls::OperationCategory};
 use std::{
     convert::{TryFrom, TryInto},
@@ -350,6 +350,7 @@ impl<T> BinaryOp<T> {
         ty: &Type,
         out_ty: &Type,
         defs: &Definitions,
+        anon_tys: &AnonTypes,
         value_trns: T,
     ) -> Result<Box<Self>>
     where
@@ -363,7 +364,7 @@ impl<T> BinaryOp<T> {
 
         let rhs = injector.new_var("rhs", ty.clone());
 
-        let injector = injector.compile(ty.clone(), defs)?;
+        let injector = injector.compile(ty.clone(), defs, anon_tys)?;
 
         if injector.out_ty() != out_ty {
             let oty = injector.out_ty();
@@ -411,6 +412,7 @@ impl BinaryOp<()> {
             ty,
             &ordty,
             blk.defs(),
+            blk.compiler().tg().anon_tys(),
             Box::new(cnv_value_to_ord) as Box<_>,
         )
         .map_err(|e| {

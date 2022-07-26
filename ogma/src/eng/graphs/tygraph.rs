@@ -1,9 +1,12 @@
 use super::*;
+use crate::lang::types::Types;
 use astgraph::*;
 use petgraph::prelude::*;
-use std::ops::Deref;
+use std::{iter, ops::Deref, rc::Rc};
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
+
+pub type AnonTypes = TypesSet;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Node {
@@ -13,15 +16,14 @@ pub struct Node {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Knowledge {
-    Unknown, // TODO remove this in favour of _reducing_ types set
     Any,
     Known(Type),
     Obliged(Type),
     Inferred(TypesSet),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct TypesSet(HashSet<Type>);
+#[derive(Debug, PartialEq, Eq)]
+pub struct TypesSet(Rc<HashSet<Type>>);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Flow {
@@ -40,33 +42,38 @@ pub enum Flow {
 pub enum Chg {
     KnownInput(NodeIndex, Type),
     ObligeInput(NodeIndex, Type),
-    InferInput(NodeIndex, Type),
+    RemoveInput(NodeIndex, Type),
     AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
-    InferOutput(NodeIndex, Type),
     AddEdge {
         src: NodeIndex,
         dst: NodeIndex,
         flow: Flow,
     },
+    /// Adds an anonymous type into the type graph, updating all inferred nodes.
+    AnonTy(Type),
 }
 
 impl Chg {
+    pub fn is_anon_ty(&self) -> bool {
+        matches!(self, Chg::AnonTy(_))
+    }
+
     pub fn node(&self) -> NodeIndex {
         *match self {
             Chg::KnownInput(i, _) => i,
             Chg::ObligeInput(i, _) => i,
-            Chg::InferInput(i, _) => i,
+            Chg::RemoveInput(i, _) => i,
             Chg::AnyInput(i) => i,
             Chg::KnownOutput(i, _) => i,
             Chg::ObligeOutput(i, _) => i,
-            Chg::InferOutput(i, _) => i,
             Chg::AddEdge {
                 src,
                 dst: _,
                 flow: _,
             } => src,
+            Chg::AnonTy(_) => unreachable!("`Chg::node` is not available for `Chg::AnonTy`"),
         }
     }
 }
@@ -102,29 +109,42 @@ pub struct ResolutionError {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct TypeGraph(TypeGraphInner);
+pub struct TypeGraph {
+    g: TypeGraphInner,
+    anon_tys: AnonTypes,
+}
 
 // NOTE that we do not expose a mutable deref, keep mutation contained in this module.
 impl Deref for TypeGraph {
     type Target = TypeGraphInner;
     fn deref(&self) -> &TypeGraphInner {
-        &self.0
+        &self.g
     }
 }
 
 impl TypeGraph {
+    pub fn anon_tys(&self) -> &AnonTypes {
+        &self.anon_tys
+    }
+
     /// Builds a type graph based off the ast graph.
-    pub fn build(ast_graph: &AstGraph) -> Self {
-        let mut g = TypeGraph(ast_graph.map(
+    pub fn build(ast_graph: &AstGraph, tys: &Types) -> Self {
+        let full = TypesSet::full(tys);
+
+        let mut g = ast_graph.map(
             |_, _| Node {
-                input: Knowledge::Unknown,
-                output: Knowledge::Unknown,
+                input: Knowledge::Inferred(full.clone()),
+                output: Knowledge::Inferred(full.clone()),
             },
             |_, _| Flow::OI,
-        ));
+        );
 
-        g.0.clear_edges(); // remove all the edges
-        g
+        g.clear_edges(); // remove all the edges
+
+        Self {
+            g,
+            anon_tys: AnonTypes::empty(),
+        }
     }
 
     /// Apply _known_ types from the AST nodes.
@@ -145,17 +165,17 @@ impl TypeGraph {
                 Expr(_) => None,
             };
 
-            if let Some(ty) = ty.map(Knowledge::Known) {
+            if let Some(ty) = ty {
                 let current = self
-                    .0
+                    .g
                     .node_weight_mut(nidx)
                     .expect("Type and Ast graphs should have same indices");
                 assert!(
-                    matches!(current.output, Knowledge::Unknown),
-                    "overwriting a non-unknown type node"
+                    matches!(&current.output, Knowledge::Inferred(ts) if ts.contains(&ty)),
+                    "only overwrite inferred with the type in the set"
                 );
                 current.input = Knowledge::Any; // all these nodes take any input
-                current.output = ty;
+                current.output = Knowledge::Known(ty);
             }
         }
 
@@ -166,7 +186,7 @@ impl TypeGraph {
             .map(|e| (e, ag.edge_endpoints(e).expect("should exist").1))
         {
             if let Some(ty) = ag[e].keyed().cloned() {
-                self.0[node].input = Knowledge::Known(ty);
+                self.g[node].input = Knowledge::Known(ty);
             }
         }
     }
@@ -203,7 +223,7 @@ impl TypeGraph {
         for &expr in &exprs {
             if let Some(op) = op_neighbors(expr).last() {
                 // last, since this would have been the first op to add
-                self.0.add_edge(expr, op, Flow::II); // input -> input
+                self.g.add_edge(expr, op, Flow::II); // input -> input
             }
         }
 
@@ -211,7 +231,7 @@ impl TypeGraph {
         for &expr in &exprs {
             if let Some(op) = op_neighbors(expr).next() {
                 // first, since this would have been the last op to add
-                self.0.add_edge(op, expr, Flow::OO); // output -> output
+                self.g.add_edge(op, expr, Flow::OO); // output -> output
             }
         }
 
@@ -221,7 +241,7 @@ impl TypeGraph {
             let tos = op_neighbors(expr); // starts at last op
 
             for (from, to) in froms.zip(tos) {
-                self.0.add_edge(from, to, Flow::OI); // output -> input
+                self.g.add_edge(from, to, Flow::OI); // output -> input
             }
         }
 
@@ -234,8 +254,8 @@ impl TypeGraph {
             _ => None,
         }) {
             let op = poundi.op(ag);
-            self.0.add_edge(op.idx(), poundi.idx(), Flow::II); // op -> arg: II
-            self.0.add_edge(op.idx(), poundi.idx(), Flow::IO); // op -> arg: IO
+            self.g.add_edge(op.idx(), poundi.idx(), Flow::II); // op -> arg: II
+            self.g.add_edge(op.idx(), poundi.idx(), Flow::IO); // op -> arg: IO
         }
 
         // defs
@@ -253,9 +273,9 @@ impl TypeGraph {
         let expr = defnode.expr(ag).idx();
 
         // flow the input of the Def into the expression
-        self.0.add_edge(def, expr, Flow::II);
+        self.g.add_edge(def, expr, Flow::II);
         // flow the output of the expression into the Def
-        self.0.add_edge(expr, def, Flow::OO);
+        self.g.add_edge(expr, def, Flow::OO);
 
         let is_keyed_none = ag[ag.find_edge(op, def).expect("edge from op to def")].keyed_none();
         let all_defs = ag
@@ -268,13 +288,13 @@ impl TypeGraph {
         // can only link op to def if there is no type key
         if is_keyed_none {
             // flow the input of the op into the input of this Def
-            self.0.add_edge(op, def, Flow::II);
+            self.g.add_edge(op, def, Flow::II);
         }
 
         // can only link def to op if there is no type key or if only def
         if is_keyed_none || is_only_def {
             // flow the output of the Def into the Op
-            self.0.add_edge(def, op, Flow::OO);
+            self.g.add_edge(def, op, Flow::OO);
         }
 
         if all_defs.iter().all(|n| ag[*n].def().is_some()) {
@@ -317,15 +337,41 @@ impl TypeGraph {
 
             if !self.contains_edge(op.idx(), arg.idx()) {
                 chgd = true;
-                self.0.add_edge(op.idx(), arg.idx(), Flow::II);
+                self.g.add_edge(op.idx(), arg.idx(), Flow::II);
             }
         }
 
         chgd
     }
 
+    /// Reduces inferred types sets given the viable input types for linked definitions.
+    pub fn reduce_inferred_sets_given_def_constraints(&mut self, ag: &AstGraph) {
+        for op in ag.op_nodes() {
+            // only reduce where multiple inputs
+            if !self[op.idx()].input.is_multiple() {
+                continue;
+            }
+
+            let keys = op.cmds(ag).fold(Some(TypesSet::empty()), |set, cmd| {
+                let e = &ag[ag.find_edge(op.idx(), cmd.idx()).unwrap()];
+                match (set, e.keyed()) {
+                    (Some(mut s), Some(t)) => {
+                        s.insert(t.clone());
+                        Some(s)
+                    }
+                    // if keyed on `None`, then we cannot reduce set
+                    _ => None,
+                }
+            });
+
+            if let Some(contrained) = keys {
+                self.g[op.idx()].input = contrained.into();
+            }
+        }
+    }
+
     pub fn set_root_input_ty(&mut self, ty: Type) {
-        if let Some(n) = self.0.node_weight_mut(0.into()) {
+        if let Some(n) = self.g.node_weight_mut(0.into()) {
             n.input = Knowledge::Known(ty);
         }
     }
@@ -348,15 +394,18 @@ impl TypeGraph {
             .filter(|e| !completed_indices.contains(&e.index()))
             .collect::<Vec<_>>();
 
+        dbg!(&completed_indices);
+
         for edge in edges {
             let flow = &self[edge];
             let (from_idx, to_idx) = self
                 .edge_endpoints(edge)
                 .expect("edge would exist in graph");
+            dbg!(edge, (from_idx, to_idx));
             let from = &self[from_idx];
-            let to = &self.0[to_idx];
-            let known_out = from.output.ty().is_some();
-            let known_in = from.input.ty().is_some();
+            let to = &self[to_idx];
+            let known_out = from.output.has_ty();
+            let known_in = from.input.has_ty();
             let any_in = from.input.is_any();
 
             let reserr = |conflict| ResolutionError {
@@ -365,6 +414,8 @@ impl TypeGraph {
                 flow: *flow,
                 conflict,
             };
+
+            dbg!(&flow);
 
             let x = match flow {
                 // Directed flow of input -> input
@@ -387,19 +438,13 @@ impl TypeGraph {
                     from.output.can_flow(&to.output).map_err(reserr)?;
                     Some((Update::ToOutput, from.output.clone()))
                 }
+
                 // Backpropagate flow if to.input:Obliged | Known -> from.input
                 Flow::II if matches!(to.input, Knowledge::Obliged(_) | Knowledge::Known(_)) => {
                     to.input.can_flow(&from.input).map_err(reserr)?;
                     Some((Update::FromInput, to.input.clone()))
                 }
-                // Backpropagate flow if to.input:Inferred -> from.input
-                // Only propagate if can_flow.
-                Flow::II
-                    if matches!(to.input, Knowledge::Inferred(_))
-                        && to.input.can_flow(&from.input).is_ok() =>
-                {
-                    Some((Update::FromInput, to.input.clone()))
-                }
+
                 // Flow input -> input, allowing Any to flow through
                 // NOTE: Any should only be allowed on input types
                 Flow::II if any_in => {
@@ -411,9 +456,9 @@ impl TypeGraph {
 
             if let Some((update, with)) = x {
                 match update {
-                    Update::ToInput => self.0[to_idx].input = with,
-                    Update::ToOutput => self.0[to_idx].output = with,
-                    Update::FromInput => self.0[from_idx].input = with,
+                    Update::ToInput => self.g[to_idx].input = with,
+                    Update::ToOutput => self.g[to_idx].output = with,
+                    Update::FromInput => self.g[from_idx].input = with,
                 }
 
                 completed_indices.insert(edge.index());
@@ -422,6 +467,89 @@ impl TypeGraph {
         }
 
         Ok(chgd)
+    }
+
+    /// Reduces the inferred types sets to be the intersection between two sets joined by an edge.
+    ///
+    /// Returns if the graph was changed.
+    /// If an intersection results in an empty set, an error is returned.
+    pub fn intersect_inferred_sets(&mut self, completed_indices: &IndexSet) -> Result<bool> {
+        fn int(a: &Knowledge, b: &Knowledge) -> Option<TypesSet> {
+            match (a, b) {
+                (Knowledge::Inferred(a), Knowledge::Inferred(b)) => {
+                    Some(a.intersection(b)).filter(|i| i != a)
+                }
+                _ => None,
+            }
+        }
+
+        let edges = self
+            .edge_indices()
+            .filter(|e| !completed_indices.contains(&e.index()))
+            .collect::<Vec<_>>();
+
+        let mut chgd = false;
+
+        for edge in edges {
+            let flow = &self[edge];
+            let (from_idx, to_idx) = self
+                .edge_endpoints(edge)
+                .expect("edge would exist in graph");
+            let from = &self[from_idx];
+            let to = &self[to_idx];
+
+            match flow {
+                Flow::II => match int(&from.input, &to.input) {
+                    Some(i) => {
+                        self.g[from_idx].input = i.clone().into();
+                        self.g[to_idx].input = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                },
+                Flow::IO => match int(&from.input, &to.output) {
+                    Some(i) => {
+                        self.g[from_idx].input = i.clone().into();
+                        self.g[to_idx].output = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                },
+                Flow::OI => match int(&from.output, &to.input) {
+                    Some(i) => {
+                        self.g[from_idx].output = i.clone().into();
+                        self.g[to_idx].input = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                },
+                Flow::OO => match int(&from.output, &to.output) {
+                    Some(i) => {
+                        self.g[from_idx].output = i.clone().into();
+                        self.g[to_idx].output = i.into();
+                        chgd = true;
+                    }
+                    None => (),
+                },
+            }
+        }
+
+        Ok(chgd)
+    }
+
+    /// Upgrades any inferred knowledge which only have a single type to be `Obliged` to that type.
+    pub fn upgrade_singleton_inferred_sets(&mut self) -> bool {
+        let mut chgd = false;
+
+        for n in self
+            .iter_kn_mut()
+            .filter(|x| matches!(x, Knowledge::Inferred(t) if t.is_single()))
+        {
+            *n = Knowledge::Obliged(n.ty().expect("will exist").clone());
+            chgd = true;
+        }
+
+        chgd
     }
 
     /// Apply the `chg` to the graph. Returns if the graph is actually altered (if the `chg` has
@@ -442,7 +570,7 @@ impl TypeGraph {
         where
             F: FnOnce(&mut Node) -> R,
         {
-            if let Some(node) = tg.0.node_weight_mut(node) {
+            if let Some(node) = tg.g.node_weight_mut(node) {
                 setfn(node)
             } else {
                 Ok(false)
@@ -456,11 +584,7 @@ impl TypeGraph {
             Chg::ObligeInput(node, ty) => {
                 apply(self, node, |n| set(&mut n.input, Knowledge::Obliged(ty)))
             }
-            Chg::InferInput(node, ty) => {
-                // TODO: should this return an error? usually `set` is called, which tests with
-                // `can_flow`
-                apply(self, node, |n| Ok(n.input.add_inferred(ty)))
-            }
+            Chg::RemoveInput(node, ty) => apply(self, node, |n| Ok(n.input.rm_inferred(&ty))),
             Chg::AnyInput(node) => {
                 // Only set the input to be Any if the there is no knowledge about the type
                 if self[node].input.ty().is_none() {
@@ -475,24 +599,41 @@ impl TypeGraph {
             Chg::ObligeOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
             }
-            Chg::InferOutput(node, ty) => {
-                // TODO: see InferInput
-                apply(self, node, |n| Ok(n.output.add_inferred(ty)))
-            }
             Chg::AddEdge { src, dst, flow } => {
                 // TODO edges_connecting is not implemented yet for StableGraph
                 // can be replicated with a filter
                 let chgd = self
-                    .0
+                    .g
                     .edges(src)
                     .filter(|e| e.target() == dst)
                     .all(|e| e.weight() != &flow);
                 if chgd {
-                    self.0.add_edge(src, dst, flow);
+                    self.g.add_edge(src, dst, flow);
                 }
                 Ok(chgd)
             }
+            Chg::AnonTy(ty) => {
+                let mut chgd = false;
+                for n in self.iter_kn_mut().filter_map(|x| match x {
+                    Knowledge::Inferred(x) => Some(x),
+                    _ => None,
+                }) {
+                    let x = n.insert(ty.clone());
+                    chgd |= x;
+                }
+
+                self.anon_tys.insert(ty);
+
+                Ok(chgd)
+            }
         }
+    }
+
+    fn iter_kn_mut(&mut self) -> impl Iterator<Item = &mut Knowledge> {
+        self.g.node_weights_mut().flat_map(|n| {
+            let Node { input, output } = n;
+            iter::once(input).chain(iter::once(output))
+        })
     }
 }
 
@@ -531,11 +672,12 @@ impl Node {
 }
 
 impl Knowledge {
-    /// If the type is known, returns `Some`.
-    pub fn known(&self) -> Option<&Type> {
+    /// Returns if there is a single known type.
+    pub fn has_ty(&self) -> bool {
         match self {
-            Knowledge::Known(ty) => Some(ty),
-            _ => None,
+            Knowledge::Known(_) | Knowledge::Obliged(_) => true,
+            Knowledge::Inferred(ts) => ts.is_single(),
+            _ => false,
         }
     }
 
@@ -550,9 +692,18 @@ impl Knowledge {
         }
     }
 
-    /// `Knowledge::Unknown` variant.
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, Knowledge::Unknown)
+    /// Returns if there are _more than one_ valid types (in the inferred state).
+    pub fn is_multiple(&self) -> bool {
+        matches!(self, Knowledge::Inferred(ts) if ts.len() > 1)
+    }
+
+    /// If the knowledge is an inferred [`TypesSet`], returns a reference to it.
+    /// **Note that it only returns `Some` if the types set has _more than one element_.**
+    pub fn tys(&self) -> Option<&TypesSet> {
+        match self {
+            Knowledge::Inferred(x) if x.len() > 1 => Some(x),
+            _ => None,
+        }
     }
 
     /// `Knowledge::Any` variant.
@@ -569,12 +720,24 @@ impl Knowledge {
         match self {
             Known(_) | Obliged(_) => false,
             Inferred(ts) => ts.insert(ty),
-            Any | Unknown => {
+            Any => {
                 let mut set = TypesSet::empty();
                 set.insert(ty);
                 *self = Inferred(set);
                 true
             }
+        }
+    }
+
+    /// Removes `ty` from the `Inferred` [`TypesSet`].
+    ///
+    /// Returns if `self` was actually changed, since this is dependent on the state of the
+    /// knowledge.
+    pub fn rm_inferred(&mut self, ty: &Type) -> bool {
+        use Knowledge::*;
+        match self {
+            Known(_) | Obliged(_) | Any => false,
+            Inferred(ts) => ts.remove(ty),
         }
     }
 
@@ -595,28 +758,25 @@ impl Knowledge {
         use Knowledge::*;
 
         match (self, into) {
-            // Unknown source cannot flow into anything!
-            (Unknown, _) => Err(UnknownSrc),
-
             // A known source can flow into an unknown or any dest
-            (Known(_), Unknown | Any) => Ok(()),
+            (Known(_), Any) => Ok(()),
             // A known source can flow into itself or lower ranked items if the types match
             (Known(t1), Known(t2) | Obliged(t2)) if t1 == t2 => Ok(()),
             (Known(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An obliged source can flow into an unknown or any dest
-            (Obliged(_), Unknown | Any) => Ok(()),
+            (Obliged(_), Any) => Ok(()),
             // An obliged source can flow into itself or lower ranked items if the types match
             (Obliged(t1), Obliged(t2)) if t1 == t2 => Ok(()),
             (Obliged(t1), Inferred(ts)) if ts.contains(t1) => Ok(()),
 
             // An inferred source can flow into an unknown or any dest
-            (Inferred(_), Unknown | Any) => Ok(()),
+            (Inferred(_), Any) => Ok(()),
             // An inferred source can flow into itself if the types match
             (Inferred(t1), Inferred(t2)) if t1 == t2 => Ok(()),
 
-            // An any source can flow into an Any or Unknown dest
-            (Any, Any | Unknown) => Ok(()),
+            // An any source can flow into an Any or Inferred dest
+            (Any, Any | Inferred(_)) => Ok(()),
 
             // Cannot flow if two known unmatching types
             (Known(t1), Known(t2)) if t1 != t2 => Err(ConflictingKnown {
@@ -638,7 +798,7 @@ impl Knowledge {
             // NOTE: this would need to clear _all_ Inferred type graph entries.
             // NOTE: probably do this later if it is found that unreasonable errors are being
             // returned.
-            (Known(t1), Inferred(ts)) if !ts.contains(t1) => Err(UnmatchedInferred {
+            (Known(t1) | Obliged(t1), Inferred(ts)) if !ts.contains(t1) => Err(UnmatchedInferred {
                 src: TypesSet::single(t1.clone()),
                 dst: ts.clone(),
             }),
@@ -665,7 +825,6 @@ impl fmt::Display for Knowledge {
             Obliged(t) => write!(f, "Obliged({})", t),
             Inferred(t) => write!(f, "Inferred({})", t),
             Any => write!(f, "Any"),
-            Unknown => write!(f, "Unknown"),
         }
     }
 }
@@ -674,6 +833,15 @@ impl TypesSet {
     /// Return an empty set.
     pub fn empty() -> Self {
         TypesSet(Default::default())
+    }
+
+    /// Return a full set of types.
+    pub fn full(tys: &Types) -> Self {
+        let mut s = Self::empty();
+        for t in tys.iter().map(|(_, x)| x.clone()) {
+            s.insert(t);
+        }
+        s
     }
 
     /// Initialise a set with a single element: `ty`.
@@ -693,6 +861,11 @@ impl TypesSet {
         self.len() == 0
     }
 
+    /// Returns if there is only a single type in the set.
+    pub fn is_single(&self) -> bool {
+        self.len() == 1
+    }
+
     /// The set contains `ty`.
     pub fn contains(&self, ty: &Type) -> bool {
         self.0.contains(ty)
@@ -703,13 +876,20 @@ impl TypesSet {
     /// Returns `true` if the set was changed (`ty` did not exist in set), and `false` if the set
     /// was unchanged (`ty` already existed in set).
     pub fn insert(&mut self, ty: Type) -> bool {
-        self.0.insert(ty)
+        Rc::make_mut(&mut self.0).insert(ty)
+    }
+
+    /// Remove a type from the set.
+    ///
+    /// Returns `true` if the set was changed (`ty` existed in the set).
+    pub fn remove(&mut self, ty: &Type) -> bool {
+        Rc::make_mut(&mut self.0).remove(ty)
     }
 
     /// If there is only a single element in the set, returns a reference to it.
     /// Otherwise returns `None`.
     pub fn only(&self) -> Option<&Type> {
-        if self.len() == 1 {
+        if self.is_single() {
             self.0.iter().next()
         } else {
             None
@@ -726,20 +906,51 @@ impl TypesSet {
     pub fn intersects(&self, other: &Self) -> bool {
         !self.is_disjoint(other)
     }
+
+    pub fn intersection(&self, other: &Self) -> Self {
+        if self == other {
+            self.clone()
+        } else {
+            TypesSet(Rc::new(self.0.intersection(&other.0).cloned().collect()))
+        }
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Type> {
+        self.0.iter()
+    }
+}
+
+impl Default for TypesSet {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+/// Clone is fast -- it is a reference count increment.
+impl Clone for TypesSet {
+    /// Clone is fast -- it is a reference count increment.
+    fn clone(&self) -> Self {
+        TypesSet(Rc::clone(&self.0))
+    }
 }
 
 impl fmt::Display for TypesSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut trail = false;
-        write!(f, "{{")?;
         for x in self.0.iter() {
             if trail {
-                write!(f, ", ")?;
+                write!(f, " ")?;
             }
             trail = true;
             write!(f, "{x}")?;
         }
 
-        write!(f, "}}")
+        Ok(())
+    }
+}
+
+impl From<TypesSet> for Knowledge {
+    fn from(ts: TypesSet) -> Self {
+        Knowledge::Inferred(ts)
     }
 }

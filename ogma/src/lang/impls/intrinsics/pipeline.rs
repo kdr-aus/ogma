@@ -894,6 +894,8 @@ fn tuple_intrinsic(mut blk: Block) -> Result<Step> {
 
     let oty = Type::Def(ty.clone());
 
+    blk.insert_anon_type_into_compiler(oty.clone());
+
     blk.assert_output(oty.clone());
 
     blk.eval(oty, move |input, cx| {

@@ -957,6 +957,11 @@ impl ArgNode {
     pub fn is_expr(self, g: &AstGraph) -> bool {
         self.child_op(g).is_some()
     }
+
+    /// If this node is a variable, return the tag.
+    pub fn var(self, g: &AstGraph) -> Option<&Tag> {
+        g[self.idx()].var()
+    }
 }
 
 impl CmdNode {

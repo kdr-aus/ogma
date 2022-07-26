@@ -176,7 +176,7 @@ fn cmp_intrinsic(mut blk: Block) -> Result<Step> {
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
 
             let injector = injector
-                .compile(ty, blk.defs())
+                .compile(ty, blk.defs(), blk.compiler().tg().anon_tys())
                 .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();
@@ -401,7 +401,7 @@ fn eq_intrinsic(mut blk: Block) -> Result<Step> {
             injector.map_arg_to_var(&mut blk, var, None, ty.clone())?;
 
             let injector = injector
-                .compile(ty, blk.defs())
+                .compile(ty, blk.defs(), blk.compiler().tg().anon_tys())
                 .map_err(|e| e.wrap_code_injection(blk.blk_tag()))?;
 
             let oty = injector.out_ty();

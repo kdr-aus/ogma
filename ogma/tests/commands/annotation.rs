@@ -54,12 +54,11 @@ fn success_03() {
     );
     assert_eq!(x, Ok(Value::Num(123.into())));
 
-    // TODO: once . operator uses type inference, this should be turned back on.
-    //     let x = process_w_table(
-    //         "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
-    //         defs,
-    //     );
-    //     assert_eq!(x, Ok(Value::Str(Str::new(""))));
+    let x = process_w_table(
+        "nth 1 Tuple {get:Num snd} #i.'Heading 3':Str | get t1",
+        defs,
+    );
+    assert_eq!(x, Ok(Value::Str(Str::new("b"))));
 }
 
 #[test]
@@ -73,13 +72,13 @@ fn errors_01() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Typing Error: Type resolution failed. Conflicting obligation type
---> shell:0
- | :Nil filter bar = 'foo'
- | ^^^^^^^^^^^^^^^^^^^^^^^ this node has input type `Table`
+        "Typing Error: Type application failed
 --> shell:5
  | :Nil filter bar = 'foo'
- |      ^^^^^^ but this node is obliged to use input `Nil`
+ |      ^^^^^^ this node has input type `Nil`
+--> shell:5
+ | :Nil filter bar = 'foo'
+ |      ^^^^^^ but it is inferred to use only types: Table String
 "
     );
 

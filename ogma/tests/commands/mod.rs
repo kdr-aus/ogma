@@ -268,12 +268,16 @@ fn multiline_errs() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Unknown Command: operation `filter` not defined
+        "Typing Error: Type resolution failed. Conflicting inferred type
 --> shell:0
  | filter {
- | ^^^^^^ `filter` not defined for input `Nil`
---> help: `filter` is implemented for the following input types: Table String
-"
+ |     get snd | + 1
+ | }
+ | ^^^^^^^^^^^^^^^^^ this node has input type `Nil`
+--> shell:0
+ | filter {
+ | ^^^^^^ but this node is inferred to use inputs: Table String
+",
     );
 
     let x = process_w_table(
@@ -285,6 +289,7 @@ fn multiline_errs() {
     .unwrap_err()
     .to_string();
     println!("{}", x);
+
     assert_eq!(
         &x,
         "Typing Error: Type resolution failed. Conflicting obligation type

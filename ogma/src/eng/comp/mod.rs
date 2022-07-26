@@ -4,7 +4,7 @@ use super::*;
 use astgraph::{AstGraph, AstNode};
 use graphs::*;
 use locals_graph::LocalsGraph;
-use tygraph::TypeGraph;
+use tygraph::{AnonTypes, TypeGraph};
 
 mod infer;
 mod params;
@@ -24,6 +24,7 @@ where
         expr,
         defs,
         input_ty.into().unwrap_or(Type::Nil),
+        &Default::default(),
         Default::default(),
     )
 }
@@ -32,10 +33,11 @@ pub fn compile_with_seed_vars(
     expr: ast::Expression,
     defs: &Definitions,
     input_ty: Type,
+    anon_tys: &AnonTypes,
     seed_vars: var::SeedVars,
 ) -> Result<FullCompilation> {
     let (ag, chgs) = astgraph::init(expr, defs)?; // flatten and expand expr/defs
-    let tg = TypeGraph::build(&ag);
+    let tg = TypeGraph::build(&ag, defs.types());
     let lg = LocalsGraph::build(&ag);
 
     let mut compiler = Box::new(Compiler {
@@ -54,7 +56,12 @@ pub fn compile_with_seed_vars(
     // initialise TG
     compiler.init_tg(input_ty);
     // apply initial annotated types
-    compiler.apply_graph_chgs(chgs.into_iter().map(Into::into))?;
+    let chgs = chgs
+        .into_iter()
+        // also apply anonymous types
+        .chain(anon_tys.iter().map(|t| tygraph::Chg::AnonTy(t.clone())))
+        .map(Into::into);
+    compiler.apply_graph_chgs(chgs)?;
 
     compiler.lg.seed(seed_vars);
 
@@ -101,10 +108,16 @@ impl<'d> Compiler<'d> {
         &self.ag
     }
 
+    /// A [`TypeGraph`] reference.
+    pub fn tg(&self) -> &TypeGraph {
+        &self.tg
+    }
+
     fn init_tg(&mut self, root_ty: Type) {
         // apply ast known types and link edges
         self.tg.apply_ast_types(&self.ag);
         self.tg.apply_ast_edges(&self.ag);
+        self.tg.reduce_inferred_sets_given_def_constraints(&self.ag);
 
         self.tg.set_root_input_ty(root_ty); // set the root input
     }
@@ -251,8 +264,8 @@ impl<'d> Compiler<'d> {
                 None => continue,
             };
 
-            // output type is unknown
-            if !self.tg[node].output.is_unknown() {
+            // output type is varied
+            if !self.tg[node].output.is_multiple() {
                 continue;
             }
 
@@ -337,7 +350,7 @@ impl<'d> Compiler<'d> {
                 // not already compiled
                 !self.compiled_ops.contains_key(&op.index())
             // and the input has a type
-            && !self.tg[op.0].input.is_unknown()
+            && self.tg[op.0].input.has_ty()
             })
             .collect::<Vec<_>>();
 
@@ -375,11 +388,11 @@ impl<'d> Compiler<'d> {
                     self.lg.seal_node(node.idx(), &self.ag);
                 }
                 Err(mut e) => {
-                    // only set the infer output if tygraph is showing unknown
+                    // only set the infer output if tygraph is showing that it has multiple options
                     if infer_output {
-                        let unknown = self.tg[node.idx()].output.is_unknown();
+                        let _unknown = self.tg[node.idx()].output.is_multiple();
                         debug_assert!(
-                            unknown,
+                            _unknown,
                             "if inferring the output node, expecting the TG output to be unknown"
                         );
                         self.output_infer_opnode = Some(node);
@@ -407,7 +420,11 @@ impl<'d> Compiler<'d> {
             }
         }
 
+        dbg!(&chgs);
+
         let chgd = self.apply_graph_chgs(chgs.into_iter())?;
+
+        dbg!(chgd);
 
         (goto_resolve | chgd)
             .then(|| ())

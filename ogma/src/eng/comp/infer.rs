@@ -25,27 +25,20 @@ impl<'d> Compiler<'d> {
         // 3. have unknown inputs
         let infer_nodes = self.ag.sinks(|n| {
             // 1. op variants
-            self.ag[n].op().is_some()
+            self.ag[n].op().is_some() &&
             // 2. not compiled
-            && !self.compiled_ops.contains_key(&n.index())
-            // 3. unknown input
-            && self.tg[n].input.is_unknown()
+            !self.compiled_ops.contains_key(&n.index()) &&
+            // 3. has multiple valid types
+            self.tg[n].input.is_multiple()
         });
 
-        let mut err = None;
         let mut chgs = Vec::new();
 
         for op in infer_nodes.into_iter().map(OpNode) {
-            match input_via_block_compilation(op, self) {
-                Ok(ty) => chgs.push(InferInput(op.idx(), ty.clone())),
-                Err(e) => err = Some(e.input_op(op.blk_tag(self.ag()))),
-            }
+            trial_inferred_types(op, self, &mut chgs);
         }
 
-        match err {
-            Some(e) if chgs.is_empty() => Err(e),
-            _ => self.apply_graph_chgs(chgs.into_iter().map(Into::into)),
-        }
+        self.apply_graph_chgs(chgs.into_iter())
     }
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
@@ -53,16 +46,18 @@ impl<'d> Compiler<'d> {
 
         // we get _shallowest_ expr nodes that:
         // 1. are not compiled,
-        // 2. have unknown input
+        // 2. have multiple input
         let infer_nodes = {
             let set = self
                 .ag
                 .expr_nodes()
                 // are not compiled
                 .filter(|n| !self.compiled_exprs.contains_key(&n.index()))
-                // have unknown input
-                .filter(|n| self.tg[n.idx()].input.is_unknown())
+                // have multiple input
+                .filter(|n| self.tg[n.idx()].input.is_multiple())
                 .collect::<HashSet<_>>();
+
+            dbg!(&set);
 
             set.iter()
                 .copied()
@@ -76,6 +71,8 @@ impl<'d> Compiler<'d> {
                 })
                 .collect::<Vec<_>>()
         };
+
+        dbg!(&infer_nodes);
 
         let mut success = false;
         let mut err = None;
@@ -114,8 +111,8 @@ impl<'d> Compiler<'d> {
             .output_infer_opnode
             // TAKE the infer node, since we are processing it.
             .take()
-            // BUT do not process if the output is NOT unknown
-            .filter(|n| self.tg[n.idx()].output.is_unknown())
+            // BUT do not process if the output is NOT multiple
+            .filter(|n| self.tg[n.idx()].output.is_multiple())
         {
             // infer output
             let x = output(opnode, self);
@@ -145,55 +142,60 @@ enum Error {
     Ambiguous { ty1: Type, ty2: Type },
 }
 
-fn input_via_block_compilation(
-    op: OpNode,
-    compiler: &Compiler,
-) -> std::result::Result<Type, Error> {
-    // NOTE - the types are returned in arbitary order
-    // if we wanted to make this deterministic we could sort on name
-    let types = compiler.defs.types().iter();
-
-    let mut inferred = None;
-
+/// Tries to compile the `op` with each type in the inferred types set.
+/// Unsuccesful compilations will add a `RemoveInput` change into the `chgs`.
+fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
     let _sink1 = &mut Default::default();
     let _sink2 = &mut Default::default();
 
-    for (_name, ty) in types {
-        let compiled = compiler
-            .compile_block(op, ty.clone(), _sink1, _sink2)
-            .is_ok();
+    let set = compiler.tg[op.idx()]
+        .input
+        .tys()
+        .expect("`op` is expected to be an inferred input node with multiple types");
 
-        if compiled {
-            match inferred.take() {
-                Some(ty1) => {
-                    return Err(Error::Ambiguous {
-                        ty1,
-                        ty2: ty.clone(),
-                    });
-                }
-                None => inferred = Some(ty.clone()),
-            }
-        }
+    let cmps = set
+        .iter()
+        .cloned()
+        .map(|ty| {
+            let compiled = compiler
+                .compile_block(op, ty.clone(), _sink1, _sink2)
+                .is_ok();
+            (compiled, ty)
+        })
+        .collect::<Vec<_>>();
+
+    // apply changes
+    if cmps.iter().filter(|(x, _)| *x).count() == 1 {
+        // only a single compilation succeeded, going to use this as an indication that this type
+        // is the correct one (a bit of an assumption)
+        chgs.push(
+            cmps.into_iter()
+                .find_map(|(x, ty)| x.then(|| ObligeInput(op.into(), ty)))
+                .unwrap()
+                .into(),
+        );
+    } else if compiler.lg.sealed(op.idx()) {
+        // if it is sealed, there won't be any variable updates which means this is pretty much
+        // as good as it gets for compilation, reduce the inferred set to what compiled
+        chgs.extend(
+            cmps.into_iter()
+                .filter_map(|(x, ty)| (!x).then(|| RemoveInput(op.into(), ty)))
+                .map(Into::into),
+        );
     }
-
-    inferred.ok_or(Error::NoTypes)
 }
 
 fn input_via_expr_compilation<'a>(
     expr: ExprNode,
     compiler: &Compiler_<'a>,
 ) -> std::result::Result<Compiler_<'a>, Error> {
-    //     let parent = expr.parent(compiler.ag());
-
     // NOTE: I believe this should break on success compilation of parent expr, not itself??
     // seem to be passing tests with this so keep it so...
     test_compile_types(compiler, expr.idx(), expr, false)
 }
 
 fn output<'a>(op: OpNode, compiler: &Compiler_<'a>) -> std::result::Result<Compiler_<'a>, Error> {
-    let ag = compiler.ag();
-    let brk = op.parent(ag);
-    //     let brk = brk.parent(ag).map(|x| x.parent(ag)).unwrap_or(brk);
+    let brk = op.parent(compiler.ag());
 
     test_compile_types(compiler, op.idx(), brk, true)
 }
@@ -204,20 +206,23 @@ fn test_compile_types<'a>(
     breakon: ExprNode,
     output: bool,
 ) -> std::result::Result<Compiler_<'a>, Error> {
-    // NOTE - the types are returned in arbitary order
-    // if we wanted to make this deterministic we could sort on name
-    let types = compiler.defs.types().iter();
+    let types = if output {
+        compiler.tg()[node].output.tys()
+    } else {
+        compiler.tg()[node].input.tys()
+    }
+    .expect("only testing inferred types set");
 
     let mut inferred = None;
 
-    for (_name, ty) in types {
+    for ty in types.iter() {
         let mut compiler: Compiler_ = compiler.clone();
         compiler.inference_depth += 1;
 
         let chg = if output {
-            InferOutput(node, ty.clone())
+            ObligeOutput(node, ty.clone())
         } else {
-            InferInput(node, ty.clone())
+            ObligeInput(node, ty.clone())
         };
 
         let x = compiler
@@ -253,8 +258,6 @@ impl Error {
                 traces: trace(op, x),
                 ..Default::default()
             },
-            // TODO make this error better,
-            // give a code example of type annotation
             Self::Ambiguous { ty1, ty2 } => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one output type can compile op".into(),
@@ -263,36 +266,6 @@ impl Error {
                         op,
                         format!(
                             "this op can be compiled with `{}` and `{}` as output types",
-                            ty1, ty2
-                        ),
-                    ),
-                    Trace::from_tag(op, x),
-                ],
-                ..Default::default()
-            },
-        }
-    }
-
-    pub fn input_op(&self, op: &Tag) -> crate::Error {
-        use crate::common::err::*;
-
-        let x = format!("try annotating input type: `{{:<type> {} ... }}`", op);
-
-        match self {
-            Self::NoTypes => crate::Error {
-                cat: Category::Semantics,
-                desc: "no input types suit compiling this op".into(),
-                traces: trace(op, x),
-                ..Default::default()
-            },
-            Self::Ambiguous { ty1, ty2 } => crate::Error {
-                cat: Category::Semantics,
-                desc: "ambiguous inference. more than one input type can compile op".into(),
-                traces: vec![
-                    Trace::from_tag(
-                        op,
-                        format!(
-                            "this op can be compiled with `{}` and `{}` as input types",
                             ty1, ty2
                         ),
                     ),
