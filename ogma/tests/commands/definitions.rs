@@ -422,3 +422,46 @@ fn not_defined_err_msg() {
 "
     );
 }
+
+#[test]
+fn variable_not_defined_in_def() {
+    let defs = &mut Definitions::new();
+
+    process_definition(
+        "def foo Table () { append { get $col } }",
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+
+    let x = process_w_table("foo", defs).unwrap_err().to_string();
+    println!("{x}");
+    assert_eq!(&x, "");
+
+    // from bug 137
+    process_definition(
+        r#"def sim-characteristics Table () {
+    let {len} $len
+    | let { fold 0 + { \ $row | get $col} | / $len } $mean
+    | Table 'mean'
+    | append-row $mean
+}"#,
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+
+    let x = process_w_nil(
+        "open input-constrained.csv | grp-by {get:Str Period | take 4} | map value { grp Run 
+    | map value fold 0 + $row.SaleableTonnesMprd | ren value Saleable }
+| map value sim-characteristics
+| save saleable-table.csv",
+        defs,
+    )
+    .unwrap_err()
+    .to_string();
+    println!("{x}");
+    assert_eq!(&x, "");
+}
