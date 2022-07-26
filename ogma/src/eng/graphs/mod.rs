@@ -781,15 +781,15 @@ mod tests {
 
         dbg!(&ag);
 
-        assert!(!ag.detect_var(OpNode(1.into())));  // \ 3
-        assert!(ag.detect_var(OpNode(3.into())));   // let
-        assert!(!ag.detect_var(OpNode(5.into())));  // +
-        assert!(ag.detect_var(OpNode(7.into())));   // - (second one)
+        assert!(!ag.detect_var(OpNode(1.into()))); // \ 3
+        assert!(ag.detect_var(OpNode(3.into()))); // let
+        assert!(!ag.detect_var(OpNode(5.into()))); // +
+        assert!(ag.detect_var(OpNode(7.into()))); // - (second one)
         assert!(!ag.detect_var(OpNode(10.into()))); // -
-        assert!(ag.detect_var(OpNode(12.into())));  // >
-        assert!(ag.detect_var(OpNode(23.into())));  // cmp $rhs
-        assert!(ag.detect_var(OpNode(25.into())));  // =
+        assert!(ag.detect_var(OpNode(12.into()))); // >
+        assert!(ag.detect_var(OpNode(23.into()))); // cmp $rhs
+        assert!(ag.detect_var(OpNode(25.into()))); // =
         assert!(!ag.detect_var(OpNode(27.into()))); // Ord::Gt
-        assert!(ag.detect_var(OpNode(36.into())));  // eq $rhs
+        assert!(ag.detect_var(OpNode(36.into()))); // eq $rhs
     }
 }
