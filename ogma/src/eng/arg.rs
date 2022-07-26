@@ -203,6 +203,7 @@ impl<'a> ArgBuilder<'a> {
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
             Def { .. } => unreachable!("an argument cannot be a Def variant"),
+
             Ident(s) => Ok(Hold::Lit(Str::new(s.str()).into())),
             Num { val, tag: _ } => Ok(Hold::Lit((*val).into())),
             Pound {
@@ -220,7 +221,7 @@ impl<'a> ArgBuilder<'a> {
             Pound {
                 ty: Pt::Newline,
                 tag: _,
-            } => Ok(Hold::Lit(Value::Str(Str::from("\n")))),
+            } => Ok(Hold::Lit(Value::Str(Str::from('\n')))),
             Pound {
                 ty: Pt::Input,
                 tag: _,
@@ -242,14 +243,17 @@ impl<'a> ArgBuilder<'a> {
 
                 Ok(Hold::Expr(stack))
             }
-            Var(tag) => lg
-                .get_checked(node.idx(), tag.str(), tag)
+            Var(tag) => {
+                dbg!(node, tag);
+                dbg!(lg
+                .get_checked(node.idx(), tag.str(), tag))
                 .and_then(|local| match local {
                     Local::Var(var) => Ok(Hold::Var(var.clone())),
                     Local::Ptr { .. } => {
                         unreachable!("a param argument should shadow the referencer arg node")
                     }
-                }),
+                })
+            }
             Expr(tag) => compiled_exprs
                 .get(&node.index())
                 .cloned()
