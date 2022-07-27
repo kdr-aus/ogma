@@ -57,3 +57,30 @@ fn suggest_typing_with_dot_operator() {
 "#
     );
 }
+
+#[test]
+fn better_parsing_error_message_bug_139() {
+    let code = r#"def sim-characteristics Table (col:Str) {
+    let {len} $len
+    | let { fold 0 + { \ $row | get $col} | / $len } $avg
+    | append --sq-diff { get $col | - $avg | * #i }
+    | fold 0 + $row.sq-diff | / { \ $len | - 1} } | root 2
+    | let { * -0.84162 | + $avg } $p20 { * 0.84162 | + $avg } $p80 $stdev_s
+    | Table P20 P50 P80 'σ_s'
+    | append-row $p20 $avg $p80 $stdev_s
+}"#;
+
+// Notice the extra brace at
+// | fold 0 + $row.sq-diff | / { \ $len | - 1} } | root 2
+//                                             ^
+
+let x = process_definition(code, Location::Shell, None, &mut Definitions::new())
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+
+        &x,
+        r#""#,
+    );
+}
