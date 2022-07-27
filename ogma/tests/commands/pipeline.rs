@@ -482,7 +482,6 @@ fn last_testing_bug_116() {
         r#"ls | grp name | fold 0 { \$row | get value | last get:Num size }"#,
         defs,
     );
-    dbg!(&x);
     assert!(matches!(x, Ok(Value::Num(_))));
 }
 

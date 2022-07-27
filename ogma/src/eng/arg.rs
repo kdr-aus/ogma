@@ -203,6 +203,7 @@ impl<'a> ArgBuilder<'a> {
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
             Def { .. } => unreachable!("an argument cannot be a Def variant"),
+
             Ident(s) => Ok(Hold::Lit(Str::new(s.str()).into())),
             Num { val, tag: _ } => Ok(Hold::Lit((*val).into())),
             Pound {
@@ -220,7 +221,7 @@ impl<'a> ArgBuilder<'a> {
             Pound {
                 ty: Pt::Newline,
                 tag: _,
-            } => Ok(Hold::Lit(Value::Str(Str::from("\n")))),
+            } => Ok(Hold::Lit(Value::Str(Str::from('\n')))),
             Pound {
                 ty: Pt::Input,
                 tag: _,

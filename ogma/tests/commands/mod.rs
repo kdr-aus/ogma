@@ -460,6 +460,110 @@ fn no_cmd_defined() {
     );
 }
 
+#[test]
+fn variables_not_existing() {
+    let defs = &Definitions::new();
+
+    let x = process_w_table("\\ $t", defs).unwrap_err().to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `t` does not exist
+--> shell:3
+ | \ $t
+ |    ^ `t` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+
+    let x = process_w_table("let $a | \\ $t", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `t` does not exist
+--> shell:12
+ | let $a | \ $t
+ |             ^ `t` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+
+    let x = process_w_nil("let $a | \\ $a", defs);
+    assert_eq!(x, Ok(Value::Nil));
+
+    let x = process_w_table("append { get $col }", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        "Semantics Error: variable `col` does not exist
+--> shell:14
+ | append { get $col }
+ |               ^^^ `col` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"
+    );
+
+    let x = process_w_table("append { let $a | get $col }", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        "Semantics Error: variable `col` does not exist
+--> shell:23
+ | append { let $a | get $col }
+ |                        ^^^ `col` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"
+    );
+
+    let x = process_w_table("append { let 'first' $a | get:Num $a } | \\ 3", defs);
+    assert_eq!(x, Ok(Value::Num(3.into())));
+
+    let x = process_w_table("let { nth 0 get $col } $c | \\ $c", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `col` does not exist
+--> shell:17
+ | let { nth 0 get $col } $c | \ $c
+ |                  ^^^ `col` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+}
+
+#[test]
+fn variables_not_existing_with_fold_call() {
+    let defs = &Definitions::new();
+
+    let x = process_w_table("fold {Table} { get $col }", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `col` does not exist
+--> shell:20
+ | fold {Table} { get $col }
+ |                     ^^^ `col` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+}
+
 // ------ General Bugs ---------------------------------------------------------
 #[test]
 fn gt_should_resolve_as_bool_return_type() {
