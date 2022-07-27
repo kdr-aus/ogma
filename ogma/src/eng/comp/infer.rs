@@ -227,8 +227,9 @@ fn test_compile_types<'a>(
             // success, first one, set the return
             (Ok(c), None) => inferred = Some(c),
             // upon error we reduce the types set to help with error reporting
-            (Err(_), _) => {
+            (Err(_), x) => {
                 validset.remove(ty);
+                inferred = x;
             }
         }
     }
