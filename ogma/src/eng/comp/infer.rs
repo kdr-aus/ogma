@@ -1,7 +1,7 @@
 use super::*;
 use petgraph::prelude::NodeIndex;
 use std::iter::once;
-use tygraph::Chg::*;
+use tygraph::{Chg::*, TypesSet};
 
 impl<'d> Compiler<'d> {
     /// Infer inputs into _blocks_.
@@ -122,7 +122,7 @@ impl<'d> Compiler<'d> {
                     *self = c;
                     Ok(true) // success
                 }
-                Err(e) => Err(e.output(opnode.op_tag(self.ag()))),
+                Err(e) => Err(e.output(opnode.op_tag(self.ag()), opnode.blk_tag(self.ag()))),
             }
         } else {
             Ok(false)
@@ -138,7 +138,7 @@ impl<'d> Compiler<'d> {
 
 enum Error {
     NoTypes,
-    Ambiguous { ty1: Type, ty2: Type },
+    Ambiguous(TypesSet),
 }
 
 /// Tries to compile the `op` with each type in the inferred types set.
@@ -203,6 +203,8 @@ fn test_compile_types<'a>(
     }
     .expect("only testing inferred types set");
 
+    let mut validset = types.clone();
+
     let mut inferred = None;
 
     for ty in types.iter() {
@@ -219,27 +221,33 @@ fn test_compile_types<'a>(
             .apply_graph_chgs(once(chg.into()))
             .and_then(|_| compiler.compile(breakon));
 
-        if let Ok(c) = x {
-            match inferred.take() {
-                Some((ty1, _)) => {
-                    return Err(Error::Ambiguous {
-                        ty1,
-                        ty2: ty.clone(),
-                    });
-                }
-                None => inferred = Some((ty.clone(), c)),
+        match (x, inferred.take()) {
+            // success; but there was another success
+            (Ok(_), Some(_)) => return Err(Error::Ambiguous(validset)),
+            // success, first one, set the return
+            (Ok(c), None) => inferred = Some(c),
+            // upon error we reduce the types set to help with error reporting
+            (Err(_), _) => {
+                validset.remove(ty);
             }
         }
     }
 
-    inferred.map(|(_, c)| c).ok_or(Error::NoTypes)
+    inferred.ok_or(Error::NoTypes)
 }
 
 impl Error {
-    pub fn output(&self, op: &Tag) -> crate::Error {
+    pub fn output(&self, op: &Tag, blk_tag: &Tag) -> crate::Error {
         use crate::common::err::*;
 
-        let x = format!("try annotating output type: `{}:<type> ...`", op);
+        let (xtag, x) = if op.str() == "." {
+            (
+                blk_tag,
+                format!("try annotating output type: `{blk_tag}:<type>`"),
+            )
+        } else {
+            (op, format!("try annotating output type: `{op}:<type> ...`"))
+        };
 
         match self {
             Self::NoTypes => crate::Error {
@@ -248,18 +256,15 @@ impl Error {
                 traces: trace(op, x),
                 ..Default::default()
             },
-            Self::Ambiguous { ty1, ty2 } => crate::Error {
+            Self::Ambiguous(set) => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one output type can compile op".into(),
                 traces: vec![
                     Trace::from_tag(
                         op,
-                        format!(
-                            "this op can be compiled with `{}` and `{}` as output types",
-                            ty1, ty2
-                        ),
+                        format!("this op can be compiled with output types: {set}"),
                     ),
-                    Trace::from_tag(op, x),
+                    Trace::from_tag(xtag, x),
                 ],
                 ..Default::default()
             },
@@ -284,16 +289,13 @@ impl Error {
                 traces: trace(expr, x),
                 ..Default::default()
             },
-            Self::Ambiguous { ty1, ty2 } => crate::Error {
+            Self::Ambiguous(set) => crate::Error {
                 cat: Category::Semantics,
                 desc: "ambiguous inference. more than one input type can compile expression".into(),
                 traces: vec![
                     Trace::from_tag(
                         expr,
-                        format!(
-                            "this expression can be compiled with `{}` and `{}` as input types",
-                            ty1, ty2
-                        ),
+                        format!("this expression can be compiled with input types: {set}"),
                     ),
                     Trace::from_tag(expr, x),
                 ],

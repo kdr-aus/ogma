@@ -38,3 +38,22 @@ fn suggest_pipe_if_trailing_cmd() {
 "
     );
 }
+
+#[test]
+fn suggest_typing_with_dot_operator() {
+    let x = process_w_nil("ls | append #i.name", &Definitions::new())
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: ambiguous inference. more than one output type can compile op
+--> shell:14
+ | ls | append #i.name
+ |               ^ this op can be compiled with output types: Nil TableRow Number Table Bool Ord String
+--> shell:12
+ | ls | append #i.name
+ |             ^^^^^^^ try annotating output type: `#i.name:<type>`
+"#
+    );
+}
