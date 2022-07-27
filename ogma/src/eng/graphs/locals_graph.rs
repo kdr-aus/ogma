@@ -320,7 +320,11 @@ impl LocalsGraph {
     /// Seal an op or expr node, flagging that there will not be any more variables introduced.
     /// An op's successful compilation would seal it.
     pub fn seal_node(&mut self, node: NodeIndex, ag: &AstGraph) {
-        self.graph[node].sealed = true; // seal itself
+        if ag[node].expr().is_some() {
+            // if sealing an expression seal itself
+            // NOTE we do NOT seal op's as themselves
+            self.graph[node].sealed = true;
+        }
 
         let mut stack = self.graph.neighbors(node).collect::<Vec<_>>();
 
@@ -342,9 +346,12 @@ impl LocalsGraph {
             // NOTE: this is done since an Op should not have variable definition power that would
             // influence the op's arguments...
             if ag[n].op().is_some() {
-                stack.extend(self.graph.neighbors(n)
+                stack.extend(
+                    self.graph
+                        .neighbors(n)
                         // do not filter the next op though
-                    .filter(|&n| ag[n].op().is_none()));
+                        .filter(|&n| ag[n].op().is_none()),
+                );
             }
         }
     }

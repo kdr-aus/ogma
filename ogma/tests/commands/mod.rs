@@ -477,7 +477,9 @@ fn variables_not_existing() {
 "#
     );
 
-    let x = process_w_table("let $a | \\ $t", defs).unwrap_err().to_string();
+    let x = process_w_table("let $a | \\ $t", defs)
+        .unwrap_err()
+        .to_string();
     println!("{x}");
     assert_eq!(
         &x,
@@ -490,7 +492,12 @@ fn variables_not_existing() {
 "#
     );
 
-    let x = process_w_table("append { get $col }", defs).unwrap_err().to_string();
+    let x = process_w_nil("let $a | \\ $a", defs);
+    assert_eq!(x, Ok(Value::Nil));
+
+    let x = process_w_table("append { get $col }", defs)
+        .unwrap_err()
+        .to_string();
     println!("{x}");
     assert_eq!(
         &x,
@@ -503,7 +510,9 @@ fn variables_not_existing() {
 "
     );
 
-    let x = process_w_table("append { let $a | get $col }", defs).unwrap_err().to_string();
+    let x = process_w_table("append { let $a | get $col }", defs)
+        .unwrap_err()
+        .to_string();
     println!("{x}");
     assert_eq!(
         &x,
@@ -514,6 +523,24 @@ fn variables_not_existing() {
 --> help: variables must be in scope
           variables can be defined using the `let` command
 "
+    );
+
+    let x = process_w_table("append { let 'first' $a | get:Num $a } | \\ 3", defs);
+    assert_eq!(x, Ok(Value::Num(3.into())));
+
+    let x = process_w_table("let { nth 0 get $col } $c | \\ $c", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `col` does not exist
+--> shell:17
+ | let { nth 0 get $col } $c | \ $c
+ |                  ^^^ `col` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
     );
 }
 

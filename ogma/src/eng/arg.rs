@@ -243,17 +243,14 @@ impl<'a> ArgBuilder<'a> {
 
                 Ok(Hold::Expr(stack))
             }
-            Var(tag) => {
-                dbg!(node, tag);
-                dbg!(lg
-                .get_checked(node.idx(), tag.str(), tag))
+            Var(tag) => lg
+                .get_checked(node.idx(), tag.str(), tag)
                 .and_then(|local| match local {
                     Local::Var(var) => Ok(Hold::Var(var.clone())),
                     Local::Ptr { .. } => {
                         unreachable!("a param argument should shadow the referencer arg node")
                     }
-                })
-            }
+                }),
             Expr(tag) => compiled_exprs
                 .get(&node.index())
                 .cloned()
