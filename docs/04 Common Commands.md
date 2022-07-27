@@ -110,7 +110,7 @@ Use type annotations to specify the output type of the command: `get:<Type>` for
 Tuple 1 2 | get t0 --> returns 1
 Tuple 1 2 | get t1 --> returns 2
 open diamonds.csv | last get color --> ERROR: need to specify output type
-open diamonds.csv | last get --Str color --> returns 'D'
+open diamonds.csv | last get:Str color --> returns 'D'
 ```
 
 ## Filter, skip, take, and pick

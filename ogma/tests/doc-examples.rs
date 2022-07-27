@@ -132,7 +132,7 @@ fn _4_0_common_cmds_01() {
     assert_eq!(x, "Semantics Error: ambiguous inference. more than one output type can compile op
 --> shell:31
  | open tests/diamonds.csv | last get color
- |                                ^^^ this op can be compiled with `Nil` and `TableRow` as output types
+ |                                ^^^ this op can be compiled with output types: Nil TableRow Number Table Bool Ord String
 --> shell:31
  | open tests/diamonds.csv | last get color
  |                                ^^^ try annotating output type: `get:<type> ...`
