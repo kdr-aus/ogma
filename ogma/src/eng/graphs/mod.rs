@@ -69,10 +69,7 @@ impl From<locals_graph::Chg> for Chg {
 
 impl Chg {
     pub fn is_lg_chg(&self) -> bool {
-        match self {
-            Chg::Lg(_) => true,
-            _ => false,
-        }
+        matches!(self, Chg::Lg(_))
     }
 }
 
