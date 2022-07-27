@@ -19,7 +19,7 @@ impl<'d> Compiler<'d> {
     }
 
     fn infer_inputs_tgt_ops(&mut self) -> Result<bool> {
-        // we get _lowest_ nodes that are:
+        // we get _deepest_ nodes that are:
         // 1. Op variants,
         // 2. are not compiled,
         // 3. have multiple inputs
@@ -32,7 +32,7 @@ impl<'d> Compiler<'d> {
             // 3. has multiple valid types
             self.tg[n].input.is_multiple() &&
             // 4. is sealed, or contains no variables
-            ((self.lg.sealed(n) && false) || !self.ag.detect_var(OpNode(n)))
+            (self.lg.sealed(n) || !self.ag.detect_var(OpNode(n)))
         });
 
         let mut chgs = Vec::new();
@@ -144,7 +144,7 @@ enum Error {
 /// Tries to compile the `op` with each type in the inferred types set.
 /// Pushes `RemoveInput` if failed.
 fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
-    let _sink1 = &mut Default::default();
+    let sink1 = &mut Default::default();
 
     let set = compiler.tg[op.idx()]
         .input
@@ -157,14 +157,17 @@ fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
         .filter(|ty| {
             let infer_output = &mut false;
             let compiled = compiler
-                .compile_block(op, ty.clone(), _sink1, infer_output)
+                .compile_block(op, ty.clone(), sink1, infer_output)
                 .is_ok();
+
+            let lg_chg_req = sink1.drain(..).any(|chg| chg.is_lg_chg());
+
             // remove input if failed compilation, and
             // does not infer output
             // we keep in if infer_output is true, since we need more information about types
             // before we can compile this block, and removing input inferences will just reduce it
             // to an empty set.
-            !compiled && !*infer_output
+            !compiled && !*infer_output && !lg_chg_req
         })
         .map(|ty| RemoveInput(op.into(), ty))
         .map(Into::into);

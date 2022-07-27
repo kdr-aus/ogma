@@ -67,6 +67,15 @@ impl From<locals_graph::Chg> for Chg {
     }
 }
 
+impl Chg {
+    pub fn is_lg_chg(&self) -> bool {
+        match self {
+            Chg::Lg(_) => true,
+            _ => false,
+        }
+    }
+}
+
 #[cfg(debug_assertions)]
 fn debug_write_flowchart<N, E, W, F0, F1, F2>(
     g: &petgraph::stable_graph::StableGraph<N, E>,
@@ -779,8 +788,6 @@ mod tests {
     fn variable_detection() {
         let (ag, _tg) = init_graphs("\\ 3 | let $a | + { - 4 } | - $a { > 3 }");
 
-        dbg!(&ag);
-
         assert!(!ag.detect_var(OpNode(1.into()))); // \ 3
         assert!(ag.detect_var(OpNode(3.into()))); // let
         assert!(!ag.detect_var(OpNode(5.into()))); // +
@@ -791,5 +798,26 @@ mod tests {
         assert!(ag.detect_var(OpNode(25.into()))); // =
         assert!(!ag.detect_var(OpNode(27.into()))); // Ord::Gt
         assert!(ag.detect_var(OpNode(36.into()))); // eq $rhs
+    }
+
+    #[test]
+    fn sinks_test() {
+        let (ag, _tg) = init_graphs("\\ 3 | + { - 4 | + 3 }");
+
+        let s = |sl: &[_]| {
+            let mut x = sl.iter().copied().map(Into::into).collect::<Vec<_>>();
+            x.sort_unstable();
+            x.reverse();
+            x
+        };
+
+        let set = ag.sinks(|_| true);
+        assert_eq!(set, s(&[9, 10, 11, 12, 13, 14, 15, 16]));
+
+        let set = ag.sinks(|n| ag[n].var().is_some());
+        assert_eq!(set, s(&[]));
+
+        let set = ag.sinks(|n| ag[n].op().is_some());
+        assert_eq!(set, s(&[7, 5, 1]));
     }
 }

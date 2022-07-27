@@ -467,40 +467,41 @@ impl AstGraph {
     /// the nodes which do not flow to another `Op` variant.
     ///
     /// This way, the sinks of a AST node variant can be found.
-    pub fn sinks<F>(&self, filter: F) -> HashSet<NodeIndex>
+    pub fn sinks<F>(&self, filter: F) -> Vec<NodeIndex>
     where
         F: Fn(NodeIndex) -> bool,
     {
-        fn find_last_match<'a, F>(
-            g: &'a AstGraph,
-            sink: NodeIndex,
-            filter: F,
-        ) -> impl Iterator<Item = NodeIndex> + 'a
-        where
-            F: 'a + Fn(NodeIndex) -> bool + Copy,
-        {
-            let srcs = g.externals(Incoming);
+        let space = &mut Default::default();
+        let mut has_path =
+            |from, to| petgraph::algo::has_path_connecting(&self.0, from, to, Some(space));
 
-            srcs.flat_map(move |src| {
-                petgraph::algo::all_simple_paths::<Vec<_>, _>(&g.0, src, sink, 0, None)
-                    .filter_map(move |v| v.into_iter().rev().find(|&n| filter(n)))
-            })
-        }
+        let mut ns = self
+            .node_indices()
+            .filter(|&n| filter(n))
+            .collect::<Vec<_>>();
+        ns.sort_unstable();
+        ns.reverse();
 
-        let sinks = self.externals(Outgoing);
+        let mut i = 1;
+        while i < ns.len() {
+            let to = ns[i - 1];
 
-        let mut set = HashSet::default();
+            let mut j = i;
+            while j < ns.len() {
+                let from = ns[j];
+                // observe that indices increase as graph goes deeper
 
-        for sink in sinks {
-            if filter(sink) {
-                // a sink matched the predicate, no need to walk path
-                set.insert(sink);
-            } else {
-                set.extend(find_last_match(self, sink, &filter));
+                if has_path(from, to) {
+                    ns.remove(j);
+                } else {
+                    j += 1;
+                }
             }
+
+            i += 1;
         }
 
-        set
+        ns
     }
 
     /// Matches a specific implementation of a command (op) with the given input type.
