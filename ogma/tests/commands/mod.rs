@@ -544,6 +544,26 @@ fn variables_not_existing() {
     );
 }
 
+#[test]
+fn variables_not_existing_with_fold_call() {
+    let defs = &Definitions::new();
+
+    let x = process_w_table("fold {Table} { get $col }", defs)
+        .unwrap_err()
+        .to_string();
+    println!("{x}");
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `col` does not exist
+--> shell:20
+ | fold {Table} { get $col }
+ |                     ^^^ `col` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+}
+
 // ------ General Bugs ---------------------------------------------------------
 #[test]
 fn gt_should_resolve_as_bool_return_type() {
