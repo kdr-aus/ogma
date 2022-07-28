@@ -6,6 +6,7 @@ use ::libs::{
 };
 use std::{cmp, io};
 use tui::{backend::Backend, layout::*, style::*, text::*, widgets::*, Frame, Terminal as Term};
+use cansi::v3 as cansi;
 
 mod completions;
 mod events;
@@ -847,7 +848,7 @@ fn convert_coloured_str(s: &str, width: usize) -> Text<'static> {
     use unicode_width::*;
 
     let mut lines = Vec::new();
-    for line in cansi::line_iter(&cansi::categorise_text(s)) {
+    for line in self::cansi::line_iter(&self::cansi::categorise_text(s)) {
         // each new line actually needs to account for the width of the new line characters
         // it is a bit tricky to work out if it will be a \r\n or \n
         let mut w = 0;
@@ -882,42 +883,44 @@ fn convert_coloured_str(s: &str, width: usize) -> Text<'static> {
     lines.into()
 }
 
-fn cnv_span(s: &str, slice: cansi::CategorisedSlice) -> Span<'static> {
+fn cnv_span(s: &str, slice: self::cansi::CategorisedSlice) -> Span<'static> {
+    let self::cansi::CategorisedSlice { fg, bg, intensity, italic, underline, blink, reversed, hidden, strikethrough, text: _, start: _, end: _ } = slice;
+
     let mut style = Style {
-        fg: Some(cnv_colour(slice.fg_colour)),
-        bg: Some(cnv_colour(slice.bg_colour)),
+        fg: fg.map(cnv_colour),
+        bg: bg.map(cnv_colour),
         ..Default::default()
     };
 
-    style = match slice.intensity {
-        cansi::Intensity::Bold => style.add_modifier(Modifier::BOLD),
-        cansi::Intensity::Faint => style.add_modifier(Modifier::DIM),
-        cansi::Intensity::Normal => style,
+    style = match intensity {
+        Some(self::cansi::Intensity::Bold) => style.add_modifier(Modifier::BOLD),
+        Some(self::cansi::Intensity::Faint) => style.add_modifier(Modifier::DIM),
+        _ => style,
     };
-    if slice.italic {
+    if italic.unwrap_or_default() {
         style = style.add_modifier(Modifier::ITALIC);
     }
-    if slice.underline {
+    if underline.unwrap_or_default() {
         style = style.add_modifier(Modifier::UNDERLINED);
     }
-    if slice.blink {
+    if blink.unwrap_or_default() {
         style = style.add_modifier(Modifier::RAPID_BLINK);
     }
-    if slice.reversed {
+    if reversed.unwrap_or_default() {
         style = style.add_modifier(Modifier::REVERSED);
     }
-    if slice.hidden {
+    if hidden.unwrap_or_default() {
         style = style.add_modifier(Modifier::HIDDEN);
     }
-    if slice.strikethrough {
+    if strikethrough.unwrap_or_default() {
         style = style.add_modifier(Modifier::CROSSED_OUT);
     }
 
     Span::styled(String::from(s), style)
 }
 
-fn cnv_colour(c: cansi::Color) -> Color {
-    use cansi::Color::*;
+fn cnv_colour(c: self::cansi::Color) -> Color {
+    use self::cansi::Color::*;
 
     match c {
         Black => Color::Black,
