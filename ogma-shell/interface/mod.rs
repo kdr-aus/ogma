@@ -605,7 +605,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
         let area = Rect::new(x, y, w, h).intersection(size);
         let para = Paragraph::new(help)
             .alignment(Alignment::Right)
-            .style(Style::default().fg(Color::Black).bg(Color::Magenta));
+            .style(light_on_magenta());
         frame.render_widget(Clear, area);
         frame.render_widget(para, area);
     }
@@ -783,7 +783,11 @@ fn construct_completion_tags(cmpls: &[Completion]) -> Text {
 }
 
 fn completion_style() -> Style {
-    Style::default().bg(Color::Magenta).fg(Color::Black)
+    light_on_magenta()
+}
+
+fn light_on_magenta() -> Style {
+    Style::default().bg(Color::Magenta).fg(Color::Rgb(192, 192, 192))
 }
 
 fn help_msg() -> Text<'static> {
