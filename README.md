@@ -50,9 +50,9 @@ community around the project and it is encouraged to participate.
 Pull requests are appreciated and encouraged! The request will be subject to a review and will 
 need to pass the CI before being merged in. Please ensure:
 - Tests are added where necessary,
-- `cargo fmt -- --check` passes,
-- `cargo clippy -- -D warnings` passes,
-- `cargo test` passes,
+- `cargo fmt --all -- --check` passes,
+- `cargo clippy --workspace -- -D warnings` passes,
+- `cargo test --workspace` passes,
 - An item describing your pull request is added to [RELEASE.md](./RELEASE.md).
 
 Happy coding!
