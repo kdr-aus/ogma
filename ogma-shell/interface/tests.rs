@@ -44,6 +44,7 @@ impl Tester {
             tabs: vec![state],
             tab_selected: 0,
             draw_help: false,
+            cmpls_drawn: false,
             config_bldr: Box::new(config),
         };
 
