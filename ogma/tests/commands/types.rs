@@ -16,13 +16,16 @@ fn boolean_test() {
     assert_eq!(x, Ok(Value::Bool(false)));
 
     let x = process_w_nil("\\ #tf", defs).unwrap_err().to_string();
-    println!("{}", x);
+    println!("{x}");
     assert_eq!(
         &x,
         r#"Parsing Error: could not parse input line
 --> shell:3
  | \ #tf
  |    ^^ special literals only have one character
+--> shell:0
+ | \ #tf
+ | ^^^^^ no command
 "#
     );
 }
