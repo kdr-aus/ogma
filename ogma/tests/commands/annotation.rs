@@ -93,6 +93,9 @@ fn errors_01() {
 --> shell:10
  | filter bar:Str = 'foo'
  |           ^^^^ unexpected type identifier
+--> shell:0
+ | filter bar:Str = 'foo'
+ | ^^^^^^^^^^^^^^^^^^^^^^ no command
 "
     );
 
@@ -103,11 +106,14 @@ fn errors_01() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Parsing Error: could not parse input line
+        r#"Parsing Error: could not parse input line
 --> shell:13
- | let $x | \\ $x:Table
+ | let $x | \ $x:Table
  |              ^^^^^^ unexpected type identifier
-"
+--> shell:8
+ | let $x | \ $x:Table
+ |         ^^^^^^^^^^^ no command
+"#
     );
 
     // can't constrain pound
@@ -117,11 +123,14 @@ fn errors_01() {
     println!("{}", x);
     assert_eq!(
         &x,
-        "Parsing Error: could not parse input line
+        r#"Parsing Error: could not parse input line
 --> shell:4
- | \\ #t:Table
+ | \ #t:Table
  |     ^^^^^^ unexpected type identifier
-"
+--> shell:0
+ | \ #t:Table
+ | ^^^^^^^^^^ no command
+"#
     );
 }
 

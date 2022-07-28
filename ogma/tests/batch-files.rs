@@ -64,20 +64,27 @@ def-ty Foo { x:Num y: }"#;
     let mut x = process(&batch, root, wd, p, Default::default()).into_iter();
     assert!(matches!(x.next(), Some((Success, _))));
     assert!(matches!(x.next(), Some((Outstanding, _))));
+    let x = x.next().map(print).unwrap();
+    println!("{x}");
     assert_eq!(
-        &x.next().map(print).unwrap(),
+        &x,
         "Parsing Error: could not parse input line
 --> '' - line 6:21
  | def-ty Foo { x:Num y: }
- |                      ^ missing a valid type specifier: `field:Type`
+ |                      ^ invalid identifier, expecting alphabetic character, found ` `
+--> '' - line 6:21
+ | def-ty Foo { x:Num y: }
+ |                      ^^ missing a valid type specifier: `field:Type`
 "
     );
 
     let batch = parse_str(code);
     let mut x = process(&batch, root, wd, p, Default::default()).into_iter();
     assert!(matches!(x.next(), Some((Success, _))));
+    let y = x.next().map(print).unwrap();
+    println!("{y}");
     assert_eq!(
-        &x.next().map(print).unwrap(),
+        &y,
         r#"Semantics Error: expecting argument with output type `Number`, found `String`
 --> '' - line 4:19
  | foo-bar | + 5 | - 'foo'
@@ -85,12 +92,18 @@ def-ty Foo { x:Num y: }"#;
 --> help: commands may require specific argument types, use `--help` to view requirements
 "#
     );
+
+    let y = x.next().map(print).unwrap();
+    println!("{y}");
     assert_eq!(
-        &x.next().map(print).unwrap(),
+        &y,
         "Parsing Error: could not parse input line
 --> '' - line 6:21
  | def-ty Foo { x:Num y: }
- |                      ^ missing a valid type specifier: `field:Type`
+ |                      ^ invalid identifier, expecting alphabetic character, found ` `
+--> '' - line 6:21
+ | def-ty Foo { x:Num y: }
+ |                      ^^ missing a valid type specifier: `field:Type`
 "
     );
 }

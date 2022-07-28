@@ -42,7 +42,7 @@ pub enum ParseSuccess {
 /// Parse the `input` as a valid `ogma` expression or definition.
 ///
 /// Uses `Location::Shell`.
-pub fn parse(input: &str, defs: &Definitions) -> std::result::Result<ParseSuccess, ParseFail> {
+pub fn parse(input: &str, defs: &Definitions) -> Result<ParseSuccess, ParseFail> {
     let loc = Location::Shell;
     if input.starts_with("def ") {
         definition_impl(input, loc, defs).map(ParseSuccess::Impl)
@@ -64,15 +64,10 @@ pub fn expression<S: Into<Arc<str>>>(
         line: expr.into(),
     };
     let expr = &line.line;
-    let x = self::expr(&line, definitions)(expr)
-        .and_then(|(i, expr)| {
-            context(
-                "remaining input",
-                exp(all_consuming(multispace0), Expecting::None),
-            )(i)
-            .map(|_| expr)
-        })
-        .map_err(|e| convert_parse_error(e, &line.line, Location::Shell));
+    let x = no_trailing_input(self::expr(&line, definitions))(expr)
+        .map_err(|e| convert_parse_error(e, &line.line, line.loc.clone()))
+        .map(|x| x.1);
+
     x
 }
 
@@ -86,6 +81,7 @@ pub fn definition_impl<S: Into<Arc<str>>>(
         loc: location.clone(),
         line: def.into(),
     };
+
     self::def_impl_inner(&line.line, &line, location.clone(), definitions)
         .map(|x| x.1)
         .map_err(|e| convert_parse_error(e, &line.line, location))
@@ -100,6 +96,7 @@ pub fn definition_type<S: Into<Arc<str>>>(
         loc: location.clone(),
         line: def.into(),
     };
+
     self::def_type_inner(&line.line, &line, location.clone())
         .map(|x| x.1)
         .map_err(|e| convert_parse_error(e, &line.line, location))
@@ -131,8 +128,7 @@ pub enum Expecting {
 
 #[derive(Debug, PartialEq)]
 struct ParsingError<'a> {
-    input: ErrIn<'a>,
-    cx: Str,
+    locs: Vec<(ErrIn<'a>, Str)>,
     expecting: Expecting,
 }
 
@@ -142,34 +138,65 @@ enum ErrIn<'a> {
     T(Tag),
 }
 
+impl From<Tag> for ErrIn<'_> {
+    fn from(t: Tag) -> Self {
+        ErrIn::T(t)
+    }
+}
+
+impl<'a> From<&'a str> for ErrIn<'a> {
+    fn from(s: &'a str) -> Self {
+        ErrIn::S(s)
+    }
+}
+
 impl<'a> ParseError<&'a str> for ParsingError<'a> {
     fn from_error_kind(input: &'a str, _: ErrorKind) -> Self {
         ParsingError {
-            input: ErrIn::S(input),
-            cx: "".into(),
+            locs: vec![(ErrIn::S(input), "".into())],
             expecting: Expecting::None,
         }
     }
-    fn append(input: &'a str, _: ErrorKind, _: Self) -> Self {
-        ParsingError {
-            input: ErrIn::S(input),
-            cx: "".into(),
-            expecting: Expecting::None,
-        }
+    fn append(input: &'a str, _: ErrorKind, mut other: Self) -> Self {
+        other.locs.push((ErrIn::S(input), "".into()));
+        other
     }
     fn from_char(input: &'a str, ch: char) -> Self {
         ParsingError {
-            input: ErrIn::S(input),
-            cx: format!("expected `{}`", ch).into(),
+            locs: vec![(ErrIn::S(input), format!("expected `{}`", ch).into())],
             expecting: Expecting::None,
         }
     }
 }
 
 impl<'a> ContextError<&'a str> for ParsingError<'a> {
-    fn add_context(_input: &'a str, cx: &'static str, mut other: Self) -> Self {
-        other.cx = cx.into();
+    fn add_context(input: &'a str, cx: &'static str, mut other: Self) -> Self {
+        other.locs.push((ErrIn::S(input), cx.into()));
         other
+    }
+}
+
+impl<'a> ParsingError<'a> {
+    fn err<I, C>(input: I, cx: C, expecting: Expecting) -> nom::Err<Self>
+    where
+        I: Into<ErrIn<'a>>,
+        C: Into<Str>,
+    {
+        nom::Err::Error(Self {
+            locs: vec![(input.into(), cx.into())],
+            expecting,
+        })
+    }
+
+    fn failure<I, C>(input: I, cx: C, expecting: Expecting) -> nom::Err<Self>
+    where
+        I: Into<ErrIn<'a>>,
+        C: Into<Str>,
+    {
+        nom::Err::Failure(Self {
+            locs: vec![(input.into(), cx.into())],
+            expecting,
+        })
     }
 }
 
@@ -179,33 +206,36 @@ fn convert_parse_error<'a>(
     loc: Location,
 ) -> ParseFail {
     use err::*;
-    let ParsingError {
-        input,
-        cx,
-        expecting,
-    } = match err {
+    let ParsingError { locs, expecting } = match err {
         nom::Err::Error(e) | nom::Err::Failure(e) => e,
         _ => unreachable!("nom parses using a complete parser"),
     };
 
-    let (start, mut len) = match input {
-        ErrIn::S(s) => (source.offset(s), s.len()),
-        ErrIn::T(t) => (t.start, t.len()),
-    };
-    if len == 0 && !source.is_empty() {
-        len = 1;
-    }
+    let traces = locs
+        .into_iter()
+        .map(|(input, cx)| {
+            let (start, mut len) = match input {
+                ErrIn::S(s) => (source.offset(s), s.len()),
+                ErrIn::T(t) => (t.start, t.len()),
+            };
+            if len == 0 && !source.is_empty() {
+                len = 1;
+            }
+
+            err::Trace {
+                loc: loc.clone(),
+                source: source.into(),
+                desc: Some(cx.to_string()),
+                start,
+                len,
+            }
+        })
+        .collect();
 
     let err = Error {
         cat: Category::Parsing,
         desc: "could not parse input line".into(),
-        traces: vec![err::Trace {
-            loc,
-            source: source.into(),
-            desc: Some(cx.to_string()),
-            start,
-            len,
-        }],
+        traces,
         ..Error::default()
     };
 
@@ -253,9 +283,7 @@ where
     move |i| {
         inner(i).map_err(|e| {
             e.map(|mut e| {
-                if e.cx.is_empty() {
-                    e.cx = context.into();
-                }
+                e.locs.push((i.into(), context.into()));
                 e
             })
         })
@@ -272,6 +300,31 @@ fn opt_ty(line: &Line) -> impl FnMut(&str) -> IResult<&str, Option<Tag>, Parsing
                 Expecting::Type,
             ),
         ))(i)
+    }
+}
+
+fn no_trailing_input<'a, F, O>(
+    mut inner: F,
+) -> impl FnMut(&'a str) -> IResult<&'a str, O, ParsingError<'a>>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O, ParsingError<'a>>,
+{
+    move |i| {
+        let (rem, o) = inner(i)?;
+
+        if rem.trim().is_empty() {
+            Ok(("", o))
+        } else {
+            let last_brace = i[..i.offset(rem)].rfind('}').map(|x| &i[x..=x]);
+
+            let mut e = ParsingError::failure(rem, "remaining input", Expecting::None);
+
+            if let Some(lb) = last_brace {
+                e = e.map(|e| ParsingError::add_context(lb, "possibly unnecessary brace", e));
+            }
+
+            Err(e)
+        }
     }
 }
 
@@ -302,11 +355,11 @@ fn expr<'f>(
         }
 
         if blocks.is_empty() {
-            Err(nom::Err::Error(ParsingError {
-                input: ErrIn::S(&input[..input.offset(i)]),
-                cx: "no valid blocks".into(),
-                expecting: Expecting::Impl,
-            }))
+            Err(ParsingError::err(
+                &input[..input.offset(i)],
+                "no valid blocks",
+                Expecting::Impl,
+            ))
         } else {
             let mut tag = line.create_tag(input);
             tag.make_mut().end = line.line.offset(i);
@@ -393,24 +446,19 @@ fn spec_op(i: &str) -> IResult<&str, &str, ParsingError> {
 fn op_ident(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
     move |i| {
         if i.is_empty() {
-            return Err(nom::Err::Error(ParsingError {
-                input: ErrIn::S(i),
-                cx: "empty identifier".into(),
-                expecting: Expecting::None,
-            }));
+            return Err(ParsingError::err(i, "empty identifier", Expecting::None));
         }
 
         let c = i.chars().next().expect("one or more chars");
         if !c.is_alphabetic() {
-            return Err(nom::Err::Error(ParsingError {
-                input: ErrIn::S(&i[..c.len_utf8()]),
-                cx: format!(
+            return Err(ParsingError::err(
+                &i[..c.len_utf8()],
+                format!(
                     "invalid identifier, expecting alphabetic character, found `{}`",
                     c,
-                )
-                .into(),
-                expecting: Expecting::None,
-            }));
+                ),
+                Expecting::None,
+            ));
         }
 
         map(
@@ -522,11 +570,11 @@ fn arg<'f>(
             if let Ok((r, _)) =
                 delimited::<_, _, _, _, (), _, _, _>(char('{'), multispace0, char('}'))(i)
             {
-                Err(nom::Err::Failure(ParsingError {
-                    input: ErrIn::S(&i[..i.offset(r)]),
-                    cx: "empty block".into(),
-                    expecting: Expecting::Impl,
-                }))
+                Err(ParsingError::failure(
+                    &i[..i.offset(r)],
+                    "empty block",
+                    Expecting::Impl,
+                ))
             } else {
                 // we know that i starts with { so we grab the start tag position for later.
                 let start = line.create_tag(i).start;
@@ -556,11 +604,11 @@ fn arg<'f>(
             let mut tag = line.create_tag(i);
             tag.make_mut().end = tag.start + 1 + ident.len(); // capture :ident
 
-            Err(nom::Err::Failure(ParsingError {
-                input: ErrIn::T(tag),
-                cx: "unexpected type identifier".into(),
-                expecting: Expecting::Term,
-            }))
+            Err(ParsingError::failure(
+                tag,
+                "unexpected type identifier",
+                Expecting::Term,
+            ))
         } else if breakon_s(i) {
             Err(nom::Err::Error(make_error(i, ErrorKind::IsA)))
         } else if i.starts_with('$') {
@@ -568,11 +616,11 @@ fn arg<'f>(
         } else if let Some(s) = i.strip_prefix('#') {
             let (ii, mut c) = cut(exp(op_ident(line), Expecting::SpecLiteral))(s)?;
             if c.str().len() != 1 {
-                Err(nom::Err::Failure(ParsingError {
-                    input: ErrIn::T(c),
-                    cx: "special literals only have one character".into(),
-                    expecting: Expecting::SpecLiteral,
-                }))
+                Err(ParsingError::failure(
+                    c,
+                    "special literals only have one character",
+                    Expecting::SpecLiteral,
+                ))
             } else {
                 let ch = c.str().chars().next().unwrap();
                 let mut t = c.make_mut();
@@ -613,11 +661,11 @@ fn ident<'a: 'f, 'f>(
 
         let (i, ident) = if i.starts_with(':') {
             // expecting an identifier but found a type specifier
-            return Err(nom::Err::Failure(ParsingError {
-                input: ErrIn::S(i),
-                cx: "expecting an identifier but found a type specifier".into(),
-                expecting: Expecting::None,
-            }));
+            return Err(ParsingError::failure(
+                i,
+                "expecting an identifier but found a type specifier",
+                Expecting::None,
+            ));
         } else if i.starts_with('\"') {
             // wrapped in double quotes, don't stop on break chars
             wrapped_str('"')(i)
@@ -671,8 +719,11 @@ fn def_impl_inner<'a>(
         Expecting::Type
     };
     let (i, params) = exp(def_params(line), x)(i)?;
-    let (i, expr) = ws(delimited(char('{'), ws(expr(line, definitions)), char('}')))(i)?;
-    all_consuming(multispace0)(i)?;
+    let (i, expr) = no_trailing_input(ws(delimited(
+        char('{'),
+        ws(expr(line, definitions)),
+        char('}'),
+    )))(i)?;
 
     let def = DefinitionImpl {
         loc,
@@ -688,22 +739,20 @@ fn def_impl_inner<'a>(
 
 fn def_params(line: &Line) -> impl Fn(&str) -> IResult<&str, Vec<Parameter>, ParsingError> + '_ {
     move |i| {
-        let e = |err| Err(nom::Err::Error(err));
         let (i, params) = delimited(char('('), many0(ws(def_param(line))), char(')'))(i)?;
         // check that there is only one remainder and it is at the end.
         // also check that parameters are distinct
         let mut set = HashSet::default();
         for param in &params {
             if set.contains(param.ident.str()) {
-                return e(ParsingError {
-                    input: ErrIn::T(param.ident.clone()),
-                    cx: format!(
+                return Err(ParsingError::err(
+                    param.ident.clone(),
+                    format!(
                         "parameters must be distinct: `{}` has been previously defined",
                         param.ident
-                    )
-                    .into(),
-                    expecting: Expecting::None,
-                });
+                    ),
+                    Expecting::None,
+                ));
             }
             set.insert(param.ident.str());
         }
@@ -858,97 +907,34 @@ mod tests {
         );
     }
 
-    fn parse_err<'a, T>(
-        exp: Ex,
-        source: &'a str,
-        cx: &str,
-        start: usize,
-        len: usize,
-    ) -> Result<T, ParseFail> {
-        Err((
-            err::Error {
-                cat: err::Category::Parsing,
-                desc: "could not parse input line".into(),
-                traces: vec![err::Trace {
-                    loc: Location::Shell,
-                    source: source.into(),
-                    desc: Some(cx.into()),
-                    start,
-                    len,
-                }],
-                ..Default::default()
-            },
-            exp,
-        ))
-    }
-
     #[test]
     fn empty_expr() {
         let d = &Definitions::new();
-        let x = expression("", Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, "", "empty identifier", 0, 0));
-
-        let src = "in something.csv { }";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, src, "empty block", 17, 3));
-        let s = x.unwrap_err().0.to_string();
+        let x = expression("", Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &s,
+            &x,
             "Parsing Error: could not parse input line
---> shell:17
- | in something.csv { }
- |                  ^^^ empty block
+--> shell:0
+--> shell:0
 "
         );
 
-        let src = "in something.csv | adf {    }";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, src, "empty block", 23, 6));
-        let err_str = x.unwrap_err().0.to_string();
-        assert_eq!(
-            &err_str,
-            "Parsing Error: could not parse input line
---> shell:23
- | in something.csv | adf {    }
- |                        ^^^^^^ empty block
-"
-        );
-
-        let src = "in { asdf {   } }";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, src, "empty block", 10, 5));
-        let err_str = x.unwrap_err().0.to_string();
-        assert_eq!(
-            &err_str,
-            "Parsing Error: could not parse input line
---> shell:10
- | in { asdf {   } }
- |           ^^^^^ empty block
-"
-        );
-    }
-
-    #[test]
-    fn empty_expr2() {
-        let d = &Definitions::new();
-
-        let x = line(" {  } ");
-        let x = expr(&x, d)(&x.line);
-        assert_eq!(
-            x,
-            Err(E::Error(ParsingError {
-                input: ErrIn::S("{"),
-                cx: "invalid identifier, expecting alphabetic character, found `{`".into(),
-                expecting: Ex::Impl,
-            }))
-        );
         let x = line(" { asdf {  }  } ");
         let x = expr(&x, d)(&x.line);
         assert_eq!(
             x,
             Err(E::Error(ParsingError {
-                input: ErrIn::S("{"),
-                cx: "invalid identifier, expecting alphabetic character, found `{`".into(),
+                locs: vec![
+                    (
+                        "{".into(),
+                        "invalid identifier, expecting alphabetic character, found `{`".into()
+                    ),
+                    (" { asdf {  }  } ".into(), "no command".into())
+                ],
                 expecting: Ex::Impl,
             }))
         );
@@ -957,11 +943,7 @@ mod tests {
         let x = term(&l, d)(&l.line);
         assert_eq!(
             x,
-            Err(E::Failure(ParsingError {
-                input: ErrIn::S("{  }"),
-                cx: "empty block".into(),
-                expecting: Ex::Impl
-            }))
+            Err(ParsingError::failure("{  }", "empty block", Ex::Impl))
         );
     }
 
@@ -970,37 +952,41 @@ mod tests {
         let d = &Definitions::new();
 
         let src = "\\ | ";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, src, "empty identifier", 4, 1));
-        let err_str = x.unwrap_err().0.to_string();
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &err_str,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:4
  | \ | 
  |     ^ empty identifier
+--> shell:3
+ | \ | 
+ |    ^ no command
 "#
         );
 
         let src = "\\ { \\ | }";
-        let x = expression(src, Location::Shell, d);
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            x,
-            parse_err(
-                Ex::Impl,
-                src,
-                "invalid identifier, expecting alphabetic character, found `}`",
-                8,
-                1
-            )
-        );
-        let err_str = x.unwrap_err().0.to_string();
-        assert_eq!(
-            &err_str,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:8
  | \ { \ | }
  |         ^ invalid identifier, expecting alphabetic character, found `}`
+--> shell:7
+ | \ { \ | }
+ |        ^^ no command
+--> shell:0
+ | \ { \ | }
+ | ^^^^^^^^^ no command
 "#
         );
     }
@@ -1014,11 +1000,11 @@ mod tests {
         let x = op_ident(&x)(&x.line);
         assert_eq!(
             x,
-            Err(E::Error(ParsingError {
-                input: ErrIn::S("0"),
-                cx: "invalid identifier, expecting alphabetic character, found `0`".into(),
-                expecting: Ex::None,
-            }))
+            Err(ParsingError::err(
+                "0",
+                "invalid identifier, expecting alphabetic character, found `0`",
+                Ex::None,
+            ))
         );
     }
 
@@ -1026,67 +1012,98 @@ mod tests {
     fn broken_expr_delimiter() {
         let d = &Definitions::new();
         let src = "\\ { cmd ident ";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Term, src, "expected `}`", 14, 1));
-        let s = x.unwrap_err().0.to_string();
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &s,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:14
  | \ { cmd ident 
  |               ^ expected `}`
+--> shell:0
+ | \ { cmd ident 
+ | ^^^^^^^^^^^^^^ no command
 "#
         );
 
         let src = "\\ { cmd { ident }";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Term, src, "expected `}`", 17, 1));
-        let s = x.unwrap_err().0.to_string();
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &s,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:17
  | \ { cmd { ident }
  |                  ^ expected `}`
+--> shell:0
+ | \ { cmd { ident }
+ | ^^^^^^^^^^^^^^^^^ no command
 "#
         );
 
         let src = "\\ f | asdf { cmd { ident } ";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Term, src, "expected `}`", 27, 1));
-        let s = x.unwrap_err().0.to_string();
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &s,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:27
  | \ f | asdf { cmd { ident } 
  |                            ^ expected `}`
+--> shell:5
+ | \ f | asdf { cmd { ident } 
+ |      ^^^^^^^^^^^^^^^^^^^^^^ no command
 "#
         );
 
         let src = "\\ file.csv | asdf { cmd {   } ";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, src, "empty block", 24, 5));
-        let s = x.unwrap_err().0.to_string();
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &s,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:24
  | \ file.csv | asdf { cmd {   } 
  |                         ^^^^^ empty block
+--> shell:20
+ | \ file.csv | asdf { cmd {   } 
+ |                     ^^^^^^^^^^ no command
+--> shell:12
+ | \ file.csv | asdf { cmd {   } 
+ |             ^^^^^^^^^^^^^^^^^^ no command
 "#
         );
 
         let src = "\\ adsf | cmd { \\ |";
-        let x = expression(src, Location::Shell, d);
-        assert_eq!(x, parse_err(Ex::Impl, src, "empty identifier", 18, 1));
-        let s = x.unwrap_err().0.to_string();
+        let x = expression(src, Location::Shell, d)
+            .unwrap_err()
+            .0
+            .to_string();
+        println!("{x}");
         assert_eq!(
-            &s,
+            &x,
             r#"Parsing Error: could not parse input line
 --> shell:18
  | \ adsf | cmd { \ |
  |                   ^ empty identifier
+--> shell:18
+ | \ adsf | cmd { \ |
+ |                   ^ no command
+--> shell:8
+ | \ adsf | cmd { \ |
+ |         ^^^^^^^^^^ no command
 "#
         );
     }
@@ -1188,11 +1205,7 @@ mod tests {
         let x = ident(&x)(&x.line);
         assert_eq!(
             x,
-            Err(nom::Err::Error(ParsingError {
-                input: ErrIn::S(""),
-                cx: "expected `\'`".into(),
-                expecting: Expecting::None,
-            }))
+            Err(ParsingError::err("", "expected `\'`", Expecting::None,))
         );
     }
 
@@ -1450,11 +1463,11 @@ mod tests {
         let x = def_param(&l)(&l.line);
         assert_eq!(
             x,
-            Err(E::Error(ParsingError {
-                input: ErrIn::S("-"),
-                cx: "invalid identifier, expecting alphabetic character, found `-`".into(),
-                expecting: Expecting::None
-            }))
+            Err(ParsingError::err(
+                "-",
+                "invalid identifier, expecting alphabetic character, found `-`",
+                Expecting::None
+            ))
         );
 
         let x = line("var rem");
@@ -1490,22 +1503,14 @@ mod tests {
         let x = def_params(&x)(&x.line);
         assert_eq!(
             x,
-            Err(E::Error(ParsingError {
-                input: ErrIn::S("asdf"),
-                cx: "expected `(`".into(),
-                expecting: Expecting::None,
-            }))
+            Err(ParsingError::err("asdf", "expected `(`", Expecting::None,))
         );
 
         let x = line("(asdf ");
         let x = def_params(&x)(&x.line);
         assert_eq!(
             x,
-            Err(E::Error(ParsingError {
-                input: ErrIn::S(""),
-                cx: "expected `)`".into(),
-                expecting: Expecting::None,
-            }))
+            Err(ParsingError::err("", "expected `)`", Expecting::None,))
         );
 
         let x = line("( asdf )");
@@ -1530,11 +1535,11 @@ mod tests {
         let x = def_params(&x)(&x.line);
         assert_eq!(
             x,
-            Err(E::Error(ParsingError {
-                input: ErrIn::T(tt("test")),
-                cx: "parameters must be distinct: `test` has been previously defined".into(),
-                expecting: Expecting::None,
-            }))
+            Err(ParsingError::err(
+                tt("test"),
+                "parameters must be distinct: `test` has been previously defined",
+                Expecting::None,
+            ))
         );
     }
 
@@ -1706,9 +1711,13 @@ mod tests {
             .unwrap_err()
             .0
             .to_string();
+        println!("{x}");
         assert_eq!(
             x,
             "Parsing Error: could not parse input line
+--> shell:16
+ | def-ty Point { x y }
+ |                 ^^^^ expected `:`
 --> shell:16
  | def-ty Point { x y }
  |                 ^^^^ a field requires a type assignment: `field:Type`
@@ -1719,12 +1728,16 @@ mod tests {
             .unwrap_err()
             .0
             .to_string();
+        println!("{x}");
         assert_eq!(
             x,
             "Parsing Error: could not parse input line
 --> shell:17
  | def-ty Point { x: y:Num }
- |                  ^ missing a valid type specifier: `field:Type`
+ |                  ^ invalid identifier, expecting alphabetic character, found ` `
+--> shell:17
+ | def-ty Point { x: y:Num }
+ |                  ^^^^^^^^ missing a valid type specifier: `field:Type`
 "
         );
 
@@ -2051,14 +2064,7 @@ mod tests {
         // works on the dot_infixed call
         let src = line("$x.y");
         let x = dot_infixed(Ident(tt("foo")), &src)(&src.line);
-        assert_eq!(
-            x,
-            Err(nom::Err::Error(ParsingError {
-                cx: "".into(),
-                expecting: Expecting::None,
-                input: ErrIn::S("$x.y"),
-            }))
-        );
+        assert_eq!(x, Err(ParsingError::err("$x.y", "", Expecting::None)));
 
         let src = line(".y remaining");
         let x = dot_infixed(Ident(tt("foo")), &src)(&src.line);
@@ -2094,11 +2100,11 @@ mod tests {
         let x = dot_infixed(Ident(tt("foo")), &src)(&src.line);
         assert_eq!(
             x,
-            Err(nom::Err::Failure(ParsingError {
-                input: ErrIn::S("$"),
-                cx: "invalid identifier, expecting alphabetic character, found `$`".into(),
-                expecting: Expecting::None,
-            }))
+            Err(ParsingError::failure(
+                ErrIn::S("$"),
+                "invalid identifier, expecting alphabetic character, found `$`",
+                Expecting::None,
+            ))
         );
 
         // Below we test if encasing identifiers works
@@ -2198,21 +2204,27 @@ mod tests {
         let x = term(&src, d)(&src.line);
         assert_eq!(
             x,
-            Err(nom::Err::Failure(ParsingError {
-                input: ErrIn::T(tt("tfoo")),
-                cx: "special literals only have one character".into(),
-                expecting: Expecting::SpecLiteral
-            }))
+            Err(ParsingError::failure(
+                tt("tfoo"),
+                "special literals only have one character",
+                Expecting::SpecLiteral
+            ))
         );
 
         let src = line("in #tfoo zog");
         let x = expr(&src, d)(&src.line);
         assert_eq!(
             x,
-            Err(nom::Err::Failure(ParsingError {
-                input: ErrIn::T(tt("tfoo")),
-                cx: "special literals only have one character".into(),
-                expecting: Expecting::SpecLiteral
+            Err(E::Failure(ParsingError {
+                locs: vec![
+                    (
+                        tt("tfoo").into(),
+                        "special literals only have one character".into()
+                    ),
+                    ("in #tfoo zog".into(), "no command".into()),
+                ],
+
+                expecting: Expecting::SpecLiteral,
             }))
         );
 
@@ -2220,10 +2232,13 @@ mod tests {
         let x = expr(&src, d)(&src.line);
         assert_eq!(
             x,
-            Err(nom::Err::Failure(ParsingError {
-                input: ErrIn::S(""),
-                cx: "empty identifier".into(),
-                expecting: Expecting::SpecLiteral
+            Err(E::Failure(ParsingError {
+                locs: vec![
+                    ("".into(), "empty identifier".into()),
+                    ("in #".into(), "no command".into()),
+                ],
+
+                expecting: Expecting::SpecLiteral,
             }))
         );
     }
@@ -2352,7 +2367,10 @@ mod tests {
             "Parsing Error: could not parse input line
 --> <ogma>:1
  | : foo:Bar zog
- |  ^ expecting a type identifier
+ |  ^ invalid identifier, expecting alphabetic character, found ` `
+--> <ogma>:1
+ | : foo:Bar zog
+ |  ^^^^^^^^^^^^ expecting a type identifier
 "
         );
 
@@ -2367,7 +2385,10 @@ mod tests {
             "Parsing Error: could not parse input line
 --> <ogma>:9
  | :Num foo: zog
- |          ^ expecting a type identifier
+ |          ^ invalid identifier, expecting alphabetic character, found ` `
+--> <ogma>:9
+ | :Num foo: zog
+ |          ^^^^ expecting a type identifier
 "
         );
 

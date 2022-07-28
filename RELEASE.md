@@ -10,6 +10,7 @@
 - Fix error where stronger type guarantees were present (https://github.com/kdr-aus/ogma/pull/117)
 - Fix def not inferring correct input in `last` (https://github.com/kdr-aus/ogma/pull/147)
 - Fix _locals graph needs updating_ bug (https://github.com/kdr-aus/ogma/pull/148)
+- Provide more verbose parsing errors (https://github.com/kdr-aus/ogma/pull/151)
 
 **✨ Other Updates**
 - `ogma` crate API documentation is now published at https://kdr-aus.github.io/ogma/ogma/ (https://github.com/kdr-aus/ogma/commit/cf5cc7979c399b609e2e0605ffe176e70e474ac2)
