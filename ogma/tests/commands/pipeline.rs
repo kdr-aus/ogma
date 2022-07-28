@@ -777,6 +777,41 @@ fn not_enough_let_params() {
     );
 }
 
+#[test]
+fn variable_shadowing_soundness_01() {
+    let defs = &Definitions::new();
+    let code = "ls | let $x | + { let 'hdr' $x | Table $x }";
+    let x = process_w_nil(code, defs);
+
+    if let Err(e) = &x {
+        println!("{e}");
+    }
+
+    assert!(matches!(x, Ok(Value::Tab(_))));
+
+    let code = r#"ls | let $x | map size {:Num let $row.type:Str $x | Table $x }"#;
+    let x = process_w_nil(code, defs);
+
+    if let Err(e) = &x {
+        println!("{e}");
+    }
+
+    assert!(matches!(x, Ok(Value::Tab(_))));
+}
+
+#[test]
+fn variable_shadowing_soundness_02() {
+    let defs = &Definitions::new();
+    let code = r#"ls | let $x | grp type | map value {:Table \ $x | let $row.key:Str $x | fold {Table $x} append-row $row.size:Num  }"#;
+    let x = process_w_nil(code, defs);
+
+    if let Err(e) = &x {
+        println!("{e}");
+    }
+
+    assert!(matches!(x, Ok(Value::Tab(_))));
+}
+
 // ------ Nth ------------------------------------------------------------------
 #[test]
 fn nth_help_msg() {

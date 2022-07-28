@@ -130,7 +130,7 @@ impl<'d> Compiler<'d> {
             self.resolve_tg()?;
 
             // NOTE turn on for debugging.
-            // self._write_debug_report("debug-compiler.md");
+            self._write_debug_report("debug-compiler.md");
 
             if self.populate_compiled_expressions() {
                 continue;
@@ -270,10 +270,12 @@ impl<'d> Compiler<'d> {
             }
 
             // map in if has a Locals
+            dbg!("assign_variable_types");
             let local = match self.lg.get(node, var_tag.str()) {
                 Some(l) => l,
                 None => continue,
             };
+            dbg!(local);
 
             match local {
                 Local::Var(v) => {

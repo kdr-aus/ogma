@@ -128,11 +128,14 @@ impl LocalsGraph {
 
     /// Fetch a variable if it is found on the node's locals map.
     pub fn get(&self, node: NodeIndex, name: &str) -> Option<&eng::Local> {
-        self.graph[node]
-            .map
-            .get(name)
-            .map(|l| l.local as usize)
-            .map(|i| &self.locals[i])
+        dbg!(node, name);
+        self.sealed(node).then(|| ()).and_then(|_| {
+            self.graph[node]
+                .map
+                .get(name)
+                .map(|l| l.local as usize)
+                .map(|i| &self.locals[i])
+        })
     }
 
     /// Much like `get`, but runs checks to assert if `name` is definitely not found, returning a
@@ -141,13 +144,19 @@ impl LocalsGraph {
     /// If `name` is not found but there could be updates to the graph which introduce `name`, then
     /// a soft error is returned.
     pub fn get_checked(&self, node: NodeIndex, name: &str, tag: &Tag) -> Result<&eng::Local> {
-        self.get(node, name).ok_or_else(|| {
-            if self.sealed(node) {
-                Error::var_not_found(tag)
-            } else {
-                Error::update_locals_graph(tag)
-            }
-        })
+        dbg!(node, name, tag);
+        if node.index() == 22 {
+            dbg!(self.sealed(node));
+            panic!()
+        }
+        self.sealed(node)
+            .then(|| {
+                self.get(node, name)
+                    .map(|l| dbg!(l))
+                    .ok_or_else(|| Error::var_not_found(tag))
+            })
+            .ok_or_else(|| Error::update_locals_graph(tag))
+            .and_then(|x| x)
     }
 
     /// A new variable should be added.
@@ -328,6 +337,27 @@ impl LocalsGraph {
 
         let mut stack = self.graph.neighbors(node).collect::<Vec<_>>();
 
+        for n in stack {
+            self.graph[n].sealed = true; // seal flow targets
+
+            if let Some(e) = ag[n].expr().map(|_| ExprNode(n)) {
+                self.graph[e.first_op(ag).idx()].sealed = true;
+            }
+
+            if ag[n].op().is_some() {
+                for n in 
+                    self.graph
+                        .neighbors(n)
+                        // do not filter the next op though
+                        .filter(|&n| ag[n].op().is_none())
+                        .collect::<Vec<_>>() {
+                self.graph[n].sealed = true;
+                        }
+            }
+        }
+
+        return;
+
         while let Some(n) = stack.pop() {
             // if already sealed, it would have already gone through this process, so do not keep
             // walking down.
@@ -350,7 +380,9 @@ impl LocalsGraph {
                     self.graph
                         .neighbors(n)
                         // do not filter the next op though
-                        .filter(|&n| ag[n].op().is_none()),
+                        .filter(|&n| ag[n].op().is_none())
+                        // do not apply to argument if an expression
+                        .filter(|&n| ag[n].expr().is_none()),
                 );
             }
         }

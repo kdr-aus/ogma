@@ -40,9 +40,19 @@ impl<'a> ArgBuilder<'a> {
     }
 
     fn follow_local_arg_ptr(mut self: Box<Self>) -> Box<Self> {
+
+        dbg!("follow_local_arg_ptr");
         let new_node = self.compiler.ag[self.node.idx()]
             .var()
             .and_then(|t| self.compiler.lg.get(self.node.idx(), t.str()))
+            .map(|l| {
+
+//         if self.node.index() == 25 {
+//             self.compiler._write_debug_report("debug-compiler.md");
+//             panic!()
+//         }
+        l
+            })
             .and_then(|l| match l {
                 Local::Ptr { to, tag: _ } => Some(to),
                 _ => None,
@@ -273,6 +283,7 @@ impl<'a> ArgBuilder<'a> {
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
         let Compiler { ag, lg, .. } = self.compiler;
 
+        dbg!("assert_var_exists");
         match &ag[self.node.idx()] {
             astgraph::AstNode::Var(tag) => {
                 lg.get(self.node.idx(), tag.str())
