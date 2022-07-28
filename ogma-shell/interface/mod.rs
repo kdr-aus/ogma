@@ -23,7 +23,7 @@ pub use completions::{Completer, Completion, CompletionType, Completions};
 pub use events::Events;
 pub use outputs::Outputs;
 
-const SLEEP: std::time::Duration = std::time::Duration::from_millis(2);
+const SLEEP: std::time::Duration = std::time::Duration::from_millis(5);
 const OUTPUTS_LIM: usize = 100;
 const NOMOD: KeyModifiers = KeyModifiers::empty();
 const SCROLL_LINES: i32 = 5;
@@ -136,6 +136,7 @@ struct TermState {
     tabs: Vec<TabState>,
     tab_selected: usize,
     draw_help: bool,
+    cmpls_drawn: bool,
     config_bldr: ConfigBldr,
 }
 
@@ -218,6 +219,7 @@ where
         tabs: vec![state],
         tab_selected: 0,
         draw_help: true,
+        cmpls_drawn: false,
         config_bldr,
     };
 
@@ -255,12 +257,16 @@ where
     let r = match r {
         EventResult::InputChanged => {
             {
+                state.cmpls_drawn = false;
                 let state = state.tab_state();
                 state.completions.request(&state.input);
             }
             EventResult::InputChanged
         }
-        EventResult::None if state.tab_state().completions.has() => EventResult::Redraw,
+        EventResult::None if state.tab_state().completions.has() && !state.cmpls_drawn => {
+            state.cmpls_drawn = true;
+            EventResult::Redraw
+        }
         x => x,
     };
 

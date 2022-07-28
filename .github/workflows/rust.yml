@@ -51,7 +51,7 @@ jobs:
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('Cargo.lock') }}
 
     - name: Check Formatting
-      run: cargo +stable fmt --workspace -- --check
+      run: cargo +stable fmt --all -- --check
       if: matrix.os == 'ubuntu-latest'
 
     - name: Build
