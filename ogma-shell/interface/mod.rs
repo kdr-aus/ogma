@@ -4,9 +4,9 @@ use ::libs::{
     divvy::Switch,
     fastrand,
 };
+use cansi::v3 as cansi;
 use std::{cmp, io};
 use tui::{backend::Backend, layout::*, style::*, text::*, widgets::*, Frame, Terminal as Term};
-use cansi::v3 as cansi;
 
 mod completions;
 mod events;
@@ -15,10 +15,12 @@ mod input;
 mod outputs;
 #[cfg(test)]
 mod tests;
+mod theme;
 
 use events::*;
 use history::History;
 use input::InputBuffer;
+use theme::Theme;
 
 pub use completions::{Completer, Completion, CompletionType, Completions};
 pub use events::Events;
@@ -100,18 +102,18 @@ struct TabState {
 }
 
 impl TabState {
-    fn input_text(&mut self, width: usize) -> Text<'static> {
+    fn input_text(&mut self, width: usize, theme: u8) -> Text<'static> {
         if self.input.buffer_changed() {
             let pos = self.input.buf_pos();
             let i = (self.decorationfn)(self.input.buffer(..), pos);
-            self.input_cache = convert_coloured_str(&i, width);
+            self.input_cache = convert_coloured_str(&i, width, theme);
             self.input.reset_buf_changed();
         }
 
         self.input_cache.clone()
     }
 
-    fn update(&mut self, cu: ConfigUpdate) {
+    fn update(&mut self, cu: ConfigUpdate, theme: u8) {
         macro_rules! update {
             ($e:expr, $a:ident => $foo:expr) => {{
                 if let Some(e) = $e {
@@ -129,7 +131,7 @@ impl TabState {
         update!(new_title, x => self.title = x);
         update!(new_prompt, x => self.prompt = x);
         update!(new_completions, x => self.completions = x);
-        update!(add_output, x => self.outputs.add(x));
+        update!(add_output, x => self.outputs.add(x, theme));
     }
 }
 
@@ -138,6 +140,7 @@ struct TermState {
     tab_selected: usize,
     draw_help: bool,
     cmpls_drawn: bool,
+    theme: u8,
     config_bldr: ConfigBldr,
 }
 
@@ -221,6 +224,7 @@ where
         tab_selected: 0,
         draw_help: true,
         cmpls_drawn: false,
+        theme: 0,
         config_bldr,
     };
 
@@ -297,18 +301,18 @@ fn process_event(ev: Event, state: &mut TermState) -> EventResult {
     let has_cmpls = state.tab_state().completions.has();
 
     match ev {
-        // ctrl+h toggles help
+        // alt+h toggles help
         Key {
             code: Char('h'),
-            mods: KM::CONTROL,
+            mods: KM::ALT,
         } => {
             state.draw_help = !state.draw_help;
             EventResult::Redraw
         }
-        // ctrl+q quits tab, quits program if all gone
+        // alt+q quits tab, quits program if all gone
         Key {
             code: Char('q'),
-            mods: KM::CONTROL,
+            mods: KM::ALT,
         } => {
             state.quit_tab();
             if state.tabs_len() == 0 {
@@ -317,10 +321,10 @@ fn process_event(ev: Event, state: &mut TermState) -> EventResult {
                 EventResult::Redraw
             }
         }
-        // ctrl+t opens a new tab
+        // alt+t opens a new tab
         Key {
             code: Char('t'),
-            mods: KM::CONTROL,
+            mods: KM::ALT,
         } => {
             state.new_tab();
             EventResult::Redraw
@@ -331,6 +335,14 @@ fn process_event(ev: Event, state: &mut TermState) -> EventResult {
             mods: NOMOD,
         } => {
             state.switch_tab();
+            EventResult::Redraw
+        }
+        // alt+m cycles theme
+        Key {
+            code: Char('m'),
+            mods: KM::ALT,
+        } => {
+            state.theme = state.theme.wrapping_add(1);
             EventResult::Redraw
         }
         // enter triggers a process
@@ -487,6 +499,7 @@ fn draw<B: Backend>(term: &mut Term<B>, state: &mut TermState) -> io::Result<()>
 fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
     let size = frame.size();
     let draw_help = state.draw_help;
+    let thm = state.theme;
 
     // border
     let border = Block::default()
@@ -501,11 +514,12 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
         .map(Spans::from)
         .collect();
     let tabs = Tabs::new(tabs)
-        .style(Style::default().fg(Color::DarkGray))
+        .style(Style::default().fg(Color::DarkGray).theme(thm))
         .highlight_style(
             Style::default()
                 .fg(Color::White)
-                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+                .theme(thm),
         )
         .select(state.tab_selected());
     let tabs_area = Rect { height: 1, ..area };
@@ -517,7 +531,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
     let area = reduce_top_margin(area, 1);
 
     // title
-    let title = convert_coloured_str(&state.title, std::usize::MAX)
+    let title = convert_coloured_str(&state.title, std::usize::MAX, thm)
         .lines
         .remove(0);
     let border = Block::default().title(title).borders(Borders::TOP);
@@ -538,7 +552,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
     frame.render_widget(Paragraph::new(prompt_txt), prompt_area);
 
     // input -- calculates cursor and completion position here as well
-    let input = state.input_text(area.width as usize);
+    let input = state.input_text(area.width as usize, thm);
     let newlines_offset = sum_newline_chars(&state.input);
     let ends_nl = |range| {
         state
@@ -586,7 +600,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
 
     // outputs
     if area.width != state.outputs.cached_width() {
-        state.outputs.update_width(area.width);
+        state.outputs.update_width(area.width, thm);
     }
     let block = Block::default().title(" Outputs ").borders(Borders::TOP);
     let area2 = block.inner(area);
@@ -605,7 +619,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
         let area = Rect::new(x, y, w, h).intersection(size);
         let para = Paragraph::new(help)
             .alignment(Alignment::Right)
-            .style(light_on_magenta());
+            .style(light_on_magenta().theme(thm));
         frame.render_widget(Clear, area);
         frame.render_widget(para, area);
     }
@@ -615,7 +629,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
         return;
     }
     let c = state.completions.items();
-    let cmpls = construct_completion_block(c, state.completions.highlighted());
+    let cmpls = construct_completion_block(c, state.completions.highlighted(), thm);
     let tags = construct_completion_tags(c);
     let txt_area = Rect {
         x: input_area.x + cmplx,
@@ -642,7 +656,7 @@ fn draw_frame<B: Backend>(frame: &mut Frame<B>, state: &mut TermState) {
         a.width += 2;
         a.intersection(area)
     };
-    let sty = completion_style();
+    let sty = completion_style().theme(thm);
 
     frame.render_widget(Clear, bg_area);
     frame.render_widget(Block::default().style(sty), bg_area);
@@ -714,8 +728,9 @@ where
 
     // update tabstate
     state.tab_state().input.clear();
+    let thm = state.theme;
     match cu {
-        Ok(cu) => state.tab_state().update(cu),
+        Ok(cu) => state.tab_state().update(cu, thm),
         Err(e) => match e.downcast::<String>() {
             Ok(e) => eprintln!("omga shell compute thread panicked: {}", e),
             Err(_) => eprintln!("ogma shell compute thread panicked"),
@@ -760,13 +775,13 @@ fn calculate_cursor_offset(text: &Text, chpos: usize) -> (u16, u16) {
     (x, y)
 }
 
-fn construct_completion_block(cmpls: &[Completion], highlighted: Option<usize>) -> Text {
+fn construct_completion_block(cmpls: &[Completion], highlighted: Option<usize>, theme: u8) -> Text {
     let mut lines: Vec<_> = cmpls.iter().map(|c| Spans::from(&*c.value)).collect();
 
     if let Some(i) = highlighted {
         if let Some(s) = lines.get_mut(i) {
             for ss in &mut s.0 {
-                ss.style = ss.style.bg(Color::Cyan);
+                ss.style = ss.style.bg(Color::Cyan).theme(theme);
             }
         }
     }
@@ -787,14 +802,17 @@ fn completion_style() -> Style {
 }
 
 fn light_on_magenta() -> Style {
-    Style::default().bg(Color::Magenta).fg(Color::Rgb(192, 192, 192))
+    Style::default()
+        .bg(Color::Magenta)
+        .fg(Color::Rgb(192, 192, 192))
 }
 
 fn help_msg() -> Text<'static> {
     let lines = vec![
-        Spans::from(Span::from("Ctrl+h: toggle help")),
-        Spans::from(Span::from("Ctrl+q: close tab")),
-        Spans::from(Span::from("Ctrl+t: open new tab")),
+        Spans::from(Span::from("Alt+h: toggle help")),
+        Spans::from(Span::from("Alt+q: close tab/exit")),
+        Spans::from(Span::from("Alt+t: open new tab")),
+        Spans::from(Span::from("Alt+m: cycle themes")),
         Spans::from(Span::from("Tab: cycle tabs")),
         Spans::from(Span::from("Shift+↑|PgUp: scroll output up")),
         Spans::from(Span::from("Shift+↓|PgDown: scroll output down")),
@@ -848,7 +866,7 @@ fn mv_completions(state: &mut TabState, next: bool) -> EventResult {
 }
 
 // ###### TEXT DECORATIONS #####################################################
-fn convert_coloured_str(s: &str, width: usize) -> Text<'static> {
+fn convert_coloured_str(s: &str, width: usize, theme: u8) -> Text<'static> {
     use unicode_width::*;
 
     let mut lines = Vec::new();
@@ -864,7 +882,7 @@ fn convert_coloured_str(s: &str, width: usize) -> Text<'static> {
                 let chw = ch.width().unwrap_or(0);
                 w += chw;
                 if w > width {
-                    spans.push(cnv_span(&slice.text[start..i], slice));
+                    spans.push(cnv_span(&slice.text[start..i], slice, theme));
                     lines.push(Spans::from(spans));
                     spans = vec![];
                     start = i;
@@ -872,7 +890,7 @@ fn convert_coloured_str(s: &str, width: usize) -> Text<'static> {
                 }
                 i += ch.len_utf8();
             }
-            spans.push(cnv_span(&slice.text[start..i], slice));
+            spans.push(cnv_span(&slice.text[start..i], slice, theme));
         }
 
         lines.push(Spans::from(spans));
@@ -887,8 +905,21 @@ fn convert_coloured_str(s: &str, width: usize) -> Text<'static> {
     lines.into()
 }
 
-fn cnv_span(s: &str, slice: self::cansi::CategorisedSlice) -> Span<'static> {
-    let self::cansi::CategorisedSlice { fg, bg, intensity, italic, underline, blink, reversed, hidden, strikethrough, text: _, start: _, end: _ } = slice;
+fn cnv_span(s: &str, slice: self::cansi::CategorisedSlice, theme: u8) -> Span<'static> {
+    let self::cansi::CategorisedSlice {
+        fg,
+        bg,
+        intensity,
+        italic,
+        underline,
+        blink,
+        reversed,
+        hidden,
+        strikethrough,
+        text: _,
+        start: _,
+        end: _,
+    } = slice;
 
     let mut style = Style {
         fg: fg.map(cnv_colour),
@@ -920,7 +951,7 @@ fn cnv_span(s: &str, slice: self::cansi::CategorisedSlice) -> Span<'static> {
         style = style.add_modifier(Modifier::CROSSED_OUT);
     }
 
-    Span::styled(String::from(s), style)
+    Span::styled(String::from(s), style.theme(theme))
 }
 
 fn cnv_colour(c: self::cansi::Color) -> Color {
