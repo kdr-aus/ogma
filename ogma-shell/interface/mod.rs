@@ -1045,10 +1045,10 @@ mod unit_tests {
 
     #[test]
     fn multiline_text_decorating() {
-        let text = |s| Text::styled(s, Style::default().fg(Color::White).bg(Color::Black));
+        let text = |s| Text::styled(s, Style::default());
 
         let t = "Hello, world!";
-        let txt = convert_coloured_str(t, 4);
+        let txt = convert_coloured_str(t, 4, 0);
         let exp = text(
             "Hell
 o, w
@@ -1085,7 +1085,7 @@ orld
                 .strikethrough(),
             "cyan".bright_cyan().on_bright_white()
         );
-        let text = convert_coloured_str(&colours, 300);
+        let text = convert_coloured_str(&colours, 300, 0);
         let output = format!("{:?}", text);
         println!("{}", output);
         assert_eq!(
@@ -1097,13 +1097,13 @@ orld
     #[test]
     fn converting_cansi_newline() {
         let colours = "\n";
-        let text = convert_coloured_str(colours, 300);
+        let text = convert_coloured_str(colours, 300, 0);
         let output = format!("{:?}", text);
         println!("{}", output);
         assert_eq!(
             &output,
             "Text { lines: [\
-Spans([Span { content: \"\", style: Style { fg: Some(White), bg: Some(Black), add_modifier: (empty), sub_modifier: (empty) } }]), \
+Spans([Span { content: \"\", style: Style { fg: None, bg: None, add_modifier: (empty), sub_modifier: (empty) } }]), \
 Spans([Span { content: \"\", style: Style { fg: None, bg: None, add_modifier: (empty), sub_modifier: (empty) } }])\
 ] }"
         );

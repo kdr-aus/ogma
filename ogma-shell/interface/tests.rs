@@ -45,6 +45,7 @@ impl Tester {
             tab_selected: 0,
             draw_help: false,
             cmpls_drawn: false,
+            theme: 0,
             config_bldr: Box::new(config),
         };
 
@@ -461,14 +462,14 @@ fn toggle_help() {
 
     t.push(vec![Key {
         code: Char('h'),
-        mods: Km::CONTROL,
+        mods: Km::ALT,
     }]);
     t.assert(
         "
-┃ Tab 1                      ┃
-           Ctrl+h: toggle help
-             Ctrl+q: close tab
-          Ctrl+t: open new tab
+            Alt+h: toggle help
+         Alt+q: close tab/exit
+           Alt+t: open new tab
+           Alt+m: cycle themes
                Tab: cycle tabs
 Shift+↑|PgUp: scroll output up
 Shift+↓|PgDown: scroll output 
@@ -482,7 +483,7 @@ fn test_tabbing() {
     let mut t = Tester::new();
     let newtab = Key {
         code: Char('t'),
-        mods: Km::CONTROL,
+        mods: Km::ALT,
     };
     let tab = Key {
         code: Tab,
@@ -521,7 +522,7 @@ fn test_tabbing() {
 
     t.push(vec![Key {
         code: Char('q'),
-        mods: Km::CONTROL,
+        mods: Km::ALT,
     }]);
     t.assert(
         "
