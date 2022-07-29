@@ -532,7 +532,7 @@ fn highlight_node(node: &Node, buf: &mut String) {
     use ogma_ls::completion::NodeType::*;
     let s = node.tag.str();
     let w = match node.ty {
-        Command => s.bright_cyan(),
+        Command => s.bright_cyan().bold(),
         Type => s.bright_green().underline(),
         Num => s.magenta(),
         Pound => s.bright_red(),
@@ -543,7 +543,7 @@ fn highlight_node(node: &Node, buf: &mut String) {
         Variant => s.bright_magenta().underline(),
         _ => s.white(),
     };
-    write!(buf, "{}", w).ok();
+    write!(buf, "{w}").ok();
 }
 
 fn highlight_help(printed_error: &str, wsp: &Workspace) -> String {
@@ -646,7 +646,7 @@ mod tests {
             f("filter one 2"),
             format!(
                 "{} {} {}",
-                "filter".bright_cyan(),
+                "filter".bright_cyan().bold(),
                 "one".white(),
                 "2".magenta()
             )
@@ -655,7 +655,7 @@ mod tests {
             f("filter $x --bar   "),
             format!(
                 "{} {} {}   ",
-                "filter".bright_cyan(),
+                "filter".bright_cyan().bold(),
                 "$x".yellow(),
                 "--bar".bright_red()
             )
@@ -664,7 +664,7 @@ mod tests {
             f("filter --'bar' --\"zog 2\""),
             format!(
                 "{} {} {}",
-                "filter".bright_cyan(),
+                "filter".bright_cyan().bold(),
                 "--'bar'".bright_red(),
                 "--\"zog 2\"".bright_red()
             )
@@ -673,22 +673,22 @@ mod tests {
             f("def foo-bar Ord (x y) { + $x $y | Ord::Gt }"),
             format!(
                 "{} {} {} ({} {}) {{ {} {} {} | {} }}",
-                "def".bright_cyan(),
-                "foo-bar".bright_cyan(),
+                "def".bright_cyan().bold(),
+                "foo-bar".bright_cyan().bold(),
                 "Ord".bright_green().underline(),
                 "x".bright_blue(),
                 "y".bright_blue(),
-                "+".bright_cyan(),
+                "+".bright_cyan().bold(),
                 "$x".yellow(),
                 "$y".yellow(),
-                "Ord::Gt".bright_cyan()
+                "Ord::Gt".bright_cyan().bold()
             )
         );
         assert_eq!(
             f("def-ty Either :: A | B"),
             format!(
                 "{} {} :: {} | {}",
-                "def-ty".bright_cyan(),
+                "def-ty".bright_cyan().bold(),
                 "Either".bright_green().underline(),
                 "A".bright_magenta().underline(),
                 "B".bright_magenta().underline()
@@ -703,7 +703,7 @@ mod tests {
             f("if #t #i #i"),
             format!(
                 "{} {} {} {}",
-                "if".bright_cyan(),
+                "if".bright_cyan().bold(),
                 "#t".bright_red(),
                 "#i".bright_red(),
                 "#i".bright_red(),
@@ -760,20 +760,21 @@ mod tests {
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[1;35mExamples:\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter ls items greater than 5kB\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96mls\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m \u{1b}[37msize\u{1b}[0m \u{1b}[96m>\u{1b}[0m \u{1b}[35m5e3\u{1b}[0m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[1;96mls\u{1b}[0m | \u{1b}[1;96mfilter\u{1b}[0m \u{1b}[37msize\u{1b}[0m \u{1b}[1;96m>\u{1b}[0m \u{1b}[35m5e3\u{1b}[0m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter ls by extension\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96mls\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m \u{1b}[37mext\u{1b}[0m \u{1b}[91m--Str\u{1b}[0m \u{1b}[96m=\u{1b}[0m \u{1b}[37mmd\u{1b}[0m\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[1;96mls\u{1b}[0m | \u{1b}[1;96mfilter\u{1b}[0m \u{1b}[37mext\u{1b}[0m \u{1b}[91m--Str\u{1b}[0m \u{1b}[1;96m=\u{1b}[0m \u{1b}[37mmd\u{1b}[0m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter a table by two columns\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96m\\\u{1b}[0m \u{1b}[37mtable.csv\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m { \u{1b}[96mand\u{1b}[0m { \u{1b}[96mget\u{1b}[0m \u{1b}[37mcol-a\u{1b}[0m | \u{1b}[96m>\u{1b}[0m \u{1b}[35m100\u{1b}[0m } { \u{1b}[96mget\u{1b}[0m \u{1b}[37mcol-b\u{1b}[0m | \u{1b}[96m<\u{1b}[0m \u{1b}[35m10\u{1b}[0m } }\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[1;96m\\\u{1b}[0m \u{1b}[37mtable.csv\u{1b}[0m | \u{1b}[1;96mfilter\u{1b}[0m { \u{1b}[1;96mand\u{1b}[0m { \u{1b}[1;96mget\u{1b}[0m \u{1b}[37mcol-a\u{1b}[0m | \u{1b}[1;96m>\u{1b}[0m \u{1b}[35m100\u{1b}[0m } { \u{1b}[1;96mget\u{1b}[0m \u{1b}[37mcol-b\u{1b}[0m | \u{1b}[1;96m<\u{1b}[0m \u{1b}[35m10\u{1b}[0m } }\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[3m\u{1b}[0m
 \u{1b}[95m | \u{1b}[0m\u{1b}[37m\u{1b}[33m filter table columns\u{1b}[0m
-\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[96m\\\u{1b}[0m \u{1b}[37mtable.csv\u{1b}[0m | \u{1b}[96mfilter\u{1b}[0m \u{1b}[91m--cols\u{1b}[0m \u{1b}[96mor\u{1b}[0m { \u{1b}[96m=\u{1b}[0m \'\u{1b}[37mfoo\u{1b}[0m\' } { \u{1b}[96m=\u{1b}[0m \u{1b}[37mbar\u{1b}[0m }\u{1b}[0m
+\u{1b}[95m | \u{1b}[0m\u{1b}[37m => \u{1b}[1;96m\\\u{1b}[0m \u{1b}[37mtable.csv\u{1b}[0m | \u{1b}[1;96mfilter\u{1b}[0m \u{1b}[91m--cols\u{1b}[0m \u{1b}[1;96mor\u{1b}[0m { \u{1b}[1;96m=\u{1b}[0m '\u{1b}[37mfoo\u{1b}[0m' } { \u{1b}[1;96m=\u{1b}[0m \u{1b}[37mbar\u{1b}[0m }\u{1b}[0m
 ";
 
-        println!("### EXPECTED ###:\n{}", exp);
-        println!("### FOUND ###:\n{}", e);
+        dbg!(&e);
+        println!("### EXPECTED ###:\n{exp}");
+        println!("### FOUND ###:\n{e}");
 
         for (a, b) in e.lines().zip(exp.lines()) {
             assert_eq!(a, b);

@@ -74,9 +74,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "cansi"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "185b9281d84fc234662dc95ef999e5ac4e9b7591a6e5aa54edabda3179b80b4f"
+checksum = "9690ba3ff3deaee141400f5ade715ca1fa6b3093938e69f1da1870bdbbf9692b"
 
 [[package]]
 name = "cassowary"

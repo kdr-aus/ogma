@@ -3,6 +3,8 @@
 **🔬 New Features**
 - Improve help messages for defs with multiple input types
     (https://github.com/kdr-aus/ogma/pull/134)
+- The shell supports themes and transparent terminal backgrounds
+    (https://github.com/kdr-aus/ogma/pull/153)
 
 **🐛 Bug Fixes**
 - Fix variable type inferencing when passing variables to `def`s (https://github.com/kdr-aus/ogma/pull/115)
