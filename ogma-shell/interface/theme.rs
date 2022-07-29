@@ -74,7 +74,7 @@ impl Alter for Light {
             LightRed => Red,
             Yellow => Rgb(210, 105, 30),
             // help and completions text,
-            Rgb(192, 192, 192) => Rgb(55,55,55),
+            Rgb(192, 192, 192) => Rgb(55, 55, 55),
             x => x,
         }
     }

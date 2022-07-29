@@ -532,7 +532,7 @@ fn highlight_node(node: &Node, buf: &mut String) {
     use ogma_ls::completion::NodeType::*;
     let s = node.tag.str();
     let w = match node.ty {
-        Command => s.bright_cyan(),
+        Command => s.bright_cyan().bold(),
         Type => s.bright_green().underline(),
         Num => s.magenta(),
         Pound => s.bright_red(),
