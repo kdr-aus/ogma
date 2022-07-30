@@ -13,14 +13,14 @@ pub struct ArgBuilder<'a> {
 
     compiler: &'a Compiler<'a>,
     blk_in_ty: Option<Type>,
-    chgs: Chgs<'a>,
+    chgs: &'a mut Chgs,
 }
 
 impl<'a> ArgBuilder<'a> {
     pub(super) fn new(
         node: ArgNode,
         compiler: &'a Compiler<'a>,
-        chgs: Chgs<'a>,
+        chgs: &'a mut Chgs,
         blk_in_ty: Option<Type>,
     ) -> Box<Self> {
         // see if the input and/or output types are known
@@ -40,19 +40,9 @@ impl<'a> ArgBuilder<'a> {
     }
 
     fn follow_local_arg_ptr(mut self: Box<Self>) -> Box<Self> {
-
-        dbg!("follow_local_arg_ptr");
         let new_node = self.compiler.ag[self.node.idx()]
             .var()
-            .and_then(|t| self.compiler.lg.get(self.node.idx(), t.str()))
-            .map(|l| {
-
-//         if self.node.index() == 25 {
-//             self.compiler._write_debug_report("debug-compiler.md");
-//             panic!()
-//         }
-        l
-            })
+            .and_then(|t| self.compiler.get_local_opt(self.node.idx(), t.str()).1)
             .and_then(|l| match l {
                 Local::Ptr { to, tag: _ } => Some(to),
                 _ => None,
@@ -109,6 +99,7 @@ impl<'a> ArgBuilder<'a> {
                     "expecting TypesSet to not be empty or a single set"
                 );
                 self.chgs
+                    .chgs
                     .push(tygraph::Chg::KnownInput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_input_type(self.tag()))
             }
@@ -142,6 +133,7 @@ impl<'a> ArgBuilder<'a> {
                     "expecting TypesSet to not be empty or a single set"
                 );
                 self.chgs
+                    .chgs
                     .push(tygraph::Chg::ObligeOutput(self.node.idx(), ty).into());
                 Err(Error::unknown_arg_output_type(self.tag()))
             }
@@ -253,14 +245,16 @@ impl<'a> ArgBuilder<'a> {
 
                 Ok(Hold::Expr(stack))
             }
-            Var(tag) => lg
-                .get_checked(node.idx(), tag.str(), tag)
-                .and_then(|local| match local {
-                    Local::Var(var) => Ok(Hold::Var(var.clone())),
-                    Local::Ptr { .. } => {
-                        unreachable!("a param argument should shadow the referencer arg node")
-                    }
-                }),
+            Var(tag) => {
+                compiler
+                    .get_local(node.idx(), tag.str(), tag)
+                    .and_then(|local| match local {
+                        Local::Var(var) => Ok(Hold::Var(var.clone())),
+                        Local::Ptr { .. } => {
+                            unreachable!("a param argument should shadow the referencer arg node")
+                        }
+                    })
+            }
             Expr(tag) => compiled_exprs
                 .get(&node.index())
                 .cloned()
@@ -281,25 +275,13 @@ impl<'a> ArgBuilder<'a> {
     /// - `Ok(Some(true))`: The variable exists in the locals,
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
-        let Compiler { ag, lg, .. } = self.compiler;
-
-        dbg!("assert_var_exists");
-        match &ag[self.node.idx()] {
-            astgraph::AstNode::Var(tag) => {
-                lg.get(self.node.idx(), tag.str())
-                    // Ok(Some(true)) if variable exists
-                    .map(|_| true)
-                    // if NOT sealed, return Ok(Some(false)) -- lg should be updated
-                    // NOTE we check the parent op for seal, not the argument itself.
-                    .or_else(|| {
-                        let sealed = lg.sealed(self.node.op(ag).idx());
-                        (!sealed).then(|| false)
-                    })
-                    // Error with a HARD error
-                    .ok_or_else(|| Error::var_not_found(tag))
-                    .map(Some)
-            }
-            _ => Ok(None), // not a variable
+        match self.node.var(self.compiler.ag()) {
+            Some(var) => match self.compiler.get_local_opt(self.node.idx(), var.str()) {
+                (true, Some(_)) => Ok(Some(true)),
+                (true, None) => Err(Error::var_not_found(var)),
+                (false, _) => Ok(Some(false)),
+            },
+            None => Ok(None), // not a variable
         }
     }
 }

@@ -66,6 +66,7 @@ impl<'a> Block<'a> {
         }
 
         self.chgs
+            .chgs
             .push(graphs::tygraph::Chg::KnownOutput(self.node.idx(), ty).into());
     }
 
@@ -73,7 +74,7 @@ impl<'a> Block<'a> {
     ///
     /// Note that this will not affect already resolved nodes, only inferred nodes.
     pub fn insert_anon_type_into_compiler(&mut self, ty: Type) {
-        self.chgs.push(graphs::tygraph::Chg::AnonTy(ty).into());
+        self.chgs.chgs.push(graphs::tygraph::Chg::AnonTy(ty).into());
     }
 
     /// Gets the flag that matches a given name.
@@ -124,7 +125,7 @@ impl<'a> Block<'a> {
                 Some(next) => lg
                     .new_var(next.idx(), Str::new(var.str()), ty, var.clone())
                     .map_err(|chg| {
-                        chgs.push(chg.into());
+                        chgs.chgs.push(chg.into());
                         Error::update_locals_graph(var)
                     }),
                 None => Ok(Variable::noop(var.clone(), ty)),
@@ -168,7 +169,7 @@ impl<'a> Block<'a> {
             .lg
             .new_var(arg.idx(), name, ty, tag.clone())
             .map_err(|chg| {
-                self.chgs.push(chg.into());
+                self.chgs.chgs.push(chg.into());
                 Error::update_locals_graph(tag)
             })
     }

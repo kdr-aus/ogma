@@ -31,11 +31,11 @@ impl<'d> Compiler<'d> {
             .filter(|d| !self.callsite_params.contains_key(&d.index()))
             .collect::<Vec<_>>();
 
-        let chgs = &mut Vec::new();
+        let mut chgs = Chgs::default();
         let mut chgd = false;
 
         for def in defs {
-            match map_def_params_into_variables(self, def, chgs)? {
+            match map_def_params_into_variables(self, def, &mut chgs)? {
                 LocalInjection::LgChange => (), // continue,
                 LocalInjection::Success { callsite_params } => {
                     chgd = true;
@@ -50,7 +50,7 @@ impl<'d> Compiler<'d> {
 
                     // seal off the def's expr node
                     // no more changes should occur since we have had succcess building.
-                    self.lg.seal_node(def.expr(&self.ag).idx(), &self.ag);
+                    self.lg.seal(def.expr(&self.ag));
                 }
                 LocalInjection::UnknownReturnTy(_) => {
                     // NOTE what to do about unknown return arguments!?
@@ -59,7 +59,7 @@ impl<'d> Compiler<'d> {
             }
         }
 
-        let chgd2 = self.apply_graph_chgs(chgs.drain(..))?;
+        let chgd2 = self.apply_graph_chgs(chgs.chgs.into_iter())?;
         Ok(chgd || chgd2)
     }
 }
@@ -80,7 +80,7 @@ pub struct CallsiteParam {
 pub(super) fn map_def_params_into_variables(
     compiler: &Compiler,
     defnode: DefNode,
-    chgs: Chgs,
+    chgs: &mut Chgs,
 ) -> Result<LocalInjection> {
     let Compiler { ag, tg, defs, .. } = compiler;
 
@@ -131,7 +131,7 @@ pub(super) fn map_def_params_into_variables(
         if param.ty.is_expr() {
             // the parameter is lazy
             if let Err(chg) = map_lazy_param(compiler, argnode, defnode, param) {
-                chgs.push(chg.into());
+                chgs.chgs.push(chg.into());
                 lg_chg = true;
             }
         } else {
@@ -179,7 +179,7 @@ fn map_callsite_param(
     defnode: DefNode,
     arg_idx: u8,
     param: &Parameter,
-    chgs: Chgs,
+    chgs: &mut Chgs,
 ) -> Result<std::result::Result<Option<CallsiteParam>, LocalInjection>> {
     let Compiler { ag, lg, .. } = compiler;
 
@@ -228,7 +228,7 @@ fn map_callsite_param(
             var,
             arg_idx,
         })
-        .map_err(|chg| chgs.push(chg.into()))
+        .map_err(|chg| chgs.chgs.push(chg.into()))
         .ok()))
 }
 
