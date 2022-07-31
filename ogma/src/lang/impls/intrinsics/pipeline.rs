@@ -382,6 +382,8 @@ variables are scoped to within the expression they are defined"
 }
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_adds_vars(false);
+
     type Binding = (eng::Variable, eng::Argument);
 
     // detect if the trailing argument is a command (expr) node
@@ -433,6 +435,8 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
     } else {
         None
     };
+
+    blk.assert_vars_added();
 
     fn bind_vars(bindings: &[Binding], value: &Value, cx: &mut Context) -> Result<()> {
         for (var, e) in bindings {

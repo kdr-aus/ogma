@@ -2,6 +2,15 @@ use super::*;
 use astgraph::AstGraph;
 use petgraph::prelude::*;
 
+type Map = HashMap<Str, Local>;
+
+#[derive(Copy, Clone, Debug)]
+enum E {
+    Flow,
+    Seal,
+}
+
+/// A index pointer into the locals stack.
 #[derive(Debug, Copy, Clone)]
 struct Local {
     local: u32,
@@ -10,12 +19,13 @@ struct Local {
 
 #[derive(Default, Debug, Clone)]
 struct Vars {
-    map: HashMap<Str, Local>,
-    /// Marker indicating that this map will not have any more variables introduced into it.
+    /// A map of all the available variables.
+    map: Map,
+    /// Flags if this node is sealed.
     sealed: bool,
 }
 
-type LocalsGraphInner = petgraph::stable_graph::StableGraph<Vars, (), petgraph::Directed, u32>;
+type LocalsGraphInner = petgraph::stable_graph::StableGraph<Vars, E, petgraph::Directed, u32>;
 
 #[derive(Debug)]
 pub enum Chg {
@@ -32,6 +42,12 @@ pub enum Chg {
         tag: Tag,
         defined_at: NodeIndex,
     },
+    /// Seal the op node, indicating no further variable additions will be made.
+    Seal(OpNode),
+    /// Removes a connection between the op and arg.
+    /// This is useful for ops such as `let` which might need it's arguments to be able to compile
+    /// without `let` op needing to be 'sealed'.
+    BreakEdge { op: OpNode, arg: ArgNode },
 }
 
 /// A graph structure which tracks variables, allowing for lexical scoping and shadowing.
@@ -46,24 +62,29 @@ pub struct LocalsGraph {
     locals: Vec<eng::Local>,
 }
 
+impl E {
+    fn is_flow(&self) -> bool {
+        matches!(self, E::Flow)
+    }
+
+    fn is_seal(&self) -> bool {
+        matches!(self, E::Seal)
+    }
+}
+
 impl LocalsGraph {
     /// Builds a locals graph based off the ast graph.
     pub fn build(ast_graph: &AstGraph) -> Self {
-        let mut graph = ast_graph.map(|_, _| Default::default(), |_, _| ());
+        let mut graph = ast_graph.map(|_, _| Default::default(), |_, _| E::Seal);
 
         graph.clear_edges(); // remove all the edges
 
-        let mut this = Self {
+        Self {
             graph,
             count: 0,
             locals: Vec::new(),
         }
-        .init_edges(ast_graph);
-
-        // seal initial node since no variables will be introduced into them
-        this.seal_node(0.into(), ast_graph);
-
-        this
+        .init_edges(ast_graph)
     }
 
     /// Crucially, no edges are provided between def boundaries.
@@ -73,21 +94,44 @@ impl LocalsGraph {
         let g = &mut self.graph;
 
         // blocks flow between each other in expressions
+        // all ops are indeterminate to add
         for op in ag.op_nodes() {
             if let Some(next) = op.next(ag) {
-                g.update_edge(op.idx(), next.idx(), ());
+                g.update_edge(op.idx(), next.idx(), E::Flow);
+                g.update_edge(next.idx(), op.idx(), E::Seal);
             }
         }
 
         // each op flows into each of its arguments
+        // sealing checks the _prev_ argument, or the expr for the root
+        // it also defaults to the op, but this can be broken
+        // all args assert that they are sealed
         for arg in ag.arg_nodes() {
-            g.update_edge(arg.op(ag).idx(), arg.idx(), ());
+            g[arg.idx()].sealed = true;
+
+            let op = arg.op(ag);
+
+            g.update_edge(op.idx(), arg.idx(), E::Flow);
+            g.update_edge(arg.idx(), op.idx(), E::Seal);
+
+            match op.prev(ag) {
+                Some(prev) => g.update_edge(arg.idx(), prev.idx(), E::Seal),
+                None => g.update_edge(arg.idx(), op.parent(ag).idx(), E::Seal),
+            };
         }
 
         // each expr flows into its first op
+        // sealing flows in opposite direction
+        // expressions are indeterminate to add, since sub-expressions of defs may have parameters
+        // that need to finalise. the only node which would be sealed is the root node
         for expr in ag.expr_nodes() {
-            g.update_edge(expr.idx(), expr.first_op(ag).idx(), ());
+            let fop = expr.first_op(ag).idx();
+            g.update_edge(expr.idx(), fop, E::Flow);
+            g.update_edge(fop, expr.idx(), E::Seal);
         }
+
+        // seal the root expression node
+        self.seal(ExprNode(0.into()));
 
         self
     }
@@ -126,28 +170,40 @@ impl LocalsGraph {
         self.count
     }
 
-    /// Fetch a variable if it is found on the node's locals map.
-    pub fn get(&self, node: NodeIndex, name: &str) -> Option<&eng::Local> {
+    /// Get a local `name` at `node`.
+    ///
+    /// Note that this does not check for sealing, that should be done before using this reference.
+    fn get_(&self, node: NodeIndex, name: &str) -> Option<&eng::Local> {
         self.graph[node]
             .map
             .get(name)
-            .map(|l| l.local as usize)
-            .map(|i| &self.locals[i])
+            .map(|l| &self.locals[l.local as usize])
     }
 
-    /// Much like `get`, but runs checks to assert if `name` is definitely not found, returning a
-    /// hard error.
+    /// Gets the local `name` at `node`.
     ///
-    /// If `name` is not found but there could be updates to the graph which introduce `name`, then
-    /// a soft error is returned.
-    pub fn get_checked(&self, node: NodeIndex, name: &str, tag: &Tag) -> Result<&eng::Local> {
-        self.get(node, name).ok_or_else(|| {
-            if self.sealed(node) {
-                Error::var_not_found(tag)
-            } else {
-                Error::update_locals_graph(tag)
-            }
-        })
+    /// If the locals graph cannot provide a concrete answer, [`Error::update_locals_graph`] is
+    /// returned.
+    pub fn get(&self, node: NodeIndex, name: &str, tag: &Tag) -> Result<&eng::Local> {
+        self.sealed(node)
+            .then(|| {
+                self.get_(node, name)
+                    .ok_or_else(|| Error::var_not_found(tag))
+            })
+            .ok_or_else(|| Error::update_locals_graph(tag))
+            .and_then(|x| x)
+    }
+
+    /// Gets the local `name` at `node`.
+    ///
+    /// If the locals graph cannot provide a concrete answer because there are unsealed nodes in
+    /// lexical scope, `(false, None)` is returned.
+    /// Otherwise `(true, Option)` is returned.
+    pub fn get_opt(&self, node: NodeIndex, name: &str) -> (bool, Option<&eng::Local>) {
+        match self.sealed(node) {
+            true => (true, self.get_(node, name)),
+            false => (false, None),
+        }
     }
 
     /// A new variable should be added.
@@ -242,13 +298,41 @@ impl LocalsGraph {
                 self.flow(defined_at); // propogate change
                 true // graph altered
             }
+            Chg::Seal(op) => {
+                let a = &mut self.graph[op.idx()];
+                if a.sealed {
+                    false
+                } else {
+                    a.sealed = true;
+                    true
+                }
+            }
+            Chg::BreakEdge { op, arg } => {
+                if let Some(e) = self.graph.find_edge(arg.idx(), op.idx()) {
+                    self.graph.remove_edge(e);
+                    true
+                } else {
+                    false
+                }
+            }
         }
+    }
+
+    fn neighbours_flow(&self, n: NodeIndex) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.graph
+            .edges(n)
+            .filter_map(|e| e.weight().is_flow().then(|| e.target()))
+    }
+
+    fn neighbours_seal(&self, n: NodeIndex) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.graph
+            .edges(n)
+            .filter_map(|e| e.weight().is_seal().then(|| e.target()))
     }
 
     fn flow(&mut self, from: NodeIndex) {
         let mut stack = self
-            .graph
-            .neighbors(from)
+            .neighbours_flow(from)
             .map(|to| (from, to))
             .collect::<Vec<_>>();
 
@@ -257,32 +341,17 @@ impl LocalsGraph {
 
             // to is now update, flow from there
             let from = to;
-            stack.extend(self.graph.neighbors(from).map(|to| (from, to)));
+            stack.extend(self.neighbours_flow(from).map(|to| (from, to)));
         }
     }
 
-    fn accrete(&mut self, from: NodeIndex, to_idx: NodeIndex) {
+    fn accrete(&mut self, from: NodeIndex, to: NodeIndex) {
         // to get around lifetime issues, we swap out the `to` map to mutate it,
         // then swap it back in once we are done
-        let mut to = std::mem::take(&mut self.graph[to_idx].map);
-        let from = &self.graph[from].map;
-
-        for (k, v) in from {
-            // if to does not contain this key, add it in!
-            if !to.contains_key(k) {
-                to.insert(k.clone(), *v);
-            } else {
-                let tov = to.get_mut(k).expect("will exist");
-                // if the to variable was defined at to, it would be more recent.
-                // if not, update the map local here to be from
-                if tov.defined != to_idx {
-                    *tov = *v;
-                }
-            }
-        }
-
+        let to_ = std::mem::take(&mut self.graph[to].map);
+        let to_ = accrete(&self.graph[from].map, to_, to);
         // reinstate the map
-        self.graph[to_idx].map = to;
+        self.graph[to].map = to_;
     }
 
     fn add_new_var(&mut self, name: Str, ty: Type, tag: Tag, defined: NodeIndex) {
@@ -317,54 +386,27 @@ impl LocalsGraph {
             .insert(name, Local { local, defined });
     }
 
-    /// Seal an op or expr node, flagging that there will not be any more variables introduced.
-    /// An op's successful compilation would seal it.
-    pub fn seal_node(&mut self, node: NodeIndex, ag: &AstGraph) {
-        if ag[node].expr().is_some() {
-            // if sealing an expression seal itself
-            // NOTE we do NOT seal op's as themselves
-            self.graph[node].sealed = true;
+    /// Checks that this node is sealed and no variables will be introduced along the path to root.
+    pub fn sealed(&self, node: NodeIndex) -> bool {
+        let mut q = std::collections::VecDeque::new();
+        q.push_back(node);
+
+        while let Some(node) = q.pop_front() {
+            if !self.graph[node].sealed {
+                return false;
+            }
+
+            q.extend(self.neighbours_seal(node));
         }
 
-        let mut stack = self.graph.neighbors(node).collect::<Vec<_>>();
-
-        while let Some(n) = stack.pop() {
-            // if already sealed, it would have already gone through this process, so do not keep
-            // walking down.
-            if self.graph[n].sealed {
-                continue;
-            }
-
-            self.graph[n].sealed = true; // seal flow targets
-
-            // if flow target is an expression, seal the expr's first op as well
-            if let Some(e) = ag[n].expr().map(|_| ExprNode(n)) {
-                stack.push(e.first_op(ag).idx());
-            }
-
-            // if the flow target is an Op (ie next block), seal the **argument** nodes
-            // NOTE: this is done since an Op should not have variable definition power that would
-            // influence the op's arguments...
-            if ag[n].op().is_some() {
-                stack.extend(
-                    self.graph
-                        .neighbors(n)
-                        // do not filter the next op though
-                        .filter(|&n| ag[n].op().is_none()),
-                );
-            }
-        }
+        true
     }
 
-    /// Returns if this node will not be updated, sealing the variable set.
+    /// Mark this expression node as one which will not introduce variables.
     ///
-    /// This not only looks at itself, but the parent paths, since an unsealed node in the chain
-    /// might introduce a variable which propagates along.
-    pub fn sealed(&self, node: NodeIndex) -> bool {
-        // self is sealed,
-        self.graph[node].sealed
-            // and its ancestors are sealed (notice the recursion)
-            && self.graph.neighbors_directed(node, Incoming).all(|n| self.sealed(n))
+    /// This is meant for definition sub-expressions for when the parameters have been finalised.
+    pub fn seal(&mut self, expr: ExprNode) {
+        self.graph[expr.idx()].sealed = true;
     }
 }
 
@@ -424,7 +466,7 @@ impl LocalsGraph {
             vars,
         } in xs
         {
-            writeln!(s, r#"    [{},"{}",{},"{}"]"#, n.index(), tag, sealed, vars)?;
+            writeln!(s, r#"    [{},"{tag}",{sealed},"{vars}"]"#, n.index())?;
         }
 
         writeln!(s, "]")?;
@@ -442,12 +484,33 @@ impl LocalsGraph {
                     "{}: {}{}",
                     n.index(),
                     ag[n].tag(),
-                    if w.sealed { " <br> sealed" } else { "" }
+                    match w.sealed {
+                        true => " <br> sealed",
+                        false => "",
+                    }
                 )
             },
-            |_, s| write!(s, " "),
+            |n, s| write!(s, "{n:?}",),
         )?;
 
         Ok(())
     }
+}
+
+fn accrete(from: &Map, mut to: Map, to_idx: NodeIndex) -> Map {
+    for (k, v) in from {
+        // if to does not contain this key, add it in!
+        if !to.contains_key(k) {
+            to.insert(k.clone(), *v);
+        } else {
+            let tov = to.get_mut(k).expect("will exist");
+            // if the to variable was defined at to, it would be more recent.
+            // if not, update the map local here to be from
+            if tov.defined != to_idx {
+                *tov = *v;
+            }
+        }
+    }
+
+    to
 }

@@ -541,13 +541,19 @@ the variable $row is available to query the table row"
 }
 
 fn fold_table_intrinsic(mut blk: Block) -> Result<Step> {
+    blk.assert_adds_vars(true);
     blk.assert_input(&Ty::Tab)?;
 
-    let seed = blk.next_arg()?.supplied(Type::Nil)?.concrete()?;
+    let seed = blk
+        .next_arg()?
+        .decouple_op_seal()
+        .supplied(Type::Nil)?
+        .concrete()?;
     let out_ty = seed.out_ty().clone();
     blk.assert_output(out_ty.clone());
 
     let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+    blk.assert_vars_added();
     let acc_expr = blk
         .next_arg()?
         .supplied(out_ty.clone())? // accumulator supplies seed type
@@ -864,8 +870,11 @@ struct MapTable {
 
 impl MapTable {
     fn map(mut blk: Block) -> Result<Step> {
+        blk.assert_adds_vars(true);
+
         let colarg = blk
             .next_arg()?
+            .decouple_op_seal()
             .supplied(Ty::Nil)?
             .returns(Ty::Str)?
             .concrete()?;
@@ -876,6 +885,7 @@ impl MapTable {
             .flatten();
 
         let row_var = blk.inject_manual_var_next_arg("row", Ty::TabRow)?;
+        blk.assert_vars_added();
 
         let transformation = blk.next_arg()?;
         let transformation = match (force_flag, ty_flag) {

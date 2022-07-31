@@ -1,6 +1,6 @@
 use super::*;
-use ::libs::divvy::Str;
 use graphs::ArgNode;
+use libs::divvy::Str;
 use std::sync::Arc;
 
 // ###### VARIABLE #############################################################

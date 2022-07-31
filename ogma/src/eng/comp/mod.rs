@@ -270,7 +270,7 @@ impl<'d> Compiler<'d> {
             }
 
             // map in if has a Locals
-            let local = match self.lg.get(node, var_tag.str()) {
+            let local = match self.lg.get_opt(node, var_tag.str()).1 {
                 Some(l) => l,
                 None => continue,
             };
@@ -356,7 +356,11 @@ impl<'d> Compiler<'d> {
 
         let mut goto_resolve = false;
         let mut err = None;
-        let mut chgs = Vec::new();
+        let mut chgs = Chgs {
+            chgs: Vec::new(),
+            infer_output: false,
+            adds_vars: false,
+        };
 
         for node in nodes {
             let in_ty = self.tg[node.idx()]
@@ -365,9 +369,10 @@ impl<'d> Compiler<'d> {
                 .cloned()
                 .expect("known input at this point");
 
-            let mut infer_output = false;
+            chgs.infer_output = false;
+            chgs.adds_vars = false;
 
-            match self.compile_block(node, in_ty, &mut chgs, &mut infer_output) {
+            match self.compile_block(node, in_ty, &mut chgs) {
                 Ok(step) => {
                     goto_resolve = true;
                     let out_ty = step.out_ty.clone();
@@ -381,15 +386,12 @@ impl<'d> Compiler<'d> {
 
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
-                    chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty).into());
-
-                    // we also seal off the op node in the locals graph, this op is not going to
-                    // alter it's dependent locals maps
-                    self.lg.seal_node(node.idx(), &self.ag);
+                    chgs.chgs
+                        .push(tygraph::Chg::KnownOutput(node.idx(), out_ty).into());
                 }
                 Err(mut e) => {
                     // only set the infer output if tygraph is showing that it has multiple options
-                    if infer_output {
+                    if chgs.infer_output {
                         let _unknown = self.tg[node.idx()].output.is_multiple();
                         debug_assert!(
                             _unknown,
@@ -418,9 +420,13 @@ impl<'d> Compiler<'d> {
                     err = Some(e);
                 }
             }
+
+            if !chgs.adds_vars {
+                chgs.chgs.push(locals_graph::Chg::Seal(node).into());
+            }
         }
 
-        let chgd = self.apply_graph_chgs(chgs.into_iter())?;
+        let chgd = self.apply_graph_chgs(chgs.chgs.into_iter())?;
 
         (goto_resolve | chgd)
             .then(|| ())
@@ -428,13 +434,7 @@ impl<'d> Compiler<'d> {
     }
 
     /// Try to compile `opnode` into an evaluation [`Step`] given the input type (`in_ty`).
-    pub fn compile_block(
-        &self,
-        opnode: OpNode,
-        in_ty: Type,
-        chgs: Chgs,
-        infer_output: &mut bool,
-    ) -> Result<Step> {
+    pub fn compile_block(&self, opnode: OpNode, in_ty: Type, chgs: &mut Chgs) -> Result<Step> {
         let cmd_node = self.ag.get_impl(opnode, &in_ty).ok_or_else(|| {
             Error::op_not_found(
                 self.ag[opnode.idx()].tag(),
@@ -446,7 +446,7 @@ impl<'d> Compiler<'d> {
 
         match &self.ag[cmd_node.idx()] {
             AstNode::Intrinsic { op: _op, intrinsic } => {
-                let block = Block::construct(self, cmd_node, in_ty, chgs, infer_output);
+                let block = Block::construct(self, cmd_node, in_ty, chgs);
                 intrinsic(block)
             }
             AstNode::Def { expr: _, params: _ } => {
@@ -473,7 +473,8 @@ impl<'d> Compiler<'d> {
                     None => {
                         // there is not, but we can add to the TG that this sub-expression will
                         // have input of `in_ty`.
-                        chgs.push(tygraph::Chg::KnownInput(expr.idx(), in_ty).into());
+                        chgs.chgs
+                            .push(tygraph::Chg::KnownInput(expr.idx(), in_ty).into());
 
                         Err(Error::incomplete_expr_compilation(
                             self.ag[expr.idx()].tag(),
@@ -509,7 +510,7 @@ impl<'d> Compiler<'d> {
         &self,
         def: DefNode,
         in_ty: &Type,
-        chgs: Chgs,
+        chgs: &mut Chgs,
     ) -> Result<Vec<(Variable, Argument)>> {
         let Compiler {
             ag,
@@ -601,13 +602,7 @@ impl<'a> Compiler<'a> {
 }
 
 impl<'a> Block<'a> {
-    fn construct(
-        compiler: &'a Compiler,
-        node: CmdNode,
-        in_ty: Type,
-        chgs: Chgs<'a>,
-        output_infer: &'a mut bool,
-    ) -> Self {
+    fn construct(compiler: &'a Compiler, node: CmdNode, in_ty: Type, chgs: &'a mut Chgs) -> Self {
         let opnode = node.parent(&compiler.ag);
         let mut flags = compiler.ag.get_flags(node);
         let mut args = compiler.ag.get_args(node);
@@ -623,7 +618,6 @@ impl<'a> Block<'a> {
             args,
             args_count: 0,
             chgs,
-            infer_output: output_infer,
             #[cfg(debug_assertions)]
             output_ty: None,
         }
@@ -744,6 +738,9 @@ mod tests {
     fn compilation_test_07() {
         // initial variable testing
         compile("let $x | \\ $x").unwrap();
+
+        eprintln!("TEST #2 ------- \\ 3 | let $a | = $a");
+        compile("\\ 3 | let $a | = $a").unwrap();
     }
 
     #[test]

@@ -24,8 +24,6 @@ pub(crate) use self::{
 
 pub use self::comp::{compile, FullCompilation};
 
-type Chgs<'a> = &'a mut Vec<graphs::Chg>;
-
 // ###### COMPILER #############################################################
 /// Ogma expression compiler.
 #[derive(Clone)]
@@ -87,6 +85,21 @@ pub struct Block<'a> {
     /// Only 255 arguments are supported.
     args_count: u8,
 
+    chgs: &'a mut Chgs,
+
+    /// Carry information about an asserted output type.
+    /// Check this against upon finalisation to ensure it matches.
+    /// Only available and checked in debug builds.
+    #[cfg(debug_assertions)]
+    output_ty: Option<Type>,
+}
+
+/// Compiler changes to apply.
+///
+/// These changes are kept separate to the compiler state and are applied given the blocks partial
+/// compilation.
+#[derive(Default)]
+pub struct Chgs {
     /// A list of changes to be made to the type graph.
     ///
     /// This is stored as a mutable reference since the block is usually passed by value to
@@ -94,16 +107,11 @@ pub struct Block<'a> {
     /// Any items here are actioned by the compiler to update the type graph, providing more
     /// information to conduct the type inferencing.
     /// This allows for block compilation to fail but the updates still be applied.
-    chgs: &'a mut Vec<graphs::Chg>,
-
+    chgs: Vec<graphs::Chg>,
     /// Flag that this block's output should be inferred if getting to output inferencing phase.
-    infer_output: &'a mut bool,
-
-    /// Carry information about an asserted output type.
-    /// Check this against upon finalisation to ensure it matches.
-    /// Only available and checked in debug builds.
-    #[cfg(debug_assertions)]
-    output_ty: Option<Type>,
+    infer_output: bool,
+    /// Flag that this op would introduce variables.
+    adds_vars: bool,
 }
 
 // ###### STEP #################################################################
@@ -135,7 +143,7 @@ mod tests {
         // Although block sizing is large, it would not really be a hot spot, and the cost of
         // refactoring somewhat outweighs any benefit, without doing any proper profiling to
         // support it.
-        assert_eq!(size_of::<Block>(), 96 + size_of::<Option<Type>>()); // `output_ty` is only on debug builds
+        assert_eq!(size_of::<Block>(), 88 + size_of::<Option<Type>>()); // `output_ty` is only on debug builds
         assert_eq!(size_of::<Step>(), 32);
     }
 }

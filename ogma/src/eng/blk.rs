@@ -66,6 +66,7 @@ impl<'a> Block<'a> {
         }
 
         self.chgs
+            .chgs
             .push(graphs::tygraph::Chg::KnownOutput(self.node.idx(), ty).into());
     }
 
@@ -73,7 +74,7 @@ impl<'a> Block<'a> {
     ///
     /// Note that this will not affect already resolved nodes, only inferred nodes.
     pub fn insert_anon_type_into_compiler(&mut self, ty: Type) {
-        self.chgs.push(graphs::tygraph::Chg::AnonTy(ty).into());
+        self.chgs.chgs.push(graphs::tygraph::Chg::AnonTy(ty).into());
     }
 
     /// Gets the flag that matches a given name.
@@ -102,6 +103,39 @@ impl<'a> Block<'a> {
         self.args.get(0).copied()
     }
 
+    /// Assert that this operation will be adding variables.
+    ///
+    /// This should be called early on to flag to the compiler that it cannot eagerly seal this
+    /// node.
+    /// Usually, `retain_op_coupling: false`, unless one or more arguments cannot be considered
+    /// sealed until this operation is (see the `fold` intrinsic as an example).
+    /// If `retain_op_coupling: true`, any arguments that **do not require** the op to be
+    /// considered sealed should flag this with [`ArgBuilder::decouple_op_seal`].
+    ///
+    /// Note that this function should be paired with a subsequent [`Block::assert_vars_added`]
+    /// call once all required variables have been added.
+    pub fn assert_adds_vars(&mut self, retain_op_coupling: bool) {
+        self.chgs.adds_vars = true;
+        if !retain_op_coupling {
+            let op = self.node;
+            self.chgs.chgs.extend(
+                self.args
+                    .iter()
+                    .map(|&arg| locals_graph::Chg::BreakEdge { op, arg }.into()),
+            );
+        }
+    }
+
+    /// Asserts that all the variables have been added, allowing the compiler to seal this node.
+    ///
+    /// This should be paired with a [`Block::assert_adds_vars`] call, and invoked _after_ the
+    /// variables have been added.
+    pub fn assert_vars_added(&mut self) {
+        self.chgs
+            .chgs
+            .push(locals_graph::Chg::Seal(self.node).into());
+    }
+
     /// Assert this argument is a variable and construct a reference to it.
     ///
     /// If the block does not contain a reference to an up-to-date locals, and error is returned.
@@ -124,7 +158,7 @@ impl<'a> Block<'a> {
                 Some(next) => lg
                     .new_var(next.idx(), Str::new(var.str()), ty, var.clone())
                     .map_err(|chg| {
-                        chgs.push(chg.into());
+                        chgs.chgs.push(chg.into());
                         Error::update_locals_graph(var)
                     }),
                 None => Ok(Variable::noop(var.clone(), ty)),
@@ -168,7 +202,7 @@ impl<'a> Block<'a> {
             .lg
             .new_var(arg.idx(), name, ty, tag.clone())
             .map_err(|chg| {
-                self.chgs.push(chg.into());
+                self.chgs.chgs.push(chg.into());
                 Error::update_locals_graph(tag)
             })
     }

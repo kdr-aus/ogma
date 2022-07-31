@@ -35,7 +35,7 @@ impl<'d> Compiler<'d> {
             (self.lg.sealed(n) || !self.ag.detect_var(OpNode(n)))
         });
 
-        let mut chgs = Vec::new();
+        let mut chgs = Vec::default();
 
         for op in infer_nodes.into_iter().map(OpNode) {
             trial_inferred_types(op, self, &mut chgs);
@@ -143,8 +143,8 @@ enum Error {
 
 /// Tries to compile the `op` with each type in the inferred types set.
 /// Pushes `RemoveInput` if failed.
-fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
-    let sink1 = &mut Default::default();
+fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: &mut Vec<graphs::Chg>) {
+    let mut sink1 = Default::default();
 
     let set = compiler.tg[op.idx()]
         .input
@@ -155,10 +155,19 @@ fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
         .iter()
         .cloned()
         .filter(|ty| {
-            let infer_output = &mut false;
-            let compiled = compiler
-                .compile_block(op, ty.clone(), sink1, infer_output)
-                .is_ok();
+            let mut chgs = Chgs {
+                chgs: std::mem::take(&mut sink1),
+                ..Chgs::default()
+            };
+
+            let compiled = compiler.compile_block(op, ty.clone(), &mut chgs).is_ok();
+
+            let Chgs {
+                chgs,
+                infer_output,
+                adds_vars: _,
+            } = chgs;
+            sink1 = chgs;
 
             let lg_chg_req = sink1.drain(..).any(|chg| chg.is_lg_chg());
 
@@ -167,7 +176,7 @@ fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: Chgs) {
             // we keep in if infer_output is true, since we need more information about types
             // before we can compile this block, and removing input inferences will just reduce it
             // to an empty set.
-            !compiled && !*infer_output && !lg_chg_req
+            !compiled && !infer_output && !lg_chg_req
         })
         .map(|ty| RemoveInput(op.into(), ty))
         .map(Into::into);
@@ -316,7 +325,7 @@ impl<'a> Block<'a> {
         let Block {
             node: opnode,
             compiler: Compiler { ag, tg, .. },
-            infer_output,
+            chgs: Chgs { infer_output, .. },
             ..
         } = self;
 
@@ -340,7 +349,7 @@ impl<'a> Block<'a> {
             .cloned();
 
         if ret.is_none() {
-            **infer_output = true;
+            *infer_output = true;
         }
 
         ret
