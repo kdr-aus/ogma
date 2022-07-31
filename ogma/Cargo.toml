@@ -1,6 +1,6 @@
 [package]
 name = "ogma"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["kurt <kurtlawrence92@gmail.com>"]
 edition = "2021"
 
@@ -15,7 +15,7 @@ table = { git = "https://github.com/kdr-aus/table" }
 
 # crates.io
 backtrace = "0.3"
-comfy-table = "5"
+comfy-table = "6"
 lazy_static = "1"
 nom = "7"
 notify = "4"
