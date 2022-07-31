@@ -15,6 +15,6 @@ ogma-ls = { path = "../ogma-ls" }
 
 # crates.io
 cansi =	"2.2"
-crossterm = "0.23"
+crossterm = "0.24"
 tui = { version = "0.17", default-features = false, features = [ "crossterm" ] }
 unicode-width = "0.1"
