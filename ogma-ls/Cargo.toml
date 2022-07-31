@@ -20,6 +20,6 @@ ogma = { path = "../ogma" }
 bitflags = "1"
 itertools = "0.10"
 log = "0.4"
-lsp-server = "0.5"
-lsp-types = "0.92"
+lsp-server = "0.6"
+lsp-types = "0.93"
 simplelog = "0.11"
