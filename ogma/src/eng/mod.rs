@@ -94,6 +94,10 @@ pub struct Block<'a> {
     output_ty: Option<Type>,
 }
 
+/// Compiler changes to apply.
+///
+/// These changes are kept separate to the compiler state and are applied given the blocks partial
+/// compilation.
 #[derive(Default)]
 pub struct Chgs {
     /// A list of changes to be made to the type graph.
@@ -107,7 +111,7 @@ pub struct Chgs {
     /// Flag that this block's output should be inferred if getting to output inferencing phase.
     infer_output: bool,
     /// Flag that this op would introduce variables.
-    adds_vars: bool
+    adds_vars: bool,
 }
 
 // ###### STEP #################################################################

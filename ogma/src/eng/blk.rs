@@ -103,19 +103,38 @@ impl<'a> Block<'a> {
         self.args.get(0).copied()
     }
 
+    /// Assert that this operation will be adding variables.
+    ///
+    /// This should be called early on to flag to the compiler that it cannot eagerly seal this
+    /// node.
+    /// Usually, `retain_op_coupling: false`, unless one or more arguments cannot be considered
+    /// sealed until this operation is (see the `fold` intrinsic as an example).
+    /// If `retain_op_coupling: true`, any arguments that **do not require** the op to be
+    /// considered sealed should flag this with [`ArgBuilder::decouple_op_seal`].
+    ///
+    /// Note that this function should be paired with a subsequent [`Block::assert_vars_added`]
+    /// call once all required variables have been added.
     pub fn assert_adds_vars(&mut self, retain_op_coupling: bool) {
         self.chgs.adds_vars = true;
         if !retain_op_coupling {
             let op = self.node;
-        self.chgs.chgs.extend(self.args.iter().map(|&arg| locals_graph::Chg::BreakEdge { op, arg }.into()));
+            self.chgs.chgs.extend(
+                self.args
+                    .iter()
+                    .map(|&arg| locals_graph::Chg::BreakEdge { op, arg }.into()),
+            );
         }
     }
 
+    /// Asserts that all the variables have been added, allowing the compiler to seal this node.
+    ///
+    /// This should be paired with a [`Block::assert_adds_vars`] call, and invoked _after_ the
+    /// variables have been added.
     pub fn assert_vars_added(&mut self) {
-        self.chgs.chgs.push(locals_graph::Chg::Seal(self.node).into());
+        self.chgs
+            .chgs
+            .push(locals_graph::Chg::Seal(self.node).into());
     }
-
-
 
     /// Assert this argument is a variable and construct a reference to it.
     ///
@@ -128,13 +147,11 @@ impl<'a> Block<'a> {
     /// The variable will be created expecting the type `ty`. `set_data` only validates types in
     /// debug builds, be sure that testing occurs of code path to avoid UB in release.
     pub fn create_var_ref(&mut self, arg: ArgNode, ty: Type) -> Result<Variable> {
-
         let Block {
             compiler: Compiler { ag, lg, .. },
             chgs,
             ..
         } = self;
-
 
         match &ag[arg.idx()] {
             astgraph::AstNode::Var(var) => match arg.op(ag).next(ag) {

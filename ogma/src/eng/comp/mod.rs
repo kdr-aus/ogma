@@ -130,7 +130,7 @@ impl<'d> Compiler<'d> {
             self.resolve_tg()?;
 
             // NOTE turn on for debugging.
-            self._write_debug_report("debug-compiler.md");
+            // self._write_debug_report("debug-compiler.md");
 
             if self.populate_compiled_expressions() {
                 continue;
@@ -274,7 +274,6 @@ impl<'d> Compiler<'d> {
                 Some(l) => l,
                 None => continue,
             };
-            dbg!(local);
 
             match local {
                 Local::Var(v) => {
@@ -360,7 +359,7 @@ impl<'d> Compiler<'d> {
         let mut chgs = Chgs {
             chgs: Vec::new(),
             infer_output: false,
-            adds_vars: false
+            adds_vars: false,
         };
 
         for node in nodes {
@@ -387,7 +386,8 @@ impl<'d> Compiler<'d> {
 
                     // since this compilation was successful, the output type is known!
                     // the TG is updated with this information
-                    chgs.chgs.push(tygraph::Chg::KnownOutput(node.idx(), out_ty).into());
+                    chgs.chgs
+                        .push(tygraph::Chg::KnownOutput(node.idx(), out_ty).into());
                 }
                 Err(mut e) => {
                     // only set the infer output if tygraph is showing that it has multiple options
@@ -434,12 +434,7 @@ impl<'d> Compiler<'d> {
     }
 
     /// Try to compile `opnode` into an evaluation [`Step`] given the input type (`in_ty`).
-    pub fn compile_block(
-        &self,
-        opnode: OpNode,
-        in_ty: Type,
-        chgs: &mut Chgs,
-    ) -> Result<Step> {
+    pub fn compile_block(&self, opnode: OpNode, in_ty: Type, chgs: &mut Chgs) -> Result<Step> {
         let cmd_node = self.ag.get_impl(opnode, &in_ty).ok_or_else(|| {
             Error::op_not_found(
                 self.ag[opnode.idx()].tag(),
@@ -478,7 +473,8 @@ impl<'d> Compiler<'d> {
                     None => {
                         // there is not, but we can add to the TG that this sub-expression will
                         // have input of `in_ty`.
-                        chgs.chgs.push(tygraph::Chg::KnownInput(expr.idx(), in_ty).into());
+                        chgs.chgs
+                            .push(tygraph::Chg::KnownInput(expr.idx(), in_ty).into());
 
                         Err(Error::incomplete_expr_compilation(
                             self.ag[expr.idx()].tag(),
@@ -606,12 +602,7 @@ impl<'a> Compiler<'a> {
 }
 
 impl<'a> Block<'a> {
-    fn construct(
-        compiler: &'a Compiler,
-        node: CmdNode,
-        in_ty: Type,
-        chgs: &'a mut Chgs,
-    ) -> Self {
+    fn construct(compiler: &'a Compiler, node: CmdNode, in_ty: Type, chgs: &'a mut Chgs) -> Self {
         let opnode = node.parent(&compiler.ag);
         let mut flags = compiler.ag.get_flags(node);
         let mut args = compiler.ag.get_args(node);

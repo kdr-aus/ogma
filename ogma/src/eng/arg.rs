@@ -66,10 +66,17 @@ impl<'a> ArgBuilder<'a> {
         self.node
     }
 
+    /// Flag that this argument does not require it's parent op to be sealed for variable
+    /// resolution.
+    ///
+    /// This method is only required when variables are being introduced, see
+    /// [`Block::assert_adds_vars`] for more information and usage practices.
     pub fn decouple_op_seal(self: Box<Self>) -> Box<Self> {
         let arg = self.node();
         let op = arg.op(self.compiler.ag());
-        self.chgs.chgs.push(locals_graph::Chg::BreakEdge { op, arg }.into());
+        self.chgs
+            .chgs
+            .push(locals_graph::Chg::BreakEdge { op, arg }.into());
         self
     }
 
@@ -252,16 +259,14 @@ impl<'a> ArgBuilder<'a> {
 
                 Ok(Hold::Expr(stack))
             }
-            Var(tag) => {
-                    lg
-                    .get(node.idx(), tag.str(), tag)
-                    .and_then(|local| match local {
-                        Local::Var(var) => Ok(Hold::Var(var.clone())),
-                        Local::Ptr { .. } => {
-                            unreachable!("a param argument should shadow the referencer arg node")
-                        }
-                    })
-            }
+            Var(tag) => lg
+                .get(node.idx(), tag.str(), tag)
+                .and_then(|local| match local {
+                    Local::Var(var) => Ok(Hold::Var(var.clone())),
+                    Local::Ptr { .. } => {
+                        unreachable!("a param argument should shadow the referencer arg node")
+                    }
+                }),
             Expr(tag) => compiled_exprs
                 .get(&node.index())
                 .cloned()

@@ -544,7 +544,11 @@ fn fold_table_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_adds_vars(true);
     blk.assert_input(&Ty::Tab)?;
 
-    let seed = blk.next_arg()?.decouple_op_seal().supplied(Type::Nil)?.concrete()?;
+    let seed = blk
+        .next_arg()?
+        .decouple_op_seal()
+        .supplied(Type::Nil)?
+        .concrete()?;
     let out_ty = seed.out_ty().clone();
     blk.assert_output(out_ty.clone());
 

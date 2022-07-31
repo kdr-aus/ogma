@@ -160,11 +160,13 @@ fn trial_inferred_types(op: OpNode, compiler: &Compiler, chgs: &mut Vec<graphs::
                 ..Chgs::default()
             };
 
-            let compiled = compiler
-                .compile_block(op, ty.clone(), &mut chgs)
-                .is_ok();
+            let compiled = compiler.compile_block(op, ty.clone(), &mut chgs).is_ok();
 
-            let Chgs { chgs, infer_output, adds_vars } = chgs;
+            let Chgs {
+                chgs,
+                infer_output,
+                adds_vars: _,
+            } = chgs;
             sink1 = chgs;
 
             let lg_chg_req = sink1.drain(..).any(|chg| chg.is_lg_chg());

@@ -47,10 +47,7 @@ pub enum Chg {
     /// Removes a connection between the op and arg.
     /// This is useful for ops such as `let` which might need it's arguments to be able to compile
     /// without `let` op needing to be 'sealed'.
-    BreakEdge {
-        op: OpNode,
-        arg: ArgNode
-    }
+    BreakEdge { op: OpNode, arg: ArgNode },
 }
 
 /// A graph structure which tracks variables, allowing for lexical scoping and shadowing.
@@ -190,8 +187,7 @@ impl LocalsGraph {
     pub fn get(&self, node: NodeIndex, name: &str, tag: &Tag) -> Result<&eng::Local> {
         self.sealed(node)
             .then(|| {
-                self
-                    .get_(node, name)
+                self.get_(node, name)
                     .ok_or_else(|| Error::var_not_found(tag))
             })
             .ok_or_else(|| Error::update_locals_graph(tag))
@@ -323,23 +319,21 @@ impl LocalsGraph {
     }
 
     fn neighbours_flow(&self, n: NodeIndex) -> impl Iterator<Item = NodeIndex> + '_ {
-        self
-            .graph
+        self.graph
             .edges(n)
             .filter_map(|e| e.weight().is_flow().then(|| e.target()))
     }
 
     fn neighbours_seal(&self, n: NodeIndex) -> impl Iterator<Item = NodeIndex> + '_ {
-        self
-            .graph
+        self.graph
             .edges(n)
             .filter_map(|e| e.weight().is_seal().then(|| e.target()))
     }
 
-
-
     fn flow(&mut self, from: NodeIndex) {
-        let mut stack = self.neighbours_flow(from).map(|to| (from, to))
+        let mut stack = self
+            .neighbours_flow(from)
+            .map(|to| (from, to))
             .collect::<Vec<_>>();
 
         while let Some((from, to)) = stack.pop() {
@@ -393,8 +387,7 @@ impl LocalsGraph {
     }
 
     /// Checks that this node is sealed and no variables will be introduced along the path to root.
-    pub fn sealed(&self, node: NodeIndex) -> bool
-    {
+    pub fn sealed(&self, node: NodeIndex) -> bool {
         let mut q = std::collections::VecDeque::new();
         q.push_back(node);
 
@@ -466,7 +459,13 @@ impl LocalsGraph {
         xs.sort_unstable_by(|a, b| a.n.cmp(&b.n));
         xs.dedup_by_key(|x| x.n);
 
-        for X { n, tag, sealed, vars } in xs {
+        for X {
+            n,
+            tag,
+            sealed,
+            vars,
+        } in xs
+        {
             writeln!(s, r#"    [{},"{tag}",{sealed},"{vars}"]"#, n.index())?;
         }
 
