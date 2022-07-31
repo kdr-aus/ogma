@@ -103,6 +103,20 @@ impl<'a> Block<'a> {
         self.args.get(0).copied()
     }
 
+    pub fn assert_adds_vars(&mut self, retain_op_coupling: bool) {
+        self.chgs.adds_vars = true;
+        if !retain_op_coupling {
+            let op = self.node;
+        self.chgs.chgs.extend(self.args.iter().map(|&arg| locals_graph::Chg::BreakEdge { op, arg }.into()));
+        }
+    }
+
+    pub fn assert_vars_added(&mut self) {
+        self.chgs.chgs.push(locals_graph::Chg::Seal(self.node).into());
+    }
+
+
+
     /// Assert this argument is a variable and construct a reference to it.
     ///
     /// If the block does not contain a reference to an up-to-date locals, and error is returned.
@@ -114,11 +128,13 @@ impl<'a> Block<'a> {
     /// The variable will be created expecting the type `ty`. `set_data` only validates types in
     /// debug builds, be sure that testing occurs of code path to avoid UB in release.
     pub fn create_var_ref(&mut self, arg: ArgNode, ty: Type) -> Result<Variable> {
+
         let Block {
             compiler: Compiler { ag, lg, .. },
             chgs,
             ..
         } = self;
+
 
         match &ag[arg.idx()] {
             astgraph::AstNode::Var(var) => match arg.op(ag).next(ag) {

@@ -270,7 +270,7 @@ impl<'d> Compiler<'d> {
             }
 
             // map in if has a Locals
-            let local = match self.get_local_opt(node, var_tag.str()).1 {
+            let local = match self.lg.get_opt(node, var_tag.str()).1 {
                 Some(l) => l,
                 None => continue,
             };
@@ -421,7 +421,9 @@ impl<'d> Compiler<'d> {
                 }
             }
 
-            chgs.chgs.push(locals_graph::Chg::AddsVar(node, chgs.adds_vars).into());
+            if !chgs.adds_vars {
+                chgs.chgs.push(locals_graph::Chg::Seal(node).into());
+            }
         }
 
         let chgd = self.apply_graph_chgs(chgs.chgs.into_iter())?;

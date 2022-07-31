@@ -42,7 +42,7 @@ impl<'a> ArgBuilder<'a> {
     fn follow_local_arg_ptr(mut self: Box<Self>) -> Box<Self> {
         let new_node = self.compiler.ag[self.node.idx()]
             .var()
-            .and_then(|t| self.compiler.get_local_opt(self.node.idx(), t.str()).1)
+            .and_then(|t| self.compiler.lg.get_opt(self.node.idx(), t.str()).1)
             .and_then(|l| match l {
                 Local::Ptr { to, tag: _ } => Some(to),
                 _ => None,
@@ -64,6 +64,13 @@ impl<'a> ArgBuilder<'a> {
 
     pub fn node(&self) -> ArgNode {
         self.node
+    }
+
+    pub fn decouple_op_seal(self: Box<Self>) -> Box<Self> {
+        let arg = self.node();
+        let op = arg.op(self.compiler.ag());
+        self.chgs.chgs.push(locals_graph::Chg::BreakEdge { op, arg }.into());
+        self
     }
 
     /// Assert that this argument will be supplied an input of type `ty`.
@@ -246,8 +253,8 @@ impl<'a> ArgBuilder<'a> {
                 Ok(Hold::Expr(stack))
             }
             Var(tag) => {
-                compiler
-                    .get_local(node.idx(), tag.str(), tag)
+                    lg
+                    .get(node.idx(), tag.str(), tag)
                     .and_then(|local| match local {
                         Local::Var(var) => Ok(Hold::Var(var.clone())),
                         Local::Ptr { .. } => {
@@ -276,7 +283,7 @@ impl<'a> ArgBuilder<'a> {
     /// - `Err(_)`: The variable does not exist in the locals.
     pub fn assert_var_exists(&self) -> Result<Option<bool>> {
         match self.node.var(self.compiler.ag()) {
-            Some(var) => match self.compiler.get_local_opt(self.node.idx(), var.str()) {
+            Some(var) => match self.compiler.lg.get_opt(self.node.idx(), var.str()) {
                 (true, Some(_)) => Ok(Some(true)),
                 (true, None) => Err(Error::var_not_found(var)),
                 (false, _) => Ok(Some(false)),
