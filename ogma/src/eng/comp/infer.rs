@@ -45,7 +45,7 @@ impl<'d> Compiler<'d> {
     }
 
     fn infer_inputs_tgt_shallow_expr(self: &mut Box<Self>) -> Result<bool> {
-        self.assert_inference_depth();
+        self.assert_inference_depth()?;
 
         // we get _shallowest_ expr nodes that:
         // 1. are not compiled,
@@ -75,6 +75,7 @@ impl<'d> Compiler<'d> {
 
         let mut success = false;
         let mut err = None;
+        let mut chgs = Vec::new();
 
         for expr in infer_nodes {
             // infer input
@@ -87,6 +88,12 @@ impl<'d> Compiler<'d> {
                     *self = c; // update self with new compiler
                     break; // return early
                 }
+                Err(Error::Reduce(ts)) => chgs.extend(
+                    ts.into_iter()
+                        .map(|t| tygraph::Chg::RemoveInput(expr.idx(), t).into()),
+                ),
+                // if the error is a depth limit, need to short circuit and propagate upwards
+                Err(e) if e.is_depth_limit() => return Err(e.input_expr(expr.tag(self.ag()))),
                 // else, bring back compiler, and set err
                 Err(e) => err = Some(e.input_expr(expr.tag(self.ag()))),
             }
@@ -94,6 +101,8 @@ impl<'d> Compiler<'d> {
 
         if success {
             Ok(true) // at least one trial worked
+        } else if !chgs.is_empty() {
+            self.apply_graph_chgs(chgs.into_iter())
         } else {
             match err {
                 Some(e) => Err(e),
@@ -104,14 +113,20 @@ impl<'d> Compiler<'d> {
 
     /// Infer the outputs with the current compiler state.
     pub fn infer_outputs(self: &mut Box<Self>) -> Result<bool> {
-        self.assert_inference_depth();
+        self.assert_inference_depth()?;
 
-        if let Some(opnode) = self
-            .output_infer_opnode
-            // TAKE the infer node, since we are processing it.
-            .take()
-            // BUT do not process if the output is NOT multiple
-            .filter(|n| self.tg[n.idx()].output.is_multiple())
+        let nodes: Vec<_> = {
+            let x = &mut self.output_infer_opnodes;
+            // notice the reverse comparison, we do this to get a descending order, trialling the
+            // 'deepest' first
+            x.sort_unstable_by(|a,b| b.index().cmp(&a.index()));
+            x.dedup();
+
+            // only take where the output is ambiguous
+            x.drain(..).filter(|n| self.tg[n.idx()].output.is_multiple()).collect()
+        };
+
+        if let Some(opnode) = nodes.get(0).copied()
         {
             // infer output
             let x = output(opnode, self);
@@ -122,6 +137,10 @@ impl<'d> Compiler<'d> {
                     *self = c;
                     Ok(true) // success
                 }
+                Err(Error::Reduce(ts)) => self.apply_graph_chgs(
+                    ts.into_iter()
+                        .map(|t| tygraph::Chg::RemoveOutput(opnode.idx(), t).into()),
+                ),
                 Err(e) => Err(e.output(opnode.op_tag(self.ag()), opnode.blk_tag(self.ag()))),
             }
         } else {
@@ -129,16 +148,27 @@ impl<'d> Compiler<'d> {
         }
     }
 
-    fn assert_inference_depth(&self) {
-        if self.inference_depth > 5 {
-            panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
-        }
+    fn assert_inference_depth(&self) -> Result<()> {
+        (self.inference_depth <= 5)
+            .then(|| ())
+            .ok_or_else(|| crate::Error::inference_depth())
+        //         if self.inference_depth > 5 {
+        //             panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
+        //         }
     }
 }
 
 enum Error {
     NoTypes,
     Ambiguous(TypesSet),
+    DepthLimit(crate::Error),
+    Reduce(Vec<Type>),
+}
+
+enum Outcome {
+    Success,
+    Fail,
+    DepthLimited,
 }
 
 /// Tries to compile the `op` with each type in the inferred types set.
@@ -213,10 +243,15 @@ fn test_compile_types<'a>(
     .expect("only testing inferred types set");
 
     let mut validset = types.clone();
+    let mut rm = Vec::new();
 
     let mut inferred = None;
 
+    _counts_line(format_args!("{node:?}"));
+
     for ty in types.iter() {
+        _counts_line(format_args!("{ty}"));
+
         let mut compiler: Compiler_ = compiler.clone();
         compiler.inference_depth += 1;
 
@@ -226,15 +261,27 @@ fn test_compile_types<'a>(
             ObligeInput(node, ty.clone())
         };
 
-        let x = compiler
-            .apply_graph_chgs(once(chg.into()))
-            .and_then(|_| compiler.compile(breakon));
+        let x = compiler.apply_graph_chgs(once(chg.into()));
+
+        let x = match x {
+            Ok(x) => {
+                debug_assert!(x, "expecting a change to actually occur");
+                compiler.compile(breakon)
+            }
+            Err(_) => {
+                _counts_line(format_args!("failed to apply {ty} to {node:?}"));
+                rm.push(ty.clone());
+                continue;
+            }
+        };
 
         match (x, inferred.take()) {
             // success; but there was another success
             (Ok(_), Some(_)) => return Err(Error::Ambiguous(validset)),
             // success, first one, set the return
             (Ok(c), None) => inferred = Some(c),
+            // a bubbled up depth error, propagate upwards
+            (Err(e), _) if e.is_inference_depth_error() => return Err(Error::DepthLimit(e)),
             // upon error we reduce the types set to help with error reporting
             (Err(_), x) => {
                 validset.remove(ty);
@@ -243,11 +290,20 @@ fn test_compile_types<'a>(
         }
     }
 
-    inferred.ok_or(Error::NoTypes)
+    match (inferred, rm.is_empty()) {
+        (Some(x), _) => Ok(x),
+        // rm is NOT empty
+        (None, false) => Err(Error::Reduce(rm)),
+        (None, true) => Err(Error::NoTypes),
+    }
 }
 
 impl Error {
-    pub fn output(&self, op: &Tag, blk_tag: &Tag) -> crate::Error {
+    fn is_depth_limit(&self) -> bool {
+        matches!(self, Self::DepthLimit(_))
+    }
+
+    fn output(self, op: &Tag, blk_tag: &Tag) -> crate::Error {
         use crate::common::err::*;
 
         let (xtag, x) = if op.str() == "." {
@@ -278,10 +334,12 @@ impl Error {
                 ],
                 ..Default::default()
             },
+            Self::DepthLimit(e) => e,
+            Self::Reduce(_) => unreachable!("handle before calling this"),
         }
     }
 
-    pub fn input_expr(&self, expr: &Tag) -> crate::Error {
+    fn input_expr(self, expr: &Tag) -> crate::Error {
         use crate::common::err::*;
 
         let x = {
@@ -311,6 +369,8 @@ impl Error {
                 ],
                 ..Default::default()
             },
+            Self::DepthLimit(e) => e,
+            Self::Reduce(_) => unreachable!("handle before calling this"),
         }
     }
 }

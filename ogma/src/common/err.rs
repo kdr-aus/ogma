@@ -562,6 +562,19 @@ Please supply this BACKTRACE:
         self.help_msg = Self::internal_err_help();
         self
     }
+
+    /// Use this to bubble an inference depth reached error.
+    pub(crate) fn inference_depth() -> Self {
+        Self {
+            desc: "inference depth reached".to_string(),
+            hard: true,
+            ..Default::default()
+        }
+    }
+
+    pub fn is_inference_depth_error(&self) -> bool {
+        self.desc.starts_with("inference depth reached")
+    }
 }
 
 /// Type Errors
@@ -989,5 +1002,11 @@ World
  |      ^
 "
         );
+    }
+
+    #[test]
+    fn chk_inference_depth() {
+        let e = Error::inference_depth();
+        assert!(e.is_inference_depth_error());
     }
 }

@@ -48,7 +48,7 @@ pub fn compile_with_seed_vars(
         flowed_edges: Default::default(),
         compiled_ops: Default::default(),
         compiled_exprs: Default::default(),
-        output_infer_opnode: None,
+        output_infer_opnodes: Default::default(),
         callsite_params: Default::default(),
         inference_depth: 0,
     });
@@ -123,6 +123,11 @@ impl<'d> Compiler<'d> {
     }
 
     fn compile<B: BreakOn>(mut self: Box<Self>, break_on: B) -> Result<Box<Self>> {
+        _counts_line(format_args!(
+            "Compiler::compile with {} depth",
+            self.inference_depth
+        ));
+
         let brk_key = &break_on.idx();
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))
@@ -162,15 +167,22 @@ impl<'d> Compiler<'d> {
                 _ => (),
             }
 
-            // return the output inference error here
-            match self.infer_outputs() {
+            match self.infer_inputs_expr() {
                 Ok(true) => continue,
+                // Break early if a hard error.
+                Err(e) if e.hard => return Err(e),
                 Err(e) => err = e,
                 _ => (),
             }
 
-            match self.infer_inputs_expr() {
+            // return the output inference error here
+            match self.infer_outputs() {
                 Ok(true) => continue,
+                // Break early if a hard error.
+                Err(e) if e.hard => {
+                    _counts_line(format_args!("{}", self.inference_depth));
+                    return Err(e);
+                }
                 Err(e) => err = e,
                 _ => (),
             }
@@ -397,7 +409,7 @@ impl<'d> Compiler<'d> {
                             _unknown,
                             "if inferring the output node, expecting the TG output to be unknown"
                         );
-                        self.output_infer_opnode = Some(node);
+                        self.output_infer_opnodes.push(node);
                     }
 
                     // add a stack trace by looking at the def interfaces

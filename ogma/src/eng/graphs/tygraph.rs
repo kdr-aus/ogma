@@ -46,6 +46,7 @@ pub enum Chg {
     AnyInput(NodeIndex),
     KnownOutput(NodeIndex, Type),
     ObligeOutput(NodeIndex, Type),
+    RemoveOutput(NodeIndex, Type),
     AddEdge {
         src: NodeIndex,
         dst: NodeIndex,
@@ -68,6 +69,7 @@ impl Chg {
             Chg::AnyInput(i) => i,
             Chg::KnownOutput(i, _) => i,
             Chg::ObligeOutput(i, _) => i,
+            Chg::RemoveOutput(i, _) => i,
             Chg::AddEdge {
                 src,
                 dst: _,
@@ -594,6 +596,7 @@ impl TypeGraph {
             Chg::ObligeOutput(node, ty) => {
                 apply(self, node, |n| set(&mut n.output, Knowledge::Obliged(ty)))
             }
+            Chg::RemoveOutput(node, ty) => apply(self, node, |n| Ok(n.output.rm_inferred(&ty))),
             Chg::AddEdge { src, dst, flow } => {
                 // TODO edges_connecting is not implemented yet for StableGraph
                 // can be replicated with a filter

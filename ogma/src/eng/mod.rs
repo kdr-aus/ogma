@@ -38,8 +38,8 @@ pub struct Compiler<'d> {
     compiled_ops: IndexMap<Step>,
     /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
     compiled_exprs: IndexMap<eval::Stack>,
-    /// A op node which has been flag for output inference.
-    output_infer_opnode: Option<graphs::OpNode>,
+    /// Op nodes which have been flagged for output inference.
+    output_infer_opnodes: Vec<graphs::OpNode>,
     /// A map of **Def** nodes which have had their call site parameters prepared as variables.
     callsite_params: IndexMap<Vec<comp::CallsiteParam>>,
     /// Depth limit of inference to loop down to.
