@@ -566,8 +566,12 @@ Please supply this BACKTRACE:
     /// Use this to bubble an inference depth reached error.
     pub(crate) fn inference_depth() -> Self {
         Self {
+            cat: Category::Type,
             desc: "inference depth reached".to_string(),
             hard: true,
+            help_msg: Some(
+                "try annotating the input and/or output types you are expecting".to_string(),
+            ),
             ..Default::default()
         }
     }

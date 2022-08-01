@@ -119,15 +119,16 @@ impl<'d> Compiler<'d> {
             let x = &mut self.output_infer_opnodes;
             // notice the reverse comparison, we do this to get a descending order, trialling the
             // 'deepest' first
-            x.sort_unstable_by(|a,b| b.index().cmp(&a.index()));
+            x.sort_unstable_by(|a, b| b.index().cmp(&a.index()));
             x.dedup();
 
             // only take where the output is ambiguous
-            x.drain(..).filter(|n| self.tg[n.idx()].output.is_multiple()).collect()
+            x.drain(..)
+                .filter(|n| self.tg[n.idx()].output.is_multiple())
+                .collect()
         };
 
-        if let Some(opnode) = nodes.get(0).copied()
-        {
+        if let Some(opnode) = nodes.get(0).copied() {
             // infer output
             let x = output(opnode, self);
 
@@ -149,12 +150,9 @@ impl<'d> Compiler<'d> {
     }
 
     fn assert_inference_depth(&self) -> Result<()> {
-        (self.inference_depth <= 5)
+        (self.inference_depth < 5)
             .then(|| ())
             .ok_or_else(|| crate::Error::inference_depth())
-        //         if self.inference_depth > 5 {
-        //             panic!("reached inference depth; this is an internal error, please raise an issue at <https://github.com/kdr-aus/ogma/issues>");
-        //         }
     }
 }
 
@@ -163,12 +161,6 @@ enum Error {
     Ambiguous(TypesSet),
     DepthLimit(crate::Error),
     Reduce(Vec<Type>),
-}
-
-enum Outcome {
-    Success,
-    Fail,
-    DepthLimited,
 }
 
 /// Tries to compile the `op` with each type in the inferred types set.
@@ -334,7 +326,9 @@ impl Error {
                 ],
                 ..Default::default()
             },
-            Self::DepthLimit(e) => e,
+            Self::DepthLimit(e) => {
+                Self::add_trace(e, op, "trying to infer output for this command")
+            }
             Self::Reduce(_) => unreachable!("handle before calling this"),
         }
     }
@@ -369,8 +363,32 @@ impl Error {
                 ],
                 ..Default::default()
             },
-            Self::DepthLimit(e) => e,
+            Self::DepthLimit(e) => {
+                Self::add_trace(e, expr, "annotate the input type for this expression")
+            }
             Self::Reduce(_) => unreachable!("handle before calling this"),
+        }
+    }
+
+    /// we do a bit of jiggering the trace vector here.
+    /// the reason is this, the _deepest_ inference error is not usually the best
+    /// one to annotate, rather, the _first_ node which fails (effectively the root
+    /// invoker of the inference chain) should be the one annotated.
+    /// to provide good error messages, the _last_ in the bubbling should be the
+    /// _first_ displayed.
+    /// So we take the head from the trace list, copy the message, set the old
+    /// message to be just a trace stack message, and we will end up with tthe
+    /// shallowest node on top
+    fn add_trace(mut e: crate::Error, tag: &Tag, msg: impl Into<String>) -> crate::Error {
+        if e.traces.is_empty() {
+            e.add_trace(tag, msg.into())
+        } else {
+            let prv = &mut e.traces[0];
+            let m = prv.desc.take();
+            prv.desc = Some("sub-inferencing failed".to_string());
+            let t = crate::common::err::Trace::from_tag(tag, m);
+            e.traces.insert(0, t);
+            e
         }
     }
 }

@@ -167,14 +167,6 @@ impl<'d> Compiler<'d> {
                 _ => (),
             }
 
-            match self.infer_inputs_expr() {
-                Ok(true) => continue,
-                // Break early if a hard error.
-                Err(e) if e.hard => return Err(e),
-                Err(e) => err = e,
-                _ => (),
-            }
-
             // return the output inference error here
             match self.infer_outputs() {
                 Ok(true) => continue,
@@ -183,6 +175,14 @@ impl<'d> Compiler<'d> {
                     _counts_line(format_args!("{}", self.inference_depth));
                     return Err(e);
                 }
+                Err(e) => err = e,
+                _ => (),
+            }
+
+            match self.infer_inputs_expr() {
+                Ok(true) => continue,
+                // Break early if a hard error.
+                Err(e) if e.hard => return Err(e),
                 Err(e) => err = e,
                 _ => (),
             }
