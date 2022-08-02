@@ -951,7 +951,7 @@ fn cnv_span(s: &str, slice: self::cansi::CategorisedSlice, theme: u8) -> Span<'s
         style = style.add_modifier(Modifier::CROSSED_OUT);
     }
 
-    Span::styled(String::from(s), style.theme(theme))
+    Span::styled(String::from(s.replace('\t', "    ")), style.theme(theme))
 }
 
 fn cnv_colour(c: self::cansi::Color) -> Color {
