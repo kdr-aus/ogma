@@ -218,6 +218,22 @@ impl<'a> Block<'a> {
             .ok_or_else(|| Error::insufficient_args(self.op_tag(), self.args_count, None))?;
         self.inject_manual_var_into_arg_locals(n, name, ty)
     }
+
+    /// Oblige the **remaining** arguments to have the input type `ty`.
+    ///
+    /// `ty` is similar to [`ArgBuilder::supplied`], where a `None` indicates to use the block's
+    /// input type.
+    ///
+    /// This method does not pop any arguments, it merely flags to the compiler to insert type
+    /// graph changes.
+    pub fn oblige_args_supplied_tys<T: Into<Option<Type>>>(&mut self, ty: T) {
+        let t = ty.into().unwrap_or_else(|| self.in_ty.clone());
+        self.chgs.chgs.extend(
+            self.args
+                .iter()
+                .map(|arg| tygraph::Chg::ObligeInput(arg.idx(), t.clone()).into()),
+        );
+    }
 }
 
 /// Evalulation functions.

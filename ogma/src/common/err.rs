@@ -562,6 +562,24 @@ Please supply this BACKTRACE:
         self.help_msg = Self::internal_err_help();
         self
     }
+
+    /// Use this to bubble an inference depth reached error.
+    pub(crate) fn inference_depth() -> Self {
+        Self {
+            cat: Category::Type,
+            desc: "inference depth reached".to_string(),
+            hard: true,
+            help_msg: Some(
+                "try annotating the input and/or output types you are expecting".to_string(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// Is this error because of reaching inference depth?
+    pub fn is_inference_depth_error(&self) -> bool {
+        self.desc.starts_with("inference depth reached")
+    }
 }
 
 /// Type Errors
@@ -989,5 +1007,11 @@ World
  |      ^
 "
         );
+    }
+
+    #[test]
+    fn chk_inference_depth() {
+        let e = Error::inference_depth();
+        assert!(e.is_inference_depth_error());
     }
 }

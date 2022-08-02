@@ -89,13 +89,11 @@ fn dotop_identifier_tests() {
     println!("{}", err);
     assert_eq!(
         err,
-        "Typing Error: Type resolution failed. Conflicting obligation type
+        "Semantics Error: expecting argument with output type `Number`, found `String`
 --> shell:27
  | fold 0 + $row.Testing-weird\\string
- |                            ^ this node returns a `String`
---> shell:27
- | fold 0 + $row.Testing-weird\\string
- |                            ^^^^^^^ but this node is obliged to return `Number`
+ |                            ^^^^^^^ this argument returns type `String`
+--> help: commands may require specific argument types, use `--help` to view requirements
 "
     );
 }

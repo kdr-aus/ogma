@@ -383,6 +383,7 @@ variables are scoped to within the expression they are defined"
 
 fn let_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_adds_vars(false);
+    blk.assert_output(blk.in_ty().clone()); // let always passes through the input
 
     type Binding = (eng::Variable, eng::Argument);
 
@@ -403,6 +404,7 @@ fn let_intrinsic(mut blk: Block) -> Result<Step> {
         });
 
     fn build_bindings(blk: &mut Block) -> Result<Vec<Binding>> {
+        blk.oblige_args_supplied_tys(None); // we cheat a little bit here, arg nodes do not need to be obliged
         let mut bindings = Vec::with_capacity(blk.args_len() / 2);
         while blk.args_len() > 1 {
             let e = blk.next_arg()?.supplied(None)?.concrete()?;

@@ -66,6 +66,7 @@ fn append_table_intrinsic(mut blk: Block) -> Result<Step> {
         return Err(Error::insufficient_args(blk.blk_tag(), 0, None));
     }
 
+    blk.oblige_args_supplied_tys(Ty::TabRow); // each argument will be supplied a TableRow
     let mut cols = Vec::with_capacity(len);
     let mut auto = 1;
     for _ in 0..len {
@@ -147,6 +148,9 @@ the row is populated with the expression results",
 fn append_row_intrinsic(mut blk: Block) -> Result<Step> {
     blk.assert_input(&Ty::Tab)?;
     blk.assert_output(Ty::Tab);
+
+    // each argument will be supplied the input type
+    blk.oblige_args_supplied_tys(None);
 
     let len = blk.args_len();
     let mut cols = Vec::with_capacity(len);

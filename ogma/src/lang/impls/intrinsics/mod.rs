@@ -77,10 +77,7 @@ where
 {
     let ty = T::as_type();
 
-    if blk.in_ty() != &ty {
-        return Err(Error::wrong_op_input_type(blk.in_ty(), blk.op_tag()));
-    }
-
+    blk.assert_input(&ty)?;
     blk.assert_output(ty.clone());
 
     let len = blk.args_len();
@@ -91,6 +88,9 @@ where
     }
 
     let args = {
+        // notice that each arg will be supplied input type!
+        blk.oblige_args_supplied_tys(None);
+
         let mut a = Vec::with_capacity(len);
         for _ in 0..len {
             // use blocks input type
