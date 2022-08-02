@@ -223,14 +223,16 @@ impl<'a> Block<'a> {
     ///
     /// `ty` is similar to [`ArgBuilder::supplied`], where a `None` indicates to use the block's
     /// input type.
-    /// 
+    ///
     /// This method does not pop any arguments, it merely flags to the compiler to insert type
     /// graph changes.
     pub fn oblige_args_supplied_tys<T: Into<Option<Type>>>(&mut self, ty: T) {
         let t = ty.into().unwrap_or_else(|| self.in_ty.clone());
-        self.chgs.chgs.extend(self.args.iter().map(|arg| {
-            tygraph::Chg::ObligeInput(arg.idx(), t.clone()).into()
-        }));
+        self.chgs.chgs.extend(
+            self.args
+                .iter()
+                .map(|arg| tygraph::Chg::ObligeInput(arg.idx(), t.clone()).into()),
+        );
     }
 }
 

@@ -576,6 +576,7 @@ Please supply this BACKTRACE:
         }
     }
 
+    /// Is this error because of reaching inference depth?
     pub fn is_inference_depth_error(&self) -> bool {
         self.desc.starts_with("inference depth reached")
     }

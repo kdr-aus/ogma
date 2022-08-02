@@ -184,7 +184,7 @@ impl<'d> Compiler<'d> {
     fn assert_inference_depth(&self) -> Result<()> {
         (self.inference_depth < 5)
             .then(|| ())
-            .ok_or_else(|| crate::Error::inference_depth())
+            .ok_or_else(crate::Error::inference_depth)
     }
 }
 
@@ -271,11 +271,7 @@ fn test_compile_types<'a>(
 
     let mut inferred = None;
 
-    _counts_line(format_args!("{node:?}"));
-
     for ty in types.iter() {
-        _counts_line(format_args!("{ty}"));
-
         let mut compiler: Compiler_ = compiler.clone();
         compiler.inference_depth += 1;
 
@@ -293,7 +289,6 @@ fn test_compile_types<'a>(
                 compiler.compile(breakon)
             }
             Err(_) => {
-                _counts_line(format_args!("failed to apply {ty} to {node:?}"));
                 rm.push(ty.clone());
                 continue;
             }

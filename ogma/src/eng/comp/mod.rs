@@ -123,11 +123,6 @@ impl<'d> Compiler<'d> {
     }
 
     fn compile<B: BreakOn>(mut self: Box<Self>, break_on: B) -> Result<Box<Self>> {
-        _counts_line(format_args!(
-            "Compiler::compile with {} depth",
-            self.inference_depth
-        ));
-
         let brk_key = &break_on.idx();
         while !(self.compiled_exprs.contains_key(brk_key)
             || self.compiled_ops.contains_key(brk_key))
@@ -171,10 +166,7 @@ impl<'d> Compiler<'d> {
             match self.infer_outputs() {
                 Ok(true) => continue,
                 // Break early if a hard error.
-                Err(e) if e.hard => {
-                    _counts_line(format_args!("{}", self.inference_depth));
-                    return Err(e);
-                }
+                Err(e) if e.hard => return Err(e),
                 Err(e) => err = e,
                 _ => (),
             }
