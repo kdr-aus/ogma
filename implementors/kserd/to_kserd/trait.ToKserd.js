@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["ogma"] = [{"text":"impl ToKserd&lt;'static&gt; for <a class=\"struct\" href=\"ogma/lang/struct.OgmaData.html\" title=\"struct ogma::lang::OgmaData\">OgmaData</a>","synthetic":false,"types":["ogma::lang::types::OgmaData"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

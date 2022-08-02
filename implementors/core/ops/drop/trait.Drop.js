@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["ogma"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.62.1/core/ops/drop/trait.Drop.html\" title=\"trait core::ops::drop::Drop\">Drop</a> for <a class=\"struct\" href=\"ogma/lang/struct.Table.html\" title=\"struct ogma::lang::Table\">Table</a>","synthetic":false,"types":["ogma::lang::types::Table"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

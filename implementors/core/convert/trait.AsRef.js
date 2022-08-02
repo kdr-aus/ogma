@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["ogma"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.62.1/core/convert/trait.AsRef.html\" title=\"trait core::convert::AsRef\">AsRef</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.62.1/std/primitive.str.html\">str</a>&gt; for <a class=\"struct\" href=\"ogma/lang/ast/struct.Tag.html\" title=\"struct ogma::lang::ast::Tag\">Tag</a>","synthetic":false,"types":["ogma::lang::syntax::ast::Tag"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

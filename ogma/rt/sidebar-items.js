@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["handle_help","Check if an expression has a help flag and output the help message (as the `Err` variant)."],["process_expression","Parse and evaluate an `expr`, returning the value if successful."]],"mod":[["bat","Batch processing of definitions and expressions."]]});
