@@ -137,7 +137,7 @@ mod tests {
     fn structures_sizing() {
         use std::mem::size_of;
 
-        assert_eq!(size_of::<Compiler>(), 408); // oomph! this is why we hide it behind Box<Compiler>
+        assert_eq!(size_of::<Compiler>(), 424); // oomph! this is why we hide it behind Box<Compiler>
 
         // NOTE
         // Although block sizing is large, it would not really be a hot spot, and the cost of
