@@ -92,10 +92,17 @@ impl<'d> Compiler<'d> {
                     ts.into_iter()
                         .map(|t| tygraph::Chg::RemoveInput(expr.idx(), t).into()),
                 ),
-                // if the error is a depth limit, need to short circuit and propagate upwards
-                Err(e) if e.is_depth_limit() => return Err(e.input_expr(expr.tag(self.ag()))),
-                // else, bring back compiler, and set err
-                Err(e) => err = Some(e.input_expr(expr.tag(self.ag()))),
+                Err(e) => {
+                    let d = e.is_depth_limit();
+                    let e = e.input_expr(expr.tag(self.ag()));
+                    if d {
+                        // if the error is a depth limit, need to short circuit and propagate upwards
+                        return Err(e);
+                    } else {
+                        // else, bring back compiler, and set err
+                        err = Some(e)
+                    }
+                }
             }
         }
 
@@ -128,24 +135,49 @@ impl<'d> Compiler<'d> {
                 .collect()
         };
 
-        if let Some(opnode) = nodes.get(0).copied() {
+        // This code mimics the inputs, but has enough differing calls to not be abstracted
+        let mut success = false;
+        let mut err = None;
+        let mut chgs = Vec::new();
+
+        for opnode in nodes {
             // infer output
             let x = output(opnode, self);
 
             match x {
+                // success!
                 Ok(c) => {
-                    // bring back the compiler to self
-                    *self = c;
-                    Ok(true) // success
+                    success = true;
+                    *self = c; // update self with new compiler
+                    break; // return early
                 }
-                Err(Error::Reduce(ts)) => self.apply_graph_chgs(
+                Err(Error::Reduce(ts)) => chgs.extend(
                     ts.into_iter()
                         .map(|t| tygraph::Chg::RemoveOutput(opnode.idx(), t).into()),
                 ),
-                Err(e) => Err(e.output(opnode.op_tag(self.ag()), opnode.blk_tag(self.ag()))),
+                Err(e) => {
+                    let d = e.is_depth_limit();
+                    let e = e.output(opnode.op_tag(self.ag()), opnode.blk_tag(self.ag()));
+                    if d {
+                        // if the error is a depth limit, need to short circuit and propagate upwards
+                        return Err(e);
+                    } else {
+                        // else, bring back compiler, and set err
+                        err = Some(e);
+                    }
+                }
             }
+        }
+
+        if success {
+            Ok(true) // at least one trial worked
+        } else if !chgs.is_empty() {
+            self.apply_graph_chgs(chgs.into_iter())
         } else {
-            Ok(false)
+            match err {
+                Some(e) => Err(e),
+                None => Ok(false), // no errors, but no success
+            }
         }
     }
 
