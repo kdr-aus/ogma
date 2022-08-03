@@ -359,7 +359,7 @@ impl<'d> Compiler<'d> {
             .collect::<Vec<_>>();
 
         let mut goto_resolve = false;
-        let mut err = None;
+        let mut err = Option::<Error>::None;
         let mut chgs = Chgs {
             chgs: Vec::new(),
             infer_output: false,
@@ -421,7 +421,17 @@ impl<'d> Compiler<'d> {
                         e = e.add_trace(parent, None);
                     }
 
-                    err = Some(e);
+                    // update the error, with hard errors taking precendence!
+                    err = match (err.take(), e) {
+                        // the current error is hard, take that.
+                        (Some(a), _) if a.hard => Some(a),
+                        // the new error is hard, take that.
+                        (_, b) if b.hard => Some(b),
+                        // there was already an error
+                        (Some(a), _) => Some(a),
+                        // no error, update with this one
+                        (None, b) => Some(b),
+                    };
                 }
             }
 
