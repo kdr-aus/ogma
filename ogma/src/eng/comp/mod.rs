@@ -423,14 +423,12 @@ impl<'d> Compiler<'d> {
 
                     // update the error, with hard errors taking precendence!
                     err = match (err.take(), e) {
-                        // the current error is hard, take that.
-                        (Some(a), _) if a.hard => Some(a),
-                        // the new error is hard, take that.
+                        // the new error is hard, it trumps all
                         (_, b) if b.hard => Some(b),
-                        // there was already an error
-                        (Some(a), _) => Some(a),
-                        // no error, update with this one
-                        (None, b) => Some(b),
+                        // the old error was hard, take that
+                        (Some(a), _) if a.hard => Some(a),
+                        // else return the new error
+                        (_, b) => Some(b),
                     };
                 }
             }
