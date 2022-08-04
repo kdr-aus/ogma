@@ -697,8 +697,8 @@ impl Error {
     pub(crate) fn var_not_found(var: &Tag) -> Self {
         Error {
             cat: Category::Semantics,
-            desc: format!("variable `{}` does not exist", var),
-            traces: trace(var, format!("`{}` not in scope", var)),
+            desc: format!("variable `{var}` does not exist"),
+            traces: trace(var, format!("`{var}` not in scope")),
             help_msg: Some(
                 "variables must be in scope
           variables can be defined using the `let` command"

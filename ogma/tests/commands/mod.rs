@@ -894,3 +894,101 @@ fn type_resolution_failure() {
     }
     assert_eq!(x, Ok(Value::Bool(true)));
 }
+
+#[test]
+fn variable_resolution_failure() {
+    let defs = &mut Definitions::new();
+
+    process_definition("def sum-amt Table () { \\ 1 }", Location::Shell, None, defs).unwrap();
+    process_definition(
+        "def sum-amt-yr Table () { \\ 1 }",
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+    process_definition("def bills Nil () { Table }", Location::Shell, None, defs).unwrap();
+    process_definition("def everyday Nil () { Table }", Location::Shell, None, defs).unwrap();
+    process_definition("def loans Nil () { Table }", Location::Shell, None, defs).unwrap();
+    process_definition(
+        "def purchases Nil () { Table }",
+        Location::Shell,
+        None,
+        defs,
+    )
+    .unwrap();
+
+    // reduced example, notice that the 2nd let should failure, since $y hasn't been defined!
+    let code = r#"Table
+| let {\ 3} $x
+| let {\ 4} $y {\ $y | - 3} $z
+| let { \ $y | - $x } $a"#;
+
+    let x = process_w_nil(code, defs).unwrap_err().to_string();
+    println!("{x}");
+
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `y` does not exist
+--> shell:19
+ | | let {\ 4} $y {\ $y | - 3} $z
+ |                    ^ `y` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+
+    let code = r#"Table Item Amount Amount-Yr
+| let { filter Item --Str { != 'SUBTOTAL' } | sum-amt } $outflow
+| let { open 'income-split.csv' | fold 0 + $row.amt } $income
+      { \$income | * 12 } $income-yr
+| let { \ $income | - $outflow } $surplus
+| append-row 'Surplus' $surplus"#;
+
+    let x = process_w_nil(code, defs).unwrap_err().to_string();
+    println!("{x}");
+
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `income` does not exist
+--> shell:10
+ |       { \$income | * 12 } $income-yr
+ |           ^^^^^^ `income` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+
+    let code = r#"Table Item Amount Amount-Yr
+| append-row 'Bills' { \ #n | bills | sum-amt } { \ #n | bills | sum-amt-yr }
+| append-row 'Everyday' { \ #n | everyday | sum-amt } { \ #n | everyday | sum-amt-yr }
+| + { \ #n | loans | pick Item Amount Amount-Yr }
+| append-row SUBTOTAL {sum-amt} {sum-amt-yr}
+| append-row
+| + { \ #n | purchases | pick Item Amount }
+| append-row SUBTOTAL { \ #n | purchases | sum-amt }
+| let { filter Item --Str { != 'SUBTOTAL' } | sum-amt } $outflow
+| append-row 'OUTFLOW TOTAL' $outflow
+| append-row
+| + { open 'income-split.csv' | pick label amt | append { get amt | * 12 } }
+| let { open 'income-split.csv' | fold 0 + $row.amt } $income
+      { \$income | * 12 } $income-yr
+| append-row 'INCOME TOTAL' $income  $income-yr
+| append-row
+| let { \ $income | - $outflow } $surplus
+| append-row 'Surplus' $surplus"#;
+
+    let x = process_w_nil(code, defs).unwrap_err().to_string();
+    println!("{x}");
+
+    assert_eq!(
+        &x,
+        r#"Semantics Error: variable `income` does not exist
+--> shell:10
+ |       { \$income | * 12 } $income-yr
+ |           ^^^^^^ `income` not in scope
+--> help: variables must be in scope
+          variables can be defined using the `let` command
+"#
+    );
+}
