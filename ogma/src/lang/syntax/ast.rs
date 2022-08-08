@@ -199,7 +199,7 @@ pub trait IBlock: std::fmt::Debug + Send + Sync {
     fn terms(&self) -> Cow<[Term]>;
     /// An optional annotated input type constraint.
     fn in_ty(&self) -> Option<CTag>;
-    /// An optional annotated ouput type constraint.
+    /// An optional annotated output type constraint.
     fn out_ty(&self) -> Option<CTag>;
 
     /// Create a tag that extends across the whole block.

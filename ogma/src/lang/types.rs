@@ -232,7 +232,7 @@ impl From<$type> for Value {
 
 prim_type_impls!(bool=>Bool, Number=>Num, Str=>Str, Table=>Tab, TableRow=>TabRow);
 
-// ----- additionals that don't fit pattern -----
+// ----- additional that don't fit pattern -----
 impl AsType for () {
     fn as_type() -> Type {
         Type::Nil
@@ -737,7 +737,7 @@ impl TableRow {
         }
     }
 
-    /// Retrive an entry at `(row, col)`. Use if _rowidx_ and _colidx_ are known an can be
+    /// Retrieve an entry at `(row, col)`. Use if _rowidx_ and _colidx_ are known an can be
     /// memoized.
     ///
     /// # Panics

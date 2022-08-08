@@ -59,9 +59,9 @@ pub struct Error {
     pub traces: Vec<Trace>,
     /// Optional help message.
     pub help_msg: Option<String>,
-    /// Error should propogate immediately.
+    /// Error should propagate immediately.
     ///
-    /// This is a flag to the compiler that the error should be propogated through, exiting the
+    /// This is a flag to the compiler that the error should be propagated through, exiting the
     /// compiling loop early without further compilation processes.
     /// This is usually done when a error is encountered that is unrelated to typing issues, and
     /// will be an error even if _all_ type information was known.
@@ -223,7 +223,7 @@ impl Error {
                 "implementation of `{}` not defined for input type `{}`",
                 op, in_ty
             ),
-            traces: trace(op, format!("`{}` not implmented for `{}` input", op, in_ty)),
+            traces: trace(op, format!("`{}` not implemented for `{}` input", op, in_ty)),
             help_msg: Some("view a list of definitions using `def --list`".into()),
             ..Self::default()
         }
@@ -840,7 +840,7 @@ fn trace_code_lines(code: &str, start: usize, end: usize) -> Vec<(&str, usize, u
 }
 
 // ###### STRUCTS ##############################################################
-/// Error catgories.
+/// Error categories.
 #[derive(Debug, PartialEq)]
 pub enum Category {
     /// Internal error. These should not occur.

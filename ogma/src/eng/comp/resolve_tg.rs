@@ -187,7 +187,7 @@ impl<'d> Compiler<'d> {
 
         let node = self.ag[node].tag();
 
-        let appliction = match &conflict {
+        let application = match &conflict {
             UnknownSrc => {
                 Trace::from_tag(node, "this node's type is specified as unknown".to_string())
             }
@@ -235,7 +235,7 @@ impl<'d> Compiler<'d> {
             )),
         };
 
-        err.traces.push(appliction);
+        err.traces.push(application);
         if let Some(e) = exists {
             err.traces.push(e);
         }

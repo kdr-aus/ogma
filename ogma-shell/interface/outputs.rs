@@ -36,7 +36,7 @@ impl Outputs {
     }
 
     pub fn add(&mut self, value: String, theme: u8) {
-        let w = self.cached_width.saturating_sub(1) as usize; // one coloumn for the scroll bar
+        let w = self.cached_width.saturating_sub(1) as usize; // one column for the scroll bar
         let cached = super::convert_coloured_str(&value, w, theme);
         self.items.push_back(Output { cached, value });
         self.scroll = 0;
@@ -49,7 +49,7 @@ impl Outputs {
     pub fn update_width(&mut self, width: u16, theme: u8) {
         self.scroll = 0;
         self.cached_width = width;
-        let w = width.saturating_sub(1) as usize; // one coloumn for the scroll bar
+        let w = width.saturating_sub(1) as usize; // one column for the scroll bar
         for item in &mut self.items {
             item.cached = super::convert_coloured_str(&item.value, w, theme);
         }

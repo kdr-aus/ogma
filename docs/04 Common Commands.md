@@ -92,7 +92,7 @@ def eq Point (rhs) { and {get x | = $rhs.x} {get y | = $rhs.y} }
 
 > This pattern extends for other commands, a good example is the `sort-by` command.
 
-> Boolean logic such as AND and OR is done with a prefix `and` and `or` comand. Both are variadic
+> Boolean logic such as AND and OR is done with a prefix `and` and `or` command. Both are variadic
 > such that a logical expression can look like `\ 5 | or {= 3} {= 2} {= 5}`.
 
 ## Get
@@ -206,7 +206,7 @@ sizes. Use `+ --help` to view these details.
 ## Sorting and grouping
 ---
 Sorting can be done using two commands. `sort` takes column headers and sorts the entries **_in a
-canoncial fashion_** (this means entry _types_ have _order_ enforced on them). In general, `sort`
+canonical fashion_** (this means entry _types_ have _order_ enforced on them). In general, `sort`
 is the 'go to' sorting command. The sort help shows how specifying more than one header can be
 used to do 'then by' sorting.
 

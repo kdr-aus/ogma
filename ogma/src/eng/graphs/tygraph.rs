@@ -366,8 +366,8 @@ impl TypeGraph {
                 }
             });
 
-            if let Some(contrained) = keys {
-                self.g[op.idx()].input = contrained.into();
+            if let Some(constrained) = keys {
+                self.g[op.idx()].input = constrained.into();
             }
         }
     }

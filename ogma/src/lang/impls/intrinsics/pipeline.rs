@@ -9,7 +9,7 @@ pub fn add_intrinsics(impls: &mut Implementations) {
         (
             ".",
             None,
-            ast::DotOperatorBlock::instrinsic,
+            ast::DotOperatorBlock::intrinsic,
             Pipeline,
             ast::DotOperatorBlock::help
         )
@@ -229,7 +229,7 @@ impl ast::DotOperatorBlock {
 
     /// Consists of 2 terms: `input.field`.
     /// For TableRow input we handle separately
-    fn instrinsic(mut blk: Block) -> Result<Step> {
+    fn intrinsic(mut blk: Block) -> Result<Step> {
         let input = blk.next_arg()?.supplied(None)?.concrete()?;
         let field = blk.next_arg()?.supplied(Ty::Nil)?;
         match input.out_ty() {

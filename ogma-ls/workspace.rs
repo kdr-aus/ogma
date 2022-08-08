@@ -125,7 +125,7 @@ impl Workspace {
     /// Runs a clearing of all definitions before loading.
     ///
     /// > This loads what the contents of what is in the virtual file map. If using through a
-    /// > terminal where `def --load` can be called it is recommneded to just share the
+    /// > terminal where `def --load` can be called it is recommended to just share the
     /// > `Definitions` file and not use this method.
     pub(crate) fn def_load(&self) {
         let files = self.files.read();

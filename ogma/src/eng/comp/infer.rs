@@ -404,7 +404,7 @@ impl Error {
     /// to provide good error messages, the _last_ in the bubbling should be the
     /// _first_ displayed.
     /// So we take the head from the trace list, copy the message, set the old
-    /// message to be just a trace stack message, and we will end up with tthe
+    /// message to be just a trace stack message, and we will end up with the
     /// shallowest node on top
     fn add_trace(mut e: crate::Error, tag: &Tag, msg: impl Into<String>) -> crate::Error {
         if e.traces.is_empty() {
