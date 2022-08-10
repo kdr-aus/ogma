@@ -223,7 +223,7 @@ pub struct Incomplete {
 
 /// A rudimentary AST node.
 pub struct Node {
-    /// The soure slice tag.
+    /// The source slice tag.
     pub tag: Tag,
     /// The language server defined kind (possibly different to the `ogma` kind).
     pub ty: NodeType,

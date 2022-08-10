@@ -31,7 +31,7 @@ impl Environment {
         let arc: &mut Arc<_> = &mut self.0;
 
         // we can't just use get_mut since using `return` seems to not work with lifetimes
-        // instead, we check the counts outselves.
+        // instead, we check the counts ourselves.
         // we use the assumption that counts of one would be unique along this thread, and since
         // there cannot be another Arc on another thread without having counts > 1, this arc is
         // unique

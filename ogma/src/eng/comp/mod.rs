@@ -414,14 +414,14 @@ impl<'d> Compiler<'d> {
                         .filter_map(|n| self.ag[n].def().map(|_| DefNode(n)))
                         // get the parent op
                         .map(|def| def.parent(&self.ag))
-                        // use the block tage as the trace
+                        // use the block tag as the trace
                         .map(|op| op.blk_tag(&self.ag));
 
                     for parent in parents {
                         e = e.add_trace(parent, None);
                     }
 
-                    // update the error, with hard errors taking precendence!
+                    // update the error, with hard errors taking precedence!
                     err = match (err.take(), e) {
                         // the new error is hard, it trumps all
                         (_, b) if b.hard => Some(b),
@@ -442,7 +442,7 @@ impl<'d> Compiler<'d> {
 
         (goto_resolve | chgd)
             .then(|| ())
-            .ok_or_else(|| err.expect("error should be some if unsuccesful"))
+            .ok_or_else(|| err.expect("error should be some if unsuccessful"))
     }
 
     /// Try to compile `opnode` into an evaluation [`Step`] given the input type (`in_ty`).
@@ -479,7 +479,7 @@ impl<'d> Compiler<'d> {
                             .output
                             .ty()
                             .cloned()
-                            .expect("shoud be known if a stack exists");
+                            .expect("should be known if a stack exists");
                         Ok(Step::def(params, stack.clone(), out_ty))
                     }
                     None => {

@@ -216,7 +216,7 @@ fn type_flag(blk: &mut Block) -> Result<Option<Type>> {
 /// 1. `buf` should **have equal or less length than table rows**
 /// 2. The first element is skipped over (table header row)
 /// 3. The callback should use `*T = foo` to update-in-place.
-/// 4. Errors should be propogated through.
+/// 4. Errors should be propagated through.
 ///
 /// This method utilises `rayon`'s `for_each_init` to seed the colmap amongst workers.
 fn par_over_tablerows<T, F>(buf: &mut [T], table: &Table, cx: &Context, f: F) -> Result<()>

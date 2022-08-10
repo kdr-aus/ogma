@@ -85,7 +85,7 @@ impl Definitions {
             "test if input is greater than or equal to rhs",
             vec![
                 HelpExample {
-                    desc: "test if 1 againt 0",
+                    desc: "test if 1 against 0",
                     code: "\\ 1 | >= 0",
                 },
                 HelpExample {
@@ -117,7 +117,7 @@ impl Definitions {
             "test if input is less than or equal to rhs",
             vec![
                 HelpExample {
-                    desc: "test if 1 againt 0",
+                    desc: "test if 1 against 0",
                     code: "\\ 1 | <= 0",
                 },
                 HelpExample {
@@ -265,7 +265,7 @@ pub fn recognise_definition(s: &str) -> bool {
 
 type DefResult<'a> = Result<(Value, Option<&'a str>)>;
 
-/// Process an expression whichs defines a _definition_.
+/// Process an expression which defines a _definition_.
 ///
 /// If successful the definition will be added to `defs`.
 ///

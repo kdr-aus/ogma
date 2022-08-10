@@ -49,7 +49,7 @@ impl<'d> Compiler<'d> {
                     );
 
                     // seal off the def's expr node
-                    // no more changes should occur since we have had succcess building.
+                    // no more changes should occur since we have had success building.
                     self.lg.seal(def.expr(&self.ag));
                 }
                 LocalInjection::UnknownReturnTy(_) => {

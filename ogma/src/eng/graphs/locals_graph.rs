@@ -285,7 +285,7 @@ impl LocalsGraph {
                 defined_at,
             } => {
                 self.add_new_var(name, ty, tag, defined_at);
-                self.flow(defined_at); // propogate change
+                self.flow(defined_at); // propagate change
                 true // graph altered
             }
             Chg::NewLazy {
@@ -295,7 +295,7 @@ impl LocalsGraph {
                 defined_at,
             } => {
                 self.add_new_lazy(name, to, tag, defined_at);
-                self.flow(defined_at); // propogate change
+                self.flow(defined_at); // propagate change
                 true // graph altered
             }
             Chg::Seal(op) => {

@@ -34,9 +34,9 @@ pub struct Compiler<'d> {
     lg: graphs::locals_graph::LocalsGraph,
     /// The edges in the `tg` that have been resolved and flowed.
     flowed_edges: IndexSet,
-    /// A map of **Op** nodes which have succesfully compiled into a `Step`.
+    /// A map of **Op** nodes which have successfully compiled into a `Step`.
     compiled_ops: IndexMap<Step>,
-    /// A map of **Expr** nodes which have succesfully compiled into an evaluation stack.
+    /// A map of **Expr** nodes which have successfully compiled into an evaluation stack.
     compiled_exprs: IndexMap<eval::Stack>,
     /// Op nodes which have been flagged for output inference.
     output_infer_opnodes: Vec<graphs::OpNode>,
@@ -46,7 +46,7 @@ pub struct Compiler<'d> {
     inference_depth: u32,
 }
 
-/// Boxed compiler, should be used when passsing by value.
+/// Boxed compiler, should be used when passing by value.
 type Compiler_<'a> = Box<Compiler<'a>>;
 
 // ###### BLOCK ################################################################
