@@ -108,7 +108,7 @@ pub type ParseFail = (err::Error, Expecting);
 /// An indication of expected AST node type if parsing fails.
 ///
 /// This is a best guess based on parsing context.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Expecting {
     /// Expecting a command/implementation.
     Impl,

@@ -49,7 +49,7 @@ macro_rules! colourln {
 ///  |        ^^^^ short description
 /// --> help: help message
 /// ```
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Error {
     /// Category of error.
     pub cat: Category,
@@ -69,7 +69,7 @@ pub struct Error {
 }
 
 /// A single trace item for error messages.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Trace {
     /// The defined location.
     pub loc: Location,
@@ -838,7 +838,7 @@ fn trace_code_lines(code: &str, start: usize, end: usize) -> Vec<(&str, usize, u
 
 // ###### STRUCTS ##############################################################
 /// Error categories.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Category {
     /// Internal error. These should not occur.
     Internal,

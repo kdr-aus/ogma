@@ -33,7 +33,7 @@ pub struct Batch {
 }
 
 /// An item to process.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BatchItem {
     /// A description of the item.
     pub comment: Option<String>,
@@ -71,7 +71,7 @@ impl BatchItem {
 }
 
 /// The outcome of an item.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     /// The item parsed, checked, and evaluated successfully.
     Success,
@@ -90,7 +90,7 @@ impl<T> From<Result<T>> for Outcome {
 }
 
 /// The type of this item.
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum ItemType {
     /// An expression.
     Expr,
