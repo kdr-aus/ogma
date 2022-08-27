@@ -110,7 +110,7 @@ impl fmt::Display for Tag {
 }
 
 /// A location indicator.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Location {
     /// Defined within `ogma`'s core.
     Ogma,

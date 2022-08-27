@@ -24,7 +24,7 @@ impl Implementation {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum OperationCategory {
     Arithmetic,
     Cmp,
