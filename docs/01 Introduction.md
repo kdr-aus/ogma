@@ -1,7 +1,7 @@
 <iframe src="./.ibox.html?raw=true" style="border:none; position:fixed; width:40px; right:0; z-index=999;"></iframe>
 
 <img 
-src="/assets/logo.png?raw=true"
+src="./assets/logo.png?raw=true"
 style="height: 200px; display:block; margin: auto; padding-top: 30px"/>
 
 # Introduction
