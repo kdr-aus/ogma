@@ -1,4 +1,3 @@
-
 use super::*;
 use nom::Err as E;
 use Argument::*;
@@ -1799,10 +1798,27 @@ fn iblock_impls() {
 
 #[test]
 fn path_parsing() {
-    let l = line("path/to/something");
+    let l = line("path/to/something ");
     let (_, x) = path(&l)(&l.line).unwrap();
-    assert_eq!(x, Path {
-        components: vec![tt("path"), tt("to"), tt("something")].into(),
-        idx: 0,
-    });
+    assert_eq!(
+        x,
+        Path {
+            components: vec![tt("path"), tt("to"), tt("something")].into(),
+            idx: 0,
+        }
+    );
+}
+
+#[test]
+fn path_parsing_errs() {
+    let l = line("path/to/");
+    let x = path(&l)(&l.line).unwrap_err();
+    assert_eq!(
+        x,
+        E::Error(ParsingError {
+            expecting: Expecting::Foo,
+            locs: vec![
+        ]
+        })
+    );
 }

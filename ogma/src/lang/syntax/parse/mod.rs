@@ -403,7 +403,13 @@ fn block<'f>(
 
 fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ {
     move |i| {
-
+        map(
+            terminated(separated_list1(tag("/"), op_ident(line)), space1),
+            |cs| Path {
+                components: cs.into(),
+                idx: 0,
+            },
+        )(i)
     }
 }
 

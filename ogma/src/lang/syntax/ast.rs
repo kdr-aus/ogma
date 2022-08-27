@@ -93,6 +93,7 @@ impl PartialEq for Tag {
         self.str() == rhs.str()
     }
 }
+impl Eq for Tag {}
 
 impl fmt::Debug for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -491,9 +492,10 @@ pub struct Field {
 }
 
 // ###### PARTITION PATHS ######################################################
+#[derive(Debug, PartialEq, Eq)]
 pub struct Path {
-    components: Arc<[Tag]>,
-    idx: u8,
+    pub(super) components: Arc<[Tag]>,
+    pub(super) idx: u8,
 }
 
 #[cfg(test)]
