@@ -401,6 +401,12 @@ fn block<'f>(
     }
 }
 
+fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ {
+    move |i| {
+
+    }
+}
+
 /// OPERATIONS -- This is where the 'default' commands are defined.
 fn op(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
     move |i| {

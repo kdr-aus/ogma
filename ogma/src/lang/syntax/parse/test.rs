@@ -1796,3 +1796,13 @@ fn iblock_impls() {
     let (_, b) = block(&l, defs)(&l.line).unwrap();
     assert_eq!(b.block_tag(), tt(":Num foo:Bar"));
 }
+
+#[test]
+fn path_parsing() {
+    let l = line("path/to/something");
+    let (_, x) = path(&l)(&l.line).unwrap();
+    assert_eq!(x, Path {
+        components: vec![tt("path"), tt("to"), tt("something")].into(),
+        idx: 0,
+    });
+}

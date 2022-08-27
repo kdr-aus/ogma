@@ -8,7 +8,7 @@
 //! ^-----------------------------------------^ --> Expression
 //! ```
 use ::kserd::Number;
-use std::{borrow::Cow, fmt, ops, path::Path, sync::Arc};
+use std::{borrow::Cow, fmt, ops, path, sync::Arc};
 
 /// `Tag` only implements tag _value_ equality checking (as in `.str()`).
 #[derive(Clone)]
@@ -119,7 +119,7 @@ pub enum Location {
     /// Defined in a file. `(filepath, line)`.
     ///
     /// Limiting line counts to 2^16.
-    File(Arc<Path>, u16),
+    File(Arc<path::Path>, u16),
 }
 
 impl Default for Location {
@@ -130,7 +130,7 @@ impl Default for Location {
 
 impl Location {
     /// Construct a location from a file and a line number.
-    pub fn file<F: AsRef<Path>>(file: F, line: u16) -> Self {
+    pub fn file<F: AsRef<path::Path>>(file: F, line: u16) -> Self {
         Location::File(Arc::from(file.as_ref()), line)
     }
 }
@@ -488,6 +488,12 @@ pub struct Field {
     pub ty: Tag,
     /// Type parameterisation: Ty<A B C>
     pub params: Vec<Tag>,
+}
+
+// ###### PARTITION PATHS ######################################################
+pub struct Path {
+    components: Arc<[Tag]>,
+    idx: u8,
 }
 
 #[cfg(test)]
