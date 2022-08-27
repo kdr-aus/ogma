@@ -6,7 +6,7 @@ pub use crossterm::event::{KeyCode, KeyModifiers};
 
 pub struct Events(Receiver<Event>);
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Event {
     Key { code: KeyCode, mods: KeyModifiers },
     Resize,

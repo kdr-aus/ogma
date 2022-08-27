@@ -230,7 +230,7 @@ pub struct Node {
 }
 
 /// The AST node kind.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum NodeType {
     /// An implementation/command/operation.
     Command,

@@ -1,6 +1,6 @@
 use clap::*;
 
-#[derive(Parser, PartialEq, Debug)]
+#[derive(Parser, PartialEq, Eq, Debug)]
 #[clap(name = "ogma")]
 #[clap(author = "Kurt Lawrence <kurtlawrence92@gmail.com>")]
 #[clap(about = "Scripting language for manipulating tabular data")]
