@@ -219,11 +219,8 @@ impl Error {
     pub(crate) fn impl_not_found(op: &Tag, in_ty: &Type) -> Self {
         Error {
             cat: Category::Semantics,
-            desc: format!(
-                "implementation of `{}` not defined for input type `{}`",
-                op, in_ty
-            ),
-            traces: trace(op, format!("`{}` not implemented for `{}` input", op, in_ty)),
+            desc: format!("implementation of `{op}` not defined for input type `{in_ty}`",),
+            traces: trace(op, format!("`{op}` not implemented for `{in_ty}` input")),
             help_msg: Some("view a list of definitions using `def --list`".into()),
             ..Self::default()
         }
