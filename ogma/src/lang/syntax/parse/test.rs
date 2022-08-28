@@ -1816,9 +1816,11 @@ fn path_parsing_errs() {
     assert_eq!(
         x,
         E::Error(ParsingError {
-            expecting: Expecting::Foo,
+            expecting: Expecting::Path,
             locs: vec![
-        ]
+                ("/".into(), "".into()),
+                ("path/to/".into(), "trailing partition delimiter".into())
+            ]
         })
     );
 }

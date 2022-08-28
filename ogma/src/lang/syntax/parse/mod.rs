@@ -113,20 +113,25 @@ bitflags::bitflags! {
     ///
     /// This is a best guess based on parsing context.
     pub struct Expecting: u32 {
+	/// Unable to provide an AST expectation.
+	const NONE = 0;
+
 	/// Expecting a command/implementation.
-	const IMPL = 0b1000;
+	const IMPL = 1;
+
 	/// Expecting a type.
-	const TYPE = 0b0100;
+	const TYPE = 0b10;
+
 	/// Expecting a term (the `bar` in `foo bar`).
-	///
-	/// > Because commands can be inlined, if `Term` is encountered, impls would suit as well.
-	const TERM = 0b0010;
+	const TERM = 0b100;
+
 	/// Expecting a Special Literal.
 	///
-	/// These are `#t`, `#f`, and `#i`.
-	const SPECLITERAL = 0b0001;
-	/// Unable to provide an AST expectation.
-	const NONE = 0b0000;
+	/// These are `#t`, `#f`, `#i`, `#b`.
+	const SPECLITERAL = 0b1000;
+
+    /// Expecting a path.
+    const PATH = 0b1_0000;
     }
 }
 
@@ -256,7 +261,7 @@ where
     delimited(multispace0, inner, multispace0)
 }
 
-/// Applies the Expecting to and error if occurred.
+/// Applies the Expecting to an error if occurred.
 fn exp<'a, F, O>(
     mut inner: F,
     exp: Expecting,
@@ -404,7 +409,13 @@ fn block<'f>(
 fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ {
     move |i| {
         map(
-            terminated(separated_list1(tag("/"), op_ident(line)), space1),
+            exp(
+                context(
+                    "trailing partition delimiter",
+                    terminated(separated_list1(tag("/"), op_ident(line)), space1),
+                ),
+                Expecting::PATH,
+            ),
             |cs| Path {
                 components: cs.into(),
                 idx: 0,
