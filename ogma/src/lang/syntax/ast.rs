@@ -492,11 +492,12 @@ pub struct Field {
 }
 
 // ###### PARTITION PATHS ######################################################
+/// A partition _path_, terminating in a command.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Path {
     pub(super) components: Arc<[Tag]>,
     pub(super) idx: u8,
-    pub(super) rooted: bool
+    pub(super) rooted: bool,
 }
 
 #[cfg(test)]
@@ -520,4 +521,17 @@ mod tests {
         assert_eq!(std::mem::size_of::<Tag>(), 8);
         assert_eq!(std::mem::size_of::<Location>(), 24);
     }
+
+    fn tt(s: &str) -> Tag {
+        Tag_ {
+            anchor: Location::Shell,
+            line: Arc::from(s),
+            start: 0,
+            end: s.len(),
+        }
+        .into()
+    }
+
+    #[test]
+    fn path_testing() {}
 }

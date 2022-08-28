@@ -1840,9 +1840,7 @@ fn path_parsing_errs() {
         x,
         E::Error(ParsingError {
             expecting: Expecting::Path,
-            locs: vec![
-                ("path/to/".into(), "trailing partition delimiter".into())
-            ]
+            locs: vec![("path/to/".into(), "trailing partition delimiter".into())]
         })
     );
 
@@ -1852,9 +1850,7 @@ fn path_parsing_errs() {
         x,
         E::Error(ParsingError {
             expecting: Expecting::None,
-            locs: vec![
-                ("1".into(), "not a valid partition component".into()),
-            ]
+            locs: vec![("1".into(), "not a valid partition component".into()),]
         })
     );
 
@@ -1864,9 +1860,7 @@ fn path_parsing_errs() {
         x,
         E::Error(ParsingError {
             expecting: Expecting::None,
-            locs: vec![
-                (" ".into(), "not a valid partition component".into())
-            ]
+            locs: vec![(" ".into(), "not a valid partition component".into())]
         })
     );
 
@@ -1876,9 +1870,7 @@ fn path_parsing_errs() {
         x,
         E::Error(ParsingError {
             expecting: Expecting::None,
-            locs: vec![
-                ("1".into(), "not a valid partition component".into())
-            ]
+            locs: vec![("1".into(), "not a valid partition component".into())]
         })
     );
 }

@@ -409,29 +409,29 @@ fn block<'f>(
 fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ {
     move |i| {
         let (i_, rooted) = map(opt(tag("/")), |x| x.is_some())(i)?;
-        let (i_, p) = map(
-                    separated_list1(tag("/"), op_ident(line)),
-            |cs| Path {
-                components: cs.into(),
-                idx: 0,
-                rooted,
-            },
-        )(i_)?;
-
+        let (i_, p) = map(separated_list1(tag("/"), op_ident(line)), |cs| Path {
+            components: cs.into(),
+            idx: 0,
+            rooted,
+        })(i_)?;
 
         match i_.strip_prefix('/') {
-            Some(x) if x.is_empty() => {
-                Err(ParsingError::err(i, "trailing partition delimiter", Expecting::Path))
-            }
+            Some(x) if x.is_empty() => Err(ParsingError::err(
+                i,
+                "trailing partition delimiter",
+                Expecting::Path,
+            )),
             Some(x) => {
                 let i = match x.split_once(|c: char| c.is_whitespace()) {
                     Some((x_, _)) if x_.is_empty() => x,
-                Some((x, _)) => {
-                    x
-                },
-                None => x,
-            };
-                Err(ParsingError::err(i, "not a valid partition component", Expecting::None))
+                    Some((x, _)) => x,
+                    None => x,
+                };
+                Err(ParsingError::err(
+                    i,
+                    "not a valid partition component",
+                    Expecting::None,
+                ))
             }
             None => Ok((i_, p)),
         }
