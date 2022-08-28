@@ -496,6 +496,7 @@ pub struct Field {
 pub struct Path {
     pub(super) components: Arc<[Tag]>,
     pub(super) idx: u8,
+    pub(super) rooted: bool
 }
 
 #[cfg(test)]

@@ -1798,13 +1798,36 @@ fn iblock_impls() {
 
 #[test]
 fn path_parsing() {
-    let l = line("path/to/something ");
+    let l = line("path/to/something");
     let (_, x) = path(&l)(&l.line).unwrap();
     assert_eq!(
         x,
         Path {
             components: vec![tt("path"), tt("to"), tt("something")].into(),
             idx: 0,
+            rooted: false,
+        }
+    );
+
+    let l = line("path/to /something");
+    let (_, x) = path(&l)(&l.line).unwrap();
+    assert_eq!(
+        x,
+        Path {
+            components: vec![tt("path"), tt("to")].into(),
+            idx: 0,
+            rooted: false,
+        }
+    );
+
+    let l = line("/path/to/something");
+    let (_, x) = path(&l)(&l.line).unwrap();
+    assert_eq!(
+        x,
+        Path {
+            components: vec![tt("path"), tt("to"), tt("something")].into(),
+            idx: 0,
+            rooted: true,
         }
     );
 }
@@ -1818,8 +1841,43 @@ fn path_parsing_errs() {
         E::Error(ParsingError {
             expecting: Expecting::Path,
             locs: vec![
-                ("/".into(), "".into()),
                 ("path/to/".into(), "trailing partition delimiter".into())
+            ]
+        })
+    );
+
+    let l = line("path/1");
+    let x = path(&l)(&l.line).unwrap_err();
+    assert_eq!(
+        x,
+        E::Error(ParsingError {
+            expecting: Expecting::None,
+            locs: vec![
+                ("1".into(), "not a valid partition component".into()),
+            ]
+        })
+    );
+
+    let l = line("path/to/ ");
+    let x = path(&l)(&l.line).unwrap_err();
+    assert_eq!(
+        x,
+        E::Error(ParsingError {
+            expecting: Expecting::None,
+            locs: vec![
+                (" ".into(), "not a valid partition component".into())
+            ]
+        })
+    );
+
+    let l = line("path/1 foo bar");
+    let x = path(&l)(&l.line).unwrap_err();
+    assert_eq!(
+        x,
+        E::Error(ParsingError {
+            expecting: Expecting::None,
+            locs: vec![
+                ("1".into(), "not a valid partition component".into())
             ]
         })
     );
