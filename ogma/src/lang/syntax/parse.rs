@@ -1,8 +1,10 @@
 //! Parsing source into a AST.
+#![allow(non_upper_case_globals)]
 
 use crate::prelude::{ast::*, err, Definitions, HashSet};
 use ::kserd::Number;
 use ::libs::divvy::Str;
+use bitflags::bitflags;
 use nom::{
     branch::*, bytes::complete::*, character::complete::*, combinator::*, error::ParseError,
     error::*, multi::*, sequence::*, IResult, Offset,
@@ -105,25 +107,26 @@ pub fn definition_type<S: Into<Arc<str>>>(
 /// Failure to parse results in the parse [`Error`], and an expecting AST node.
 pub type ParseFail = (err::Error, Expecting);
 
-/// An indication of expected AST node type if parsing fails.
-///
-/// This is a best guess based on parsing context.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum Expecting {
-    /// Expecting a command/implementation.
-    Impl,
-    /// Expecting a type.
-    Type,
-    /// Expecting a term (the `bar` in `foo bar`).
+bitflags! {
+    /// An indication of expected AST node type if parsing fails.
     ///
-    /// > Because commands can be inlined, if `Term` is encountered, impls would suit as well.
-    Term,
-    /// Expecting a Special Literal.
-    ///
-    /// These are `#t`, `#f`, and `#i`.
-    SpecLiteral,
-    /// Unable to provide an AST expectation.
-    None,
+    /// This is a best guess based on parsing context.
+    pub struct Expecting: u32 {
+	/// Expecting a command/implementation.
+	const Impl = 0b00001;
+	/// Expecting a type.
+	const Type = 0b00010;
+	/// Expecting a term (the `bar` in `foo bar`).
+	///
+	/// > Because commands can be inlined, if `Term` is encountered, impls would suit as well.
+	const Term = 0b00100;
+	/// Expecting a Special Literal.
+	///
+	/// These are `#t`, `#f`, and `#i`.
+	const SpecLiteral = 0b01000;
+	/// Unable to provide an AST expectation.
+	const None = 0b10000;
+    }
 }
 
 #[derive(Debug, PartialEq)]

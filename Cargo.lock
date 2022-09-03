@@ -881,6 +881,7 @@ name = "ogma"
 version = "0.5.0"
 dependencies = [
  "backtrace",
+ "bitflags",
  "comfy-table",
  "encoding",
  "kserd",
