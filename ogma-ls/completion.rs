@@ -84,16 +84,17 @@ fn incomplete_completions(
     use ogma::lang::parse::Expecting as Exp;
 
     match incomplete.exp {
-        Exp::Impl => Some(cmpls(wsp, line, working_dir, Items::IMPLS)),
-        Exp::Type => Some(cmpls(wsp, line, working_dir, Items::TYPES)),
-        Exp::Term => Some(cmpls(
+        Exp::IMPL => Some(cmpls(wsp, line, working_dir, Items::IMPLS)),
+        Exp::TYPE => Some(cmpls(wsp, line, working_dir, Items::TYPES)),
+        Exp::TERM => Some(cmpls(
             wsp,
             line,
             working_dir,
             Items::IMPLS | Items::PATHS | Items::SPEC_LIT,
         )),
-        Exp::SpecLiteral => Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT)),
-        Exp::None => None,
+        Exp::SPECLITERAL => Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT)),
+        Exp::NONE => None,
+	_ => todo!()
     }
 }
 
