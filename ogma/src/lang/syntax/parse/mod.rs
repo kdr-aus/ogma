@@ -409,7 +409,7 @@ fn block<'f>(
 fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ {
     move |i| {
         let (i_, rooted) = map(opt(tag("/")), |x| x.is_some())(i)?;
-        let (i_, p) = map(separated_list1(tag("/"), op_ident(line)), |cs| Path {
+        let (i_, p) = map(separated_list1(tag("/"), tmp_op_parser(line)), |cs| Path {
             components: cs.into(),
             idx: 0,
             rooted,
@@ -438,15 +438,10 @@ fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ 
     }
 }
 
-/// OPERATIONS -- This is where the 'default' commands are defined.
-fn op(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
+/// Temporary handle `::` until the path sytax takes over.
+fn tmp_op_parser(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
     move |i| {
-        let x = map(spec_op, |cmd| line.create_tag(cmd))(i);
-        if x.is_ok() {
-            return x;
-        }
-
-        // op is slightly different to op_ident in that chained paths (Ord::Gt) are resolved to a
+// op is slightly different to op_ident in that chained paths (Ord::Gt) are resolved to a
         // _single_ Tag. It also enforces that the path `::` must not be trailing (by way of
         // needing to pass 2 parsers)
         let (mut i, mut ident) = op_ident(line)(i)?;
@@ -459,6 +454,26 @@ fn op(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
         ident.make_mut().start = start;
 
         Ok((i, ident))
+    }
+}
+
+/// OPERATIONS -- This is where the 'default' commands are defined.
+fn op(line: &Line) -> impl Fn(&str) -> IResult<&str, Op, ParsingError> + '_ {
+    move |i| {
+        let x = map(spec_op, |cmd| Op::Single(line.create_tag(cmd)))(i);
+
+        if x.is_ok() {
+            return x;
+        }
+
+        let (i, x) = path(line)(i)?;
+        let op = if x.components.len() == 1 {
+            Op::Single(x.components[0].clone())
+        } else {
+            Op::Path(x)
+        };
+
+        Ok((i, op))
     }
 }
 
@@ -511,7 +526,10 @@ fn op_ident(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + 
 
 fn known_op<'a>(line: &'a Line, defs: &'a Definitions) -> impl Fn(&str) -> bool + 'a {
     move |i| match op(line)(i) {
-        Ok((_, op)) => defs.impls().contains_op(op.str()),
+        Ok((_, op)) => match op.is_op() {
+            Some(t) => defs.impls().contains_op(t.str()),
+            None => false, // TODO handle this once `defs` can have path queries
+        }
         _ => false,
     }
 }
@@ -753,6 +771,12 @@ fn def_impl_inner<'a>(
     definitions: &Definitions,
 ) -> IResult<&'a str, DefinitionImpl, ParsingError<'a>> {
     let (i, name) = ws(preceded(tag("def "), op(line)))(i)?;
+    let name = match name.is_op() {
+        Some(t) => Ok(t.clone()),
+        None => {
+            Err(ParsingError::failure(name.tag().into_owned(), "paths cannot be used to define a definition name", Expecting::None))
+        }
+    }?;
     let (i, in_ty) = ws(opt(op_ident(line)))(i)?;
     let x = if in_ty.is_some() {
         Expecting::NONE

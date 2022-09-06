@@ -25,6 +25,10 @@ fn tt(s: &str) -> Tag {
     .into()
 }
 
+fn ops(s: &str) -> Op {
+    Op::Single(tt(s))
+}
+
 #[test]
 fn input_expr() {
     let d = &Definitions::new();
@@ -34,7 +38,7 @@ fn input_expr() {
         Ok(Expression {
             tag: tt("in"),
             blocks: vec![PrefixBlock {
-                op: tt("in"),
+                op: ops("in"),
                 terms: vec![],
                 in_ty: None,
                 out_ty: None
@@ -50,7 +54,7 @@ fn input_expr() {
         Ok(Expression {
             tag: tt("in file.csv"),
             blocks: vec![PrefixBlock {
-                op: tt("in"),
+                op: ops("in"),
                 terms: vec![Arg(Ident(tt("file.csv")))],
                 in_ty: None,
                 out_ty: None
@@ -273,7 +277,7 @@ fn arguments() {
             Arg(Expr(Expression {
                 tag: tt("{ \\ asdf }"),
                 blocks: vec![PrefixBlock {
-                    op: tt("\\"),
+                    op: ops("\\"),
                     terms: vec![Arg(Ident(tt("asdf")))],
                     in_ty: None,
                     out_ty: None
@@ -295,18 +299,18 @@ fn pipelining() {
             tag: tt("\\ test.csv | cmd { \\ asdf }"),
             blocks: vec![
                 PrefixBlock {
-                    op: tt("\\"),
+                    op: ops("\\"),
                     terms: vec![Arg(Ident(tt("test.csv")))],
                     in_ty: None,
                     out_ty: None
                 }
                 .into(),
                 PrefixBlock {
-                    op: tt("cmd"),
+                    op: ops("cmd"),
                     terms: vec![Arg(Expr(Expression {
                         tag: tt("{ \\ asdf }"),
                         blocks: vec![PrefixBlock {
-                            op: tt("\\"),
+                            op: ops("\\"),
                             terms: vec![Arg(Ident(tt("asdf")))],
                             in_ty: None,
                             out_ty: None
@@ -429,7 +433,7 @@ fn term_parsing_which_is_cmd() {
             Arg(Expr(Expression {
                 tag: tt("filter adsf cdx "),
                 blocks: vec![PrefixBlock {
-                    op: tt("filter"),
+                    op: ops("filter"),
                     terms: vec![Arg(Ident(tt("adsf"))), Arg(Ident(tt("cdx")))],
                     in_ty: None,
                     out_ty: None
@@ -449,11 +453,11 @@ fn term_parsing_which_is_cmd() {
             Arg(Expr(Expression {
                 tag: tt("filter > col-name 1"),
                 blocks: vec![PrefixBlock {
-                    op: tt("filter"),
+                    op: ops("filter"),
                     terms: vec![Arg(Expr(Expression {
                         tag: tt("> col-name 1"),
                         blocks: vec![PrefixBlock {
-                            op: tt(">"),
+                            op: ops(">"),
                             terms: vec![Arg(Ident(tt("col-name"))), Arg(Num(1.into(), tt("1")))],
                             in_ty: None,
                             out_ty: None
@@ -481,11 +485,11 @@ fn nested_expressions_without_braces() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("filter"),
+                op: ops("filter"),
                 terms: vec![Arg(Expr(Expression {
                     tag: tt("> col-name 1e3"),
                     blocks: vec![PrefixBlock {
-                        op: tt(">"),
+                        op: ops(">"),
                         terms: vec![Arg(Ident(tt("col-name"))), Arg(Num(1000.into(), tt("1e3")))],
                         in_ty: None,
                         out_ty: None
@@ -509,18 +513,18 @@ fn nested_expressions_without_braces() {
                 tag: tt(&src.line),
                 blocks: vec![
                     PrefixBlock {
-                        op: tt("in"),
+                        op: ops("in"),
                         terms: vec![Arg(Ident(tt("asdf")))],
                         in_ty: None,
                         out_ty: None
                     }
                     .into(),
                     PrefixBlock {
-                        op: tt("filter"),
+                        op: ops("filter"),
                         terms: vec![Arg(Expr(Expression {
                             tag: tt("> col-name 1e3"),
                             blocks: vec![PrefixBlock {
-                                op: tt(">"),
+                                op: ops(">"),
                                 terms: vec![
                                     Arg(Ident(tt("col-name"))),
                                     Arg(Num(1000.into(), tt("1e3")))
@@ -551,18 +555,18 @@ fn nested_expressions_without_braces() {
                 tag: tt(&src.line),
                 blocks: vec![
                     PrefixBlock {
-                        op: tt("in"),
+                        op: ops("in"),
                         terms: vec![Arg(Ident(tt("asdf")))],
                         in_ty: None,
                         out_ty: None
                     }
                     .into(),
                     PrefixBlock {
-                        op: tt("filter"),
+                        op: ops("filter"),
                         terms: vec![Arg(Expr(Expression {
                             tag: tt("> col-name 1e3 "),
                             blocks: vec![PrefixBlock {
-                                op: tt(">"),
+                                op: ops(">"),
                                 terms: vec![
                                     Arg(Ident(tt("col-name"))),
                                     Arg(Num(1000.into(), tt("1e3")))
@@ -578,7 +582,7 @@ fn nested_expressions_without_braces() {
                     }
                     .into(),
                     PrefixBlock {
-                        op: tt("ls"),
+                        op: ops("ls"),
                         terms: vec![],
                         in_ty: None,
                         out_ty: None
@@ -696,10 +700,10 @@ fn full_op_str() {
     // test that commands such as ls-files won't be recognised as `ls`.
     let x = line("ls what");
     let x = op(&x)(&x.line);
-    assert_eq!(x, Ok((" what", tt("ls"))));
+    assert_eq!(x, Ok((" what", ops("ls"))));
     let x = line("ls-files what");
     let x = op(&x)(&x.line);
-    assert_eq!(x, Ok((" what", tt("ls-files"))));
+    assert_eq!(x, Ok((" what", ops("ls-files"))));
 }
 
 #[test]
@@ -710,7 +714,7 @@ fn spec_op_chars() {
         Ok(Expression {
             tag: tt("+ 101 "),
             blocks: vec![PrefixBlock {
-                op: tt("+"),
+                op: ops("+"),
                 terms: vec![Arg(Num(101.into(), tt("101")))],
                 in_ty: None,
                 out_ty: None
@@ -917,7 +921,7 @@ fn def_impl_on_ty() {
             params: vec![],
             expr: Expression {
                 blocks: vec![PrefixBlock {
-                    op: tt("in"),
+                    op: ops("in"),
                     terms: vec![],
                     in_ty: None,
                     out_ty: None
@@ -941,7 +945,7 @@ fn def_impl_on_ty() {
             params: vec![],
             expr: Expression {
                 blocks: vec![PrefixBlock {
-                    op: tt("in"),
+                    op: ops("in"),
                     terms: vec![],
                     in_ty: None,
                     out_ty: None
@@ -958,7 +962,7 @@ fn def_impl_on_ty() {
 fn op_with_path() {
     let x = line("Ord:Gt");
     let x = op(&x)(&x.line);
-    assert_eq!(x, Ok((":Gt", tt("Ord"))));
+    assert_eq!(x, Ok((":Gt", ops("Ord"))));
 
     let x = line("Ord::Gt what");
     let x = op_ident(&x)(&x.line);
@@ -966,11 +970,11 @@ fn op_with_path() {
 
     let x = line("Ord::Gt what");
     let x = op(&x)(&x.line);
-    assert_eq!(x, Ok((" what", tt("Ord::Gt"))));
+    assert_eq!(x, Ok((" what", ops("Ord::Gt"))));
 
     let x = line("Ord:: what");
     let x = op(&x)(&x.line);
-    assert_eq!(x, Ok((":: what", tt("Ord"))));
+    assert_eq!(x, Ok((":: what", ops("Ord"))));
 }
 
 // -- partial parsing expecting checks
@@ -1021,7 +1025,7 @@ fn no_padding() {
             Arg(Expr(Expression {
                 tag: tt("{in asdf }"),
                 blocks: vec![PrefixBlock {
-                    op: tt("in"),
+                    op: ops("in"),
                     terms: vec![Arg(Ident(tt("asdf")))],
                     in_ty: None,
                     out_ty: None
@@ -1041,7 +1045,7 @@ fn no_padding() {
             Arg(Expr(Expression {
                 tag: tt("{in asdf}"),
                 blocks: vec![PrefixBlock {
-                    op: tt("in"),
+                    op: ops("in"),
                     terms: vec![Arg(Ident(tt("asdf")))],
                     in_ty: None,
                     out_ty: None
@@ -1062,21 +1066,21 @@ fn no_padding() {
                 tag: tt("foo|bar|zog"),
                 blocks: vec![
                     PrefixBlock {
-                        op: tt("foo"),
+                        op: ops("foo"),
                         terms: vec![],
                         in_ty: None,
                         out_ty: None
                     }
                     .into(),
                     PrefixBlock {
-                        op: tt("bar"),
+                        op: ops("bar"),
                         terms: vec![],
                         in_ty: None,
                         out_ty: None
                     }
                     .into(),
                     PrefixBlock {
-                        op: tt("zog"),
+                        op: ops("zog"),
                         terms: vec![],
                         in_ty: None,
                         out_ty: None
@@ -1100,24 +1104,24 @@ fn no_padding_integration() {
             Expression {
                 tag: tt("append{get first|if{= 0}{+ 100}{- 100}}"),
                 blocks: vec![PrefixBlock {
-                    op: tt("append"),
+                    op: ops("append"),
                     terms: vec![Arg(Expr(Expression {
                         tag: tt("{get first|if{= 0}{+ 100}{- 100}}"),
                         blocks: vec![
                             PrefixBlock {
-                                op: tt("get"),
+                                op: ops("get"),
                                 terms: vec![Arg(Ident(tt("first")))],
                                 in_ty: None,
                                 out_ty: None
                             }
                             .into(),
                             PrefixBlock {
-                                op: tt("if"),
+                                op: ops("if"),
                                 terms: vec![
                                     Arg(Expr(Expression {
                                         tag: tt("{= 0}"),
                                         blocks: vec![PrefixBlock {
-                                            op: tt("="),
+                                            op: ops("="),
                                             terms: vec![Arg(Num(0.into(), tt("0")))],
                                             in_ty: None,
                                             out_ty: None
@@ -1128,7 +1132,7 @@ fn no_padding_integration() {
                                     Arg(Expr(Expression {
                                         tag: tt("{+ 100}"),
                                         blocks: vec![PrefixBlock {
-                                            op: tt("+"),
+                                            op: ops("+"),
                                             terms: vec![Arg(Num(100.into(), tt("100")))],
                                             in_ty: None,
                                             out_ty: None
@@ -1139,7 +1143,7 @@ fn no_padding_integration() {
                                     Arg(Expr(Expression {
                                         tag: tt("{- 100}"),
                                         blocks: vec![PrefixBlock {
-                                            op: tt("-"),
+                                            op: ops("-"),
                                             terms: vec![Arg(Num(100.into(), tt("100")))],
                                             in_ty: None,
                                             out_ty: None
@@ -1407,10 +1411,10 @@ fn multiline_def_expecting_impl() {
 fn spec_ops_dont_need_trailing_space() {
     let src = line("\\#t");
     let x = op(&src)(&src.line);
-    assert_eq!(x, Ok(("#t", tt("\\"))));
+    assert_eq!(x, Ok(("#t", ops("\\"))));
     let src = line("+#t");
     let x = op(&src)(&src.line);
-    assert_eq!(x, Ok(("#t", tt("+"))));
+    assert_eq!(x, Ok(("#t", ops("+"))));
 
     let defs = &Definitions::new();
     let src = line("\\#t");
@@ -1420,7 +1424,7 @@ fn spec_ops_dont_need_trailing_space() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("\\"),
+                op: ops("\\"),
                 terms: vec![Arg(Pound('t', tt("#t")))],
                 in_ty: None,
                 out_ty: None
@@ -1434,7 +1438,7 @@ fn spec_ops_dont_need_trailing_space() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("+"),
+                op: ops("+"),
                 terms: vec![Arg(Pound('t', tt("#t")))],
                 in_ty: None,
                 out_ty: None
@@ -1463,7 +1467,7 @@ fn ty_annotation_01_op() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Ident(tt("zog")))],
                 in_ty: Some(tt("Num")),
                 out_ty: Some(tt("Bar")),
@@ -1477,7 +1481,7 @@ fn ty_annotation_01_op() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Ident(tt("zog")))],
                 in_ty: Some(tt("Num")),
                 out_ty: None,
@@ -1491,7 +1495,7 @@ fn ty_annotation_01_op() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Ident(tt("zog")))],
                 in_ty: None,
                 out_ty: Some(tt("Bar")),
@@ -1566,11 +1570,11 @@ fn ty_annotation_03_nested() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Expr(Expression {
                     tag: tt("ls"),
                     blocks: vec![PrefixBlock {
-                        op: tt("ls"),
+                        op: ops("ls"),
                         terms: vec![],
                         in_ty: None,
                         out_ty: None
@@ -1590,13 +1594,13 @@ fn ty_annotation_03_nested() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![
                     Arg(Ident(tt("zog"))),
                     Arg(Expr(Expression {
                         tag: tt("ls:Bar"),
                         blocks: vec![PrefixBlock {
-                            op: tt("ls"),
+                            op: ops("ls"),
                             terms: vec![],
                             in_ty: None,
                             out_ty: Some(tt("Bar")),
@@ -1632,11 +1636,11 @@ fn ty_annotation_03_nested() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Expr(Expression {
                     tag: tt("ls:Zog"),
                     blocks: vec![PrefixBlock {
-                        op: tt("ls"),
+                        op: ops("ls"),
                         terms: vec![],
                         in_ty: None,
                         out_ty: Some(tt("Zog")),
@@ -1661,7 +1665,7 @@ fn ty_annotation_04_dotop() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Expr(Expression {
                     tag: tt("$row.var:Str"),
                     blocks: vec![DotOperatorBlock {
@@ -1720,11 +1724,11 @@ fn ty_annotation_05_expr() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Expr(Expression {
                     tag: tt("{:Bar zog:Num }:Bool"),
                     blocks: vec![PrefixBlock {
-                        op: tt("zog"),
+                        op: ops("zog"),
                         terms: vec![],
                         in_ty: Some(tt("Bar")),
                         out_ty: Some(tt("Num")),
@@ -1744,19 +1748,19 @@ fn ty_annotation_05_expr() {
         Ok((
             "",
             PrefixBlock {
-                op: tt("foo"),
+                op: ops("foo"),
                 terms: vec![Arg(Expr(Expression {
                     tag: tt("{:Bar zog:Num |:Fog hir:Str }:Bool"),
                     blocks: vec![
                         PrefixBlock {
-                            op: tt("zog"),
+                            op: ops("zog"),
                             terms: vec![],
                             in_ty: Some(tt("Bar")),
                             out_ty: Some(tt("Num")),
                         }
                         .into(),
                         PrefixBlock {
-                            op: tt("hir"),
+                            op: ops("hir"),
                             terms: vec![],
                             in_ty: Some(tt("Fog")),
                             out_ty: Some(tt("Str")),

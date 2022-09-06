@@ -180,6 +180,13 @@ impl AstGraph {
                     out_ty,
                 } = blk.parts();
 
+                let op = match op.is_op() {
+                    Some(t) => t.clone(),
+                    None => {
+                        todo!("paths are not supported yet")
+                    }
+                };
+
                 let op = g.add_node(AstNode::Op { op, blk: blk_tag });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 

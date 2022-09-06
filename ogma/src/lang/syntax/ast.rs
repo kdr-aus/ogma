@@ -182,8 +182,6 @@ impl Clone for Expression {
 }
 
 // ###### BLOCK ################################################################
-/// Operation tag.
-pub type Op = Tag;
 /// List of terms.
 pub type Terms = Vec<Term>;
 
@@ -205,7 +203,7 @@ pub trait IBlock: std::fmt::Debug + Send + Sync {
 
     /// Create a tag that extends across the whole block.
     fn block_tag(&self) -> Tag;
-    /// The common aspects of a a block: the operation tag and a list of terms.
+    /// The common aspects of a block: the operation tag and a list of terms.
     fn parts(self: Box<Self>) -> BlockParts;
     /// Trait-object safe clone.
     fn clone(&self) -> Block;
@@ -213,7 +211,7 @@ pub trait IBlock: std::fmt::Debug + Send + Sync {
 
 /// The concrete parts of a block.
 pub struct BlockParts {
-    /// The operation tag.
+    /// The operation.
     pub op: Op,
     /// The terms.
     pub terms: Terms,
@@ -247,7 +245,10 @@ pub struct PrefixBlock {
 
 impl IBlock for PrefixBlock {
     fn op(&self) -> CTag {
-        Cow::Borrowed(&self.op)
+        match self.op.is_op() {
+            Some(x) => Cow::Borrowed(x),
+            None => panic!("partitions are not yet supported")
+        }
     }
 
     fn terms(&self) -> Cow<[Term]> {
@@ -263,7 +264,7 @@ impl IBlock for PrefixBlock {
     }
 
     fn block_tag(&self) -> Tag {
-        let mut tag = self.op.clone();
+        let mut tag = self.op.tag().into_owned();
 
         if let Some(t) = &self.in_ty {
             tag.make_mut().start = t.start.saturating_sub(1); // include leading ':'
@@ -371,7 +372,7 @@ impl IBlock for DotOperatorBlock {
         } = *self;
 
         BlockParts {
-            op,
+            op: Op::Single(op),
             terms,
             in_ty: None,
             out_ty,
@@ -493,11 +494,70 @@ pub struct Field {
 
 // ###### PARTITION PATHS ######################################################
 /// A partition _path_, terminating in a command.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Path {
     pub(super) components: Arc<[Tag]>,
     pub(super) idx: u8,
     pub(super) rooted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Op {
+    Path(Path),
+    Single(Tag)
+}
+
+impl Path {
+    /// Returns the tag from _the current component to the end_ of the path.
+    pub fn tag(&self) -> CTag {
+        if self.is_last() {
+            CTag::Borrowed(self.last())
+        } else {
+            let mut tag = self.last().clone();
+            let t = tag.make_mut();
+            t.start = self.component().start;
+            
+            if self.rooted && self.idx == 0 {
+                t.start = t.start.saturating_sub(1); // include leading `/`
+            }
+
+            CTag::Owned(tag)
+        }
+    }
+
+    /// Returns the current component tag.
+    pub fn component(&self) -> &Tag {
+        &self.components[self.idx as usize]
+    }
+
+    /// Returns if this path is on the _last_ component.
+    pub fn is_last(&self) -> bool {
+        self.idx as usize == self.components.len() - 1
+    }
+
+    /// Return the last component of the path, which is the definition.
+    pub fn last(&self) -> &Tag {
+        self.components.last().expect("more than zero components")
+    }
+}
+
+impl Op {
+    /// Returns a tag which covers the whole defined op.
+    pub fn tag(&self) -> CTag {
+        match self {
+            Op::Single(t) => CTag::Borrowed(t),
+            Op::Path(p) => p.tag(),
+        }
+    }
+
+    /// Returns `Some` if the op is a singleton, or if path is on its last component.
+    pub fn is_op(&self) -> Option<&Tag> {
+        match self {
+            Op::Single(t) => Some(t),
+            Op::Path(p) if p.is_last() => Some(p.last()),
+            _ => None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -533,5 +593,6 @@ mod tests {
     }
 
     #[test]
-    fn path_testing() {}
+    fn path_testing() {
+    }
 }
