@@ -8,7 +8,7 @@
 //! ^-----------------------------------------^ --> Expression
 //! ```
 use ::kserd::Number;
-use std::{borrow::Cow, fmt, ops, path::Path, sync::Arc};
+use std::{borrow::Cow, fmt, ops, path, sync::Arc};
 
 /// `Tag` only implements tag _value_ equality checking (as in `.str()`).
 #[derive(Clone)]
@@ -93,6 +93,7 @@ impl PartialEq for Tag {
         self.str() == rhs.str()
     }
 }
+impl Eq for Tag {}
 
 impl fmt::Debug for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -119,7 +120,7 @@ pub enum Location {
     /// Defined in a file. `(filepath, line)`.
     ///
     /// Limiting line counts to 2^16.
-    File(Arc<Path>, u16),
+    File(Arc<path::Path>, u16),
 }
 
 impl Default for Location {
@@ -130,7 +131,7 @@ impl Default for Location {
 
 impl Location {
     /// Construct a location from a file and a line number.
-    pub fn file<F: AsRef<Path>>(file: F, line: u16) -> Self {
+    pub fn file<F: AsRef<path::Path>>(file: F, line: u16) -> Self {
         Location::File(Arc::from(file.as_ref()), line)
     }
 }
@@ -181,8 +182,6 @@ impl Clone for Expression {
 }
 
 // ###### BLOCK ################################################################
-/// Operation tag.
-pub type Op = Tag;
 /// List of terms.
 pub type Terms = Vec<Term>;
 
@@ -204,7 +203,7 @@ pub trait IBlock: std::fmt::Debug + Send + Sync {
 
     /// Create a tag that extends across the whole block.
     fn block_tag(&self) -> Tag;
-    /// The common aspects of a a block: the operation tag and a list of terms.
+    /// The common aspects of a block: the operation tag and a list of terms.
     fn parts(self: Box<Self>) -> BlockParts;
     /// Trait-object safe clone.
     fn clone(&self) -> Block;
@@ -212,7 +211,7 @@ pub trait IBlock: std::fmt::Debug + Send + Sync {
 
 /// The concrete parts of a block.
 pub struct BlockParts {
-    /// The operation tag.
+    /// The operation.
     pub op: Op,
     /// The terms.
     pub terms: Terms,
@@ -246,7 +245,10 @@ pub struct PrefixBlock {
 
 impl IBlock for PrefixBlock {
     fn op(&self) -> CTag {
-        Cow::Borrowed(&self.op)
+        match self.op.is_op() {
+            Some(x) => Cow::Borrowed(x),
+            None => panic!("partitions are not yet supported"),
+        }
     }
 
     fn terms(&self) -> Cow<[Term]> {
@@ -262,7 +264,7 @@ impl IBlock for PrefixBlock {
     }
 
     fn block_tag(&self) -> Tag {
-        let mut tag = self.op.clone();
+        let mut tag = self.op.tag().into_owned();
 
         if let Some(t) = &self.in_ty {
             tag.make_mut().start = t.start.saturating_sub(1); // include leading ':'
@@ -370,7 +372,7 @@ impl IBlock for DotOperatorBlock {
         } = *self;
 
         BlockParts {
-            op,
+            op: Op::Single(op),
             terms,
             in_ty: None,
             out_ty,
@@ -423,7 +425,7 @@ impl Argument {
 
 // ###### DEFINITIONS ##########################################################
 /// A implementation definition's parameters.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Parameter {
     /// The name ident of the parameter.
     pub ident: Tag,
@@ -449,7 +451,7 @@ pub struct DefinitionImpl {
 }
 
 /// A type definition.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DefinitionType {
     /// The location where this type is defined.
     pub loc: Location,
@@ -462,7 +464,7 @@ pub struct DefinitionType {
 }
 
 /// Types are either `Sum` (enum) or `Product` (struct).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TypeVariant {
     /// A 'sum' type, a type composed of mutually exclusive variants.
     Sum(Vec<Variant>),
@@ -471,7 +473,7 @@ pub enum TypeVariant {
 }
 
 /// A sum type variant.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Variant {
     /// The name ident.
     pub name: Tag,
@@ -480,7 +482,7 @@ pub struct Variant {
 }
 
 /// A product type field.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Field {
     /// The name ident.
     pub name: Tag,
@@ -488,6 +490,77 @@ pub struct Field {
     pub ty: Tag,
     /// Type parameterisation: Ty<A B C>
     pub params: Vec<Tag>,
+}
+
+// ###### PARTITION PATHS ######################################################
+/// A partition _path_, terminating in a command.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Path {
+    pub(super) components: Arc<[Tag]>,
+    pub(super) idx: u8,
+    pub(super) rooted: bool,
+}
+
+/// The parsed operation, represented as a single tag or a path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Op {
+    /// Consists of a path.
+    Path(Path),
+    /// Consisting of a single tag.
+    Single(Tag),
+}
+
+impl Path {
+    /// Returns the tag from _the current component to the end_ of the path.
+    pub fn tag(&self) -> CTag {
+        if self.is_last() {
+            CTag::Borrowed(self.last())
+        } else {
+            let mut tag = self.last().clone();
+            let t = tag.make_mut();
+            t.start = self.component().start;
+
+            if self.rooted && self.idx == 0 {
+                t.start = t.start.saturating_sub(1); // include leading `/`
+            }
+
+            CTag::Owned(tag)
+        }
+    }
+
+    /// Returns the current component tag.
+    pub fn component(&self) -> &Tag {
+        &self.components[self.idx as usize]
+    }
+
+    /// Returns if this path is on the _last_ component.
+    pub fn is_last(&self) -> bool {
+        self.idx as usize == self.components.len() - 1
+    }
+
+    /// Return the last component of the path, which is the definition.
+    pub fn last(&self) -> &Tag {
+        self.components.last().expect("more than zero components")
+    }
+}
+
+impl Op {
+    /// Returns a tag which covers the whole defined op.
+    pub fn tag(&self) -> CTag {
+        match self {
+            Op::Single(t) => CTag::Borrowed(t),
+            Op::Path(p) => p.tag(),
+        }
+    }
+
+    /// Returns `Some` if the op is a singleton, or if path is on its last component.
+    pub fn is_op(&self) -> Option<&Tag> {
+        match self {
+            Op::Single(t) => Some(t),
+            Op::Path(p) if p.is_last() => Some(p.last()),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -511,4 +584,17 @@ mod tests {
         assert_eq!(std::mem::size_of::<Tag>(), 8);
         assert_eq!(std::mem::size_of::<Location>(), 24);
     }
+
+    fn tt(s: &str) -> Tag {
+        Tag_ {
+            anchor: Location::Shell,
+            line: Arc::from(s),
+            start: 0,
+            end: s.len(),
+        }
+        .into()
+    }
+
+    #[test]
+    fn path_testing() {}
 }

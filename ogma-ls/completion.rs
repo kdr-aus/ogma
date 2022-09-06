@@ -94,7 +94,7 @@ fn incomplete_completions(
         )),
         Exp::SPECLITERAL => Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT)),
         Exp::NONE => None,
-	_ => todo!()
+        _ => todo!(),
     }
 }
 
