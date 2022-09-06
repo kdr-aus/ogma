@@ -399,6 +399,8 @@ fn fs_caching_removes_changed_files() {
     };
     check_is_table(x, exp.clone());
 
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
     let x = process_w_nil("open 'ls-test/test-file.csv'", defs);
     let table2 = match &x {
         Ok(Value::Tab(table)) => table.clone(),
