@@ -441,7 +441,7 @@ fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ 
 /// Temporary handle `::` until the path sytax takes over.
 fn tmp_op_parser(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + '_ {
     move |i| {
-// op is slightly different to op_ident in that chained paths (Ord::Gt) are resolved to a
+        // op is slightly different to op_ident in that chained paths (Ord::Gt) are resolved to a
         // _single_ Tag. It also enforces that the path `::` must not be trailing (by way of
         // needing to pass 2 parsers)
         let (mut i, mut ident) = op_ident(line)(i)?;
@@ -529,7 +529,7 @@ fn known_op<'a>(line: &'a Line, defs: &'a Definitions) -> impl Fn(&str) -> bool 
         Ok((_, op)) => match op.is_op() {
             Some(t) => defs.impls().contains_op(t.str()),
             None => false, // TODO handle this once `defs` can have path queries
-        }
+        },
         _ => false,
     }
 }
@@ -773,9 +773,11 @@ fn def_impl_inner<'a>(
     let (i, name) = ws(preceded(tag("def "), op(line)))(i)?;
     let name = match name.is_op() {
         Some(t) => Ok(t.clone()),
-        None => {
-            Err(ParsingError::failure(name.tag().into_owned(), "paths cannot be used to define a definition name", Expecting::None))
-        }
+        None => Err(ParsingError::failure(
+            name.tag().into_owned(),
+            "paths cannot be used to define a definition name",
+            Expecting::None,
+        )),
     }?;
     let (i, in_ty) = ws(opt(op_ident(line)))(i)?;
     let x = if in_ty.is_some() {

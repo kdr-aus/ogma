@@ -247,7 +247,7 @@ impl IBlock for PrefixBlock {
     fn op(&self) -> CTag {
         match self.op.is_op() {
             Some(x) => Cow::Borrowed(x),
-            None => panic!("partitions are not yet supported")
+            None => panic!("partitions are not yet supported"),
         }
     }
 
@@ -425,7 +425,7 @@ impl Argument {
 
 // ###### DEFINITIONS ##########################################################
 /// A implementation definition's parameters.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Parameter {
     /// The name ident of the parameter.
     pub ident: Tag,
@@ -451,7 +451,7 @@ pub struct DefinitionImpl {
 }
 
 /// A type definition.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DefinitionType {
     /// The location where this type is defined.
     pub loc: Location,
@@ -464,7 +464,7 @@ pub struct DefinitionType {
 }
 
 /// Types are either `Sum` (enum) or `Product` (struct).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TypeVariant {
     /// A 'sum' type, a type composed of mutually exclusive variants.
     Sum(Vec<Variant>),
@@ -473,7 +473,7 @@ pub enum TypeVariant {
 }
 
 /// A sum type variant.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Variant {
     /// The name ident.
     pub name: Tag,
@@ -482,7 +482,7 @@ pub struct Variant {
 }
 
 /// A product type field.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Field {
     /// The name ident.
     pub name: Tag,
@@ -501,10 +501,13 @@ pub struct Path {
     pub(super) rooted: bool,
 }
 
+/// The parsed operation, represented as a single tag or a path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
+    /// Consists of a path.
     Path(Path),
-    Single(Tag)
+    /// Consisting of a single tag.
+    Single(Tag),
 }
 
 impl Path {
@@ -516,7 +519,7 @@ impl Path {
             let mut tag = self.last().clone();
             let t = tag.make_mut();
             t.start = self.component().start;
-            
+
             if self.rooted && self.idx == 0 {
                 t.start = t.start.saturating_sub(1); // include leading `/`
             }
@@ -555,7 +558,7 @@ impl Op {
         match self {
             Op::Single(t) => Some(t),
             Op::Path(p) if p.is_last() => Some(p.last()),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -593,6 +596,5 @@ mod tests {
     }
 
     #[test]
-    fn path_testing() {
-    }
+    fn path_testing() {}
 }
