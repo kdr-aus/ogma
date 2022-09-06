@@ -113,22 +113,22 @@ bitflags::bitflags! {
     ///
     /// This is a best guess based on parsing context.
     pub struct Expecting: u32 {
-	/// Unable to provide an AST expectation.
-	const NONE = 0;
+    /// Unable to provide an AST expectation.
+    const NONE = 0;
 
-	/// Expecting a command/implementation.
-	const IMPL = 1;
+    /// Expecting a command/implementation.
+    const IMPL = 1;
 
-	/// Expecting a type.
-	const TYPE = 0b10;
+    /// Expecting a type.
+    const TYPE = 0b10;
 
-	/// Expecting a term (the `bar` in `foo bar`).
-	const TERM = 0b100;
+    /// Expecting a term (the `bar` in `foo bar`).
+    const TERM = 0b100;
 
-	/// Expecting a Special Literal.
-	///
-	/// These are `#t`, `#f`, `#i`, `#b`.
-	const SPECLITERAL = 0b1000;
+    /// Expecting a Special Literal.
+    ///
+    /// These are `#t`, `#f`, `#i`, `#b`.
+    const SPECLITERAL = 0b1000;
 
     /// Expecting a path.
     const PATH = 0b1_0000;
@@ -419,7 +419,7 @@ fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ 
             Some(x) if x.is_empty() => Err(ParsingError::err(
                 i,
                 "trailing partition delimiter",
-                Expecting::Path,
+                Expecting::PATH,
             )),
             Some(x) => {
                 let i = match x.split_once(|c: char| c.is_whitespace()) {
@@ -430,7 +430,7 @@ fn path(line: &Line) -> impl Fn(&str) -> IResult<&str, Path, ParsingError> + '_ 
                 Err(ParsingError::err(
                     i,
                     "not a valid partition component",
-                    Expecting::None,
+                    Expecting::NONE,
                 ))
             }
             None => Ok((i_, p)),
@@ -776,7 +776,7 @@ fn def_impl_inner<'a>(
         None => Err(ParsingError::failure(
             name.tag().into_owned(),
             "paths cannot be used to define a definition name",
-            Expecting::None,
+            Expecting::NONE,
         )),
     }?;
     let (i, in_ty) = ws(opt(op_ident(line)))(i)?;
