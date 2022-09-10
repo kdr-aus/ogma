@@ -26,6 +26,10 @@ pub enum Directive {
     NoParallelise,
     /// Stop processing if an expression fails.
     FailFast,
+    /// Import items.
+    Import(Vec<Import>),
+    /// Export items.
+    Export(Vec<Glob>),
 }
 
 /// An item contains code and an optional documentation string.
@@ -35,6 +39,17 @@ pub struct Item {
     pub doc: Option<String>,
     /// Code, including the keywords for types and impls.
     pub code: String,
+}
+
+type Glob = Tag;
+
+/// Import path.
+#[derive(PartialEq, Eq, Debug)]
+pub struct Import {
+    /// The leading partition path.
+    pub path: Vec<Tag>,
+    /// The items glob pattern.
+    pub glob: Glob,
 }
 
 /// Parse a complete file to return the _item pointers_ and directives that exist in the file.
@@ -47,12 +62,12 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
     };
 
     // first, get all the lines that are comments
-    let (doc, mut text) = doc_comment(line.line.trim());
+    let (doc, mut text) = doc_comment(line.line.trim_start());
     let doc = (!doc.is_empty()).then_some(doc);
 
     let mut directives = Vec::new();
     let text = loop {
-        let (t, ds) = opt(terminated(directive_line(), cut(newline)))(text)
+        let (t, ds) = opt(terminated(directive_line(&line), cut(line_ending)))(text)
             .map_err(|e| convert_parse_error(e, &line.line, loc.clone()).0)?;
         match ds {
             Some(ds) => {
@@ -130,18 +145,20 @@ fn doc_comment(text: &str) -> (String, &str) {
     (doc, t)
 }
 
-fn directive_line() -> impl FnMut(&str) -> IResult<&str, Vec<Directive>, ParsingError> {
+fn directive_line(
+    line: &Line,
+) -> impl FnMut(&str) -> IResult<&str, Vec<Directive>, ParsingError> + '_ {
     move |i| {
         let i = i.trim_start();
         delimited(
             char('['),
-            separated_list1(space1, directive()),
+            separated_list1(space1, directive(line)),
             cut(preceded(space0, char(']'))),
         )(i)
     }
 }
 
-fn directive() -> impl FnMut(&str) -> IResult<&str, Directive, ParsingError> {
+fn directive(line: &Line) -> impl FnMut(&str) -> IResult<&str, Directive, ParsingError> + '_ {
     move |i| {
         let (i, _) = space0(i)?;
         let x = map(tag("no-parallelise"), |_| Directive::NoParallelise)(i);
@@ -154,11 +171,65 @@ fn directive() -> impl FnMut(&str) -> IResult<&str, Directive, ParsingError> {
             return x;
         }
 
+        if let Ok((i, _)) = tag::<_, _, ()>("import")(i) {
+            return map(imports(line), Directive::Import)(i);
+        }
+
+        if let Ok((i, _)) = tag::<_, _, ()>("export")(i) {
+            return map(exports(line), Directive::Export)(i);
+        }
+
         Err(ParsingError::err(
             i,
             "unrecognised directive",
             Expecting::NONE,
         ))
+    }
+}
+
+fn exports(line: &Line) -> impl FnMut(&str) -> IResult<&str, Vec<Glob>, ParsingError> + '_ {
+    move |i| {
+        delimited(
+            char('('),
+            separated_list1(space1, preceded(space0, glob(line))),
+            preceded(space0, char(')')),
+        )(i)
+    }
+}
+
+fn glob(line: &Line) -> impl FnMut(&str) -> IResult<&str, Glob, ParsingError> + '_ {
+    move |i| {
+        map(take_till1(|c: char| c.is_whitespace() || c == ')'), |x| {
+            line.create_tag(x)
+        })(i)
+    }
+}
+
+fn imports(line: &Line) -> impl FnMut(&str) -> IResult<&str, Vec<Import>, ParsingError> + '_ {
+    move |i| {
+        delimited(
+            char('('),
+            separated_list1(space1, preceded(space0, import(line))),
+            preceded(space0, char(')')),
+        )(i)
+    }
+}
+
+fn import(line: &Line) -> impl FnMut(&str) -> IResult<&str, Import, ParsingError> + '_ {
+    move |i| {
+        let (i, mut path) = separated_list1(
+            char('/'),
+            take_till1(|c: char| c.is_whitespace() || c == ')' || c == '/'),
+        )(i)?;
+
+        let (_, glob) = glob(line)(path.pop().expect("at least one"))?;
+
+        let path = path
+            .into_iter()
+            .map(|p| op_ident(line)(p).map(|(_, x)| x))
+            .collect::<Result<_, _>>()?;
+
+        Ok((i, Import { path, glob }))
     }
 }
 
@@ -232,30 +303,84 @@ after that"
         );
     }
 
+    fn test_directive_line(s: &str, exp: Option<Vec<Directive>>) {
+        let l = Line::from(s);
+        let x = directive_line(&l)(&l.line);
+        match exp {
+            Some(exp) => assert_eq!(x, Ok(("", exp))),
+            None => assert!(x.is_err()),
+        }
+    }
+
     #[test]
     fn directive_line_test_01() {
-        let d = |i| directive_line()(i);
+        test_directive_line("[no-parallelise]", Some(vec![Directive::NoParallelise]));
+        test_directive_line("[fail-fast]", Some(vec![Directive::FailFast]));
+        test_directive_line(
+            "[no-parallelise fail-fast]",
+            Some(vec![Directive::NoParallelise, Directive::FailFast]),
+        );
+        test_directive_line("[no-parallelise, fail-fast]", None);
+        test_directive_line("[]", None);
+        test_directive_line("[no-parallelise, fail-fast", None);
+        test_directive_line("[no-parallelise, fail-fast", None);
+        test_directive_line(
+            "[ no-parallelise fail-fast  ]",
+            Some(vec![Directive::NoParallelise, Directive::FailFast]),
+        );
+        test_directive_line(
+            "[no-parallelise, fail-fast
+]",
+            None,
+        );
+    }
 
-        assert_eq!(
-            d("[no-parallelise]"),
-            Ok(("", vec![Directive::NoParallelise]))
+    #[test]
+    fn directive_line_test_02() {
+        test_directive_line(
+            "[export(foo bar ?zog)]",
+            Some(vec![Directive::Export(vec![
+                tt("foo"),
+                tt("bar"),
+                tt("?zog"),
+            ])]),
         );
-        assert_eq!(d("[fail-fast]"), Ok(("", vec![Directive::FailFast])));
-        assert_eq!(
-            d("[no-parallelise fail-fast]"),
-            Ok(("", vec![Directive::NoParallelise, Directive::FailFast]))
+        test_directive_line("[export()]", None);
+        test_directive_line("[export(foo bar]", None);
+        test_directive_line(
+            "[ export( foo ) ]",
+            Some(vec![Directive::Export(vec![tt("foo")])]),
         );
-        assert!(d("[no-parallelise, fail-fast]").is_err());
-        assert!(d("[]").is_err());
-        assert!(d("[no-parallelise, fail-fast").is_err());
-        assert!(d("[no-parallelise, fail-fast").is_err());
-        assert_eq!(
-            d("[ no-parallelise fail-fast  ]"),
-            Ok(("", vec![Directive::NoParallelise, Directive::FailFast]))
+    }
+
+    #[test]
+    fn directive_line_test_03() {
+        test_directive_line(
+            "[import(yo yo/path path/?zog)]",
+            Some(vec![Directive::Import(vec![
+                Import {
+                    path: vec![],
+                    glob: tt("yo"),
+                },
+                Import {
+                    path: vec![tt("yo")],
+                    glob: tt("path"),
+                },
+                Import {
+                    path: vec![tt("path")],
+                    glob: tt("?zog"),
+                },
+            ])]),
         );
-        assert!(d("[no-parallelise, fail-fast
-]")
-        .is_err());
+        test_directive_line("[import()]", None);
+        test_directive_line("[export(foo bar]", None);
+        test_directive_line(
+            "[ import( foo ) ]",
+            Some(vec![Directive::Import(vec![Import {
+                path: vec![],
+                glob: tt("foo"),
+            }])]),
+        );
     }
 
     #[test]
@@ -385,5 +510,82 @@ an xpr | zog
                 }
             ]
         );
+    }
+
+    #[test]
+    fn file_test_02() {
+        let f = "
+
+[fail-fast]
+[no-parallelise]
+";
+
+        let f = file(f, Location::Shell).unwrap();
+
+        dbg!(&f);
+
+        assert_eq!(f.doc, None);
+        assert_eq!(
+            f.directives,
+            vec![Directive::FailFast, Directive::NoParallelise]
+        );
+        assert!(f.types.is_empty());
+        assert!(f.impls.is_empty());
+        assert!(f.exprs.is_empty());
+    }
+
+    #[test]
+    fn import_test() {
+        fn t(s: &str, exp: Option<Import>) {
+            let l = Line::from(s);
+            let x = import(&l)(&l.line);
+            dbg!(&x);
+            match exp {
+                Some(exp) => assert_eq!(x, Ok(("", exp))),
+                None => assert!(x.is_err()),
+            }
+        }
+
+        t(
+            "yo",
+            Some(Import {
+                path: vec![],
+                glob: tt("yo"),
+            }),
+        );
+
+        t(
+            "yo/path",
+            Some(Import {
+                path: vec![tt("yo")],
+                glob: tt("path"),
+            }),
+        );
+
+        t(
+            "yo/path/*",
+            Some(Import {
+                path: vec![tt("yo"), tt("path")],
+                glob: tt("*"),
+            }),
+        );
+
+        t(
+            "yo/path/{a,b}",
+            Some(Import {
+                path: vec![tt("yo"), tt("path")],
+                glob: tt("{a,b}"),
+            }),
+        );
+
+        t(
+            "yo/path/[a,b]",
+            Some(Import {
+                path: vec![tt("yo"), tt("path")],
+                glob: tt("[a,b]"),
+            }),
+        );
+
+        t("yo/*/path", None);
     }
 }

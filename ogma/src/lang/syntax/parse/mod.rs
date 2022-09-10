@@ -15,6 +15,17 @@ use nom::{
 };
 use std::sync::Arc;
 
+#[cfg(test)]
+fn tt(s: &str) -> Tag {
+    Tag_ {
+        anchor: Location::Shell,
+        line: Arc::from(s),
+        start: 0,
+        end: s.len(),
+    }
+    .into()
+}
+
 struct Line {
     line: Arc<str>,
     loc: Location,
@@ -31,6 +42,14 @@ impl Line {
             end,
         }
         .into()
+    }
+
+    #[cfg(test)]
+    fn from(i: &str) -> Self {
+        Self {
+            line: i.to_string().into(),
+            loc: Location::Shell,
+        }
     }
 }
 
