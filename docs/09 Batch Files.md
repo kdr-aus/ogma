@@ -24,9 +24,9 @@ classifies each item. Multiline comments are supported _before_ an item, prefixe
 ## Directives
 ---
 Batch files support directives to alter the processing methodology.
-Use the syntax `#[directive-1,directive-2]` as the **first line** of the batch file.
-For example, to _disable_ parallel processing and to _enable_ fast fail the first line of a batch
-file would contain: `#[no-parallelise,fail-fast]`
+Use the syntax `[directive-1 directive-2]` _after any file comments, but **before any items.**_
+For example, to _disable_ parallel processing and to _enable_ fast fail the batch
+file would contain: `[no-parallelise fail-fast]`
 
 ## Processing
 ---
