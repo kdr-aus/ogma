@@ -65,7 +65,7 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
 
     // first, get all the lines that are comments
     let (doc, mut text) = doc_comment(line.line.trim_start());
-    let doc = (!doc.is_empty()).then_some(doc);
+    let mut doc = (!doc.is_empty()).then_some(doc);
 
     let mut directives = Vec::new();
     let text = loop {
@@ -80,18 +80,35 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
         }
     };
 
+    let mut mv_doc = directives.is_empty() && !text.starts_with("\n\n");
+
     let items = split_items(text);
 
     let mut impls = Vec::new();
     let mut types = Vec::new();
     let mut exprs = Vec::new();
 
-    let line_num = |i| u16::try_from(line.line[..line.line.offset(i)]
-        .chars().filter(|&c| c == '\n').count() + 1).expect("file must have less than 16 bit line numbers");
+    let line_num = |i| {
+        u16::try_from(
+            line.line[..line.line.offset(i)]
+                .chars()
+                .filter(|&c| c == '\n')
+                .count()
+                + 1,
+        )
+        .expect("file must have less than 16 bit line numbers")
+    };
 
     for item in items {
-        let (doc, code) = doc_comment(item);
+        let (doc_, code) = doc_comment(item);
         let code = code.trim();
+
+        let doc = if mv_doc {
+            mv_doc = false;
+            doc.take()
+        } else {
+            (!doc_.is_empty()).then_some(doc_)
+        };
 
         if code.starts_with("def-ty") {
             let (_, name) = defty_name(&line)(code)
@@ -99,9 +116,9 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
             types.push((
                 name.to_string(),
                 Item {
-                    doc: (!doc.is_empty()).then_some(doc),
+                    doc,
                     code: code.to_owned(),
-                    line: line_num(code)
+                    line: line_num(code),
                 },
             ));
         } else if code.starts_with("def") {
@@ -110,16 +127,16 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
             impls.push((
                 name.to_string(),
                 Item {
-                    doc: (!doc.is_empty()).then_some(doc),
+                    doc,
                     code: code.to_owned(),
-                    line: line_num(code)
+                    line: line_num(code),
                 },
             ));
         } else {
             exprs.push(Item {
-                doc: (!doc.is_empty()).then_some(doc),
+                doc,
                 code: code.to_owned(),
-                    line: line_num(code)
+                line: line_num(code),
             });
         }
     }
@@ -504,7 +521,6 @@ an xpr | zog
                         doc: Some("Bzog docs".to_string()),
                         code: "def bar-zog () { }".to_string(),
                         line: 12
-
                     }
                 )
             ]
@@ -545,6 +561,88 @@ an xpr | zog
         );
         assert!(f.types.is_empty());
         assert!(f.impls.is_empty());
+        assert!(f.exprs.is_empty());
+    }
+
+    #[test]
+    fn file_test_03() {
+        let f = "
+# Doc
+def foo-bar () { }";
+
+        let f = file(f, Location::Shell).unwrap();
+
+        dbg!(&f);
+
+        assert_eq!(f.doc, None);
+        assert_eq!(f.directives, vec![]);
+        assert!(f.types.is_empty());
+        assert_eq!(
+            f.impls,
+            vec![(
+                "foo-bar".to_string(),
+                Item {
+                    doc: Some("Doc".to_string()),
+                    code: "def foo-bar () { }".to_string(),
+                    line: 3
+                }
+            ),]
+        );
+        assert!(f.exprs.is_empty());
+    }
+
+    #[test]
+    fn file_test_04() {
+        let f = "# Header doc
+
+# Doc
+def foo-bar () { }";
+
+        let f = file(f, Location::Shell).unwrap();
+
+        dbg!(&f);
+
+        assert_eq!(f.doc, Some("Header doc".to_string()));
+        assert_eq!(f.directives, vec![]);
+        assert!(f.types.is_empty());
+        assert_eq!(
+            f.impls,
+            vec![(
+                "foo-bar".to_string(),
+                Item {
+                    doc: Some("Doc".to_string()),
+                    code: "def foo-bar () { }".to_string(),
+                    line: 4
+                }
+            ),]
+        );
+        assert!(f.exprs.is_empty());
+    }
+
+    #[test]
+    fn file_test_05() {
+        let f = "# Header doc
+
+def foo-bar () { }";
+
+        let f = file(f, Location::Shell).unwrap();
+
+        dbg!(&f);
+
+        assert_eq!(f.doc, Some("Header doc".to_string()));
+        assert_eq!(f.directives, vec![]);
+        assert!(f.types.is_empty());
+        assert_eq!(
+            f.impls,
+            vec![(
+                "foo-bar".to_string(),
+                Item {
+                    doc: None,
+                    code: "def foo-bar () { }".to_string(),
+                    line: 3
+                }
+            ),]
+        );
         assert!(f.exprs.is_empty());
     }
 
