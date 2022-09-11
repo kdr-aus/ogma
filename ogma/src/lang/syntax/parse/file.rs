@@ -39,6 +39,8 @@ pub struct Item {
     pub doc: Option<String>,
     /// Code, including the keywords for types and impls.
     pub code: String,
+    /// The line number of this item.
+    pub line: u16,
 }
 
 type Glob = Tag;
@@ -84,6 +86,9 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
     let mut types = Vec::new();
     let mut exprs = Vec::new();
 
+    let line_num = |i| u16::try_from(line.line[..line.line.offset(i)]
+        .chars().filter(|&c| c == '\n').count() + 1).expect("file must have less than 16 bit line numbers");
+
     for item in items {
         let (doc, code) = doc_comment(item);
         let code = code.trim();
@@ -96,6 +101,7 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
                 Item {
                     doc: (!doc.is_empty()).then_some(doc),
                     code: code.to_owned(),
+                    line: line_num(code)
                 },
             ));
         } else if code.starts_with("def") {
@@ -106,12 +112,14 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
                 Item {
                     doc: (!doc.is_empty()).then_some(doc),
                     code: code.to_owned(),
+                    line: line_num(code)
                 },
             ));
         } else {
             exprs.push(Item {
                 doc: (!doc.is_empty()).then_some(doc),
                 code: code.to_owned(),
+                    line: line_num(code)
             });
         }
     }
@@ -474,7 +482,8 @@ an xpr | zog
                 "Woah".to_string(),
                 Item {
                     doc: None,
-                    code: "def-ty Woah code goes here".to_string()
+                    code: "def-ty Woah code goes here".to_string(),
+                    line: 7
                 }
             )]
         );
@@ -485,14 +494,17 @@ an xpr | zog
                     "foo-bar".to_string(),
                     Item {
                         doc: None,
-                        code: "def foo-bar () { }".to_string()
+                        code: "def foo-bar () { }".to_string(),
+                        line: 5
                     }
                 ),
                 (
                     "bar-zog".to_string(),
                     Item {
                         doc: Some("Bzog docs".to_string()),
-                        code: "def bar-zog () { }".to_string()
+                        code: "def bar-zog () { }".to_string(),
+                        line: 12
+
                     }
                 )
             ]
@@ -503,10 +515,12 @@ an xpr | zog
                 Item {
                     doc: None,
                     code: "first expr".to_string(),
+                    line: 9
                 },
                 Item {
                     doc: None,
-                    code: "an xpr | zog".to_string()
+                    code: "an xpr | zog".to_string(),
+                    line: 14
                 }
             ]
         );
