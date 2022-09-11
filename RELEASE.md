@@ -1,4 +1,5 @@
 **🛑 Breaking Changes**
+- Batch files use a different syntax for the directives (https://github.com/kdr-aus/ogma/pull/174)
 
 **🔬 New Features**
 

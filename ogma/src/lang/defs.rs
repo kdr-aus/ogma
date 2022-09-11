@@ -194,18 +194,16 @@ the row is assumed to be populated with strings, if not an error occurs",
 
     /// Add definitions from a string.
     pub fn add_from_str(&mut self, s: &str, file: &std::path::Path) -> Result<usize> {
-        let items = rt::bat::parse_str(s);
         let file = Arc::from(file);
+        let loc = Location::File(Arc::clone(&file), 0);
+        let items = lang::parse::file(s, loc)?;
+
         // parse and add each def
         let mut count = 0;
-        for mut item in items.items {
-            let help = item.comment.take();
-            process_definition(
-                item.code(),
-                Location::File(Arc::clone(&file), item.line),
-                help,
-                self,
-            )?;
+        for item in items.types.into_iter().chain(items.impls).map(|(_, x)| x) {
+            dbg!(&item.doc);
+            let lang::parse::Item { doc, code, line } = item;
+            process_definition(&code, Location::File(file.clone(), line), doc, self)?;
             count += 1;
         }
 

@@ -15,16 +15,6 @@ fn line(s: &str) -> Line {
     }
 }
 
-fn tt(s: &str) -> Tag {
-    Tag_ {
-        anchor: Location::Shell,
-        line: Arc::from(s),
-        start: 0,
-        end: s.len(),
-    }
-    .into()
-}
-
 fn ops(s: &str) -> Op {
     Op::Single(tt(s))
 }

@@ -11,8 +11,8 @@ use ::libs::{
     serde_json,
 };
 use ast::Location;
+use lang::parse::{Directive, File, Item};
 use std::{
-    convert::TryInto,
     fs, io,
     iter::*,
     path::Path,
@@ -47,18 +47,6 @@ pub struct BatchItem {
 }
 
 impl BatchItem {
-    /// Construct a new batch item.
-    pub fn new(code: String) -> Self {
-        let ty = work_out_type(&code);
-        Self {
-            code,
-            ty,
-            comment: None,
-            file: Arc::from(Path::new("")),
-            line: Default::default(),
-        }
-    }
-
     /// Return the expression or definition code.
     pub fn code(&self) -> &str {
         &self.code
@@ -100,140 +88,68 @@ pub enum ItemType {
     Type,
 }
 
-fn work_out_type(code: &str) -> ItemType {
-    let c = code.trim_start();
-    if lang::defs::recognise_definition(c) {
-        if c.starts_with("def-ty") {
-            ItemType::Type
-        } else {
-            ItemType::Impl
-        }
-    } else {
-        ItemType::Expr
-    }
-}
-
 // ------ Parsing --------------------------------------------------------------
 /// Parse a string of items.
 ///
 /// This can be thought of as parsing a code file, with multiple items separated by a blank line.
-/// It is recommended to set the file field once parsed.
-///
-/// # Example
-/// ```rust
-/// # use ogma::rt::bat::*;
-/// let src = "#[no-fail-fast]
-///
-/// def foo () { bar }
-///
-/// ## Use comments!
-/// foo | + 5
-///
-/// def-ty Zog { x:Num }";
-///
-/// let batch = parse_str(src);
-/// assert_eq!(batch.fail_fast, false);
-///
-/// let mut items = batch.items.into_iter();
-/// let item1 = items.next().unwrap();
-/// let item2 = items.next().unwrap();
-/// let item3 = items.next().unwrap();
-///
-/// assert_eq!(item1.comment, None);
-/// assert_eq!(item1.code(), "def foo () { bar }");
-/// assert_eq!(item2.comment, Some("Use comments!".to_string()));
-/// assert_eq!(item2.code(), "foo | + 5");
-/// assert_eq!(item3.comment, None);
-/// assert_eq!(item3.code(), "def-ty Zog { x:Num }");
-/// ```
-pub fn parse_str(s: &str) -> Batch {
-    let parallelise = !directive(s, "no-parallelise");
-    let fail_fast = directive(s, "fail-fast");
+pub fn parse_str(s: &str, loc: Location) -> Result<Batch> {
+    let File {
+        doc: _,
+        directives,
+        types,
+        impls,
+        exprs,
+    } = lang::parse::file(s, loc)?;
 
-    // first split out each doc/definition bunching, split on empty lines.
-    let (mut bunches, bunch) = s.lines().enumerate().fold(
-        (Vec::new(), Vec::new()),
-        |(mut bunches, mut bunch), (idx, line)| {
-            if line.trim().is_empty() {
-                bunches.push(std::mem::take(&mut bunch));
-            } else {
-                bunch.push((
-                    idx.try_into().expect("only supporting 16-bit line counts"),
-                    line,
-                ));
-            }
-            (bunches, bunch)
-        },
-    );
-    bunches.push(bunch);
-
-    // strip out the doc comments and then concatenate all the code lines together
-    let items = bunches
+    let items = types
         .into_iter()
-        .map(|bunch| {
-            bunch.into_iter().fold(
-                (String::new(), String::new(), 0),
-                |(mut doc, mut code, mut line), (idx, l)| {
-                    if code.is_empty() {
-                        if let Some(d) = l.strip_prefix('#') {
-                            doc.push_str(d.trim());
-                            doc.push('\n');
-                        } else {
-                            line = idx;
-                            code.push_str(l.trim());
-                        }
-                    } else {
-                        code.push('\n');
-                        code.push_str(l);
-                    }
-                    (doc, code, line)
-                },
-            )
+        .map(|(_, Item { doc, code, line })| BatchItem {
+            code,
+            comment: doc,
+            file: Path::new(".").into(),
+            line,
+            ty: ItemType::Type,
         })
-        // ignore empty code
-        .filter(|x| !x.1.is_empty())
-        // transform into BatchItem
-        .map(|(doc, code, line)| {
-            let doc = doc.trim();
-            let comment = if doc.is_empty() {
-                None
-            } else {
-                Some(doc.to_string())
-            };
-            BatchItem {
-                comment,
-                line: line + 1,
-                ..BatchItem::new(code)
-            }
-        })
+        .chain(
+            impls
+                .into_iter()
+                .map(|(_, Item { doc, code, line })| BatchItem {
+                    code,
+                    comment: doc,
+                    file: Path::new(".").into(),
+                    line,
+                    ty: ItemType::Impl,
+                }),
+        )
+        .chain(exprs.into_iter().map(|Item { doc, code, line }| BatchItem {
+            code,
+            comment: doc,
+            file: Path::new(".").into(),
+            line,
+            ty: ItemType::Expr,
+        }))
         .collect();
 
-    Batch {
+    Ok(Batch {
+        parallelise: !directives.iter().any(|x| x == &Directive::NoParallelise),
+        fail_fast: directives.iter().any(|x| x == &Directive::FailFast),
         items,
-        parallelise,
-        fail_fast,
-    }
+    })
 }
 
 /// Parse the contents of a file into a list of [`BatchItem`]s.
 ///
 /// # Security
 /// Filepath should be validated to only be inside working directory.
-pub fn parse_file(f: impl AsRef<Path>) -> io::Result<Batch> {
+pub fn parse_file(f: impl AsRef<Path>) -> io::Result<Result<Batch>> {
     let f = Arc::from(f.as_ref());
     let s = fs::read_to_string(&f)?;
-    let mut v = parse_str(&s);
-    v.items.iter_mut().for_each(|x| x.file = Arc::clone(&f));
+    let loc = Location::File(Arc::clone(&f), 0);
+    let mut v = parse_str(&s, loc);
+    if let Ok(v) = &mut v {
+        v.items.iter_mut().for_each(|x| x.file = Arc::clone(&f));
+    }
     Ok(v)
-}
-
-fn directive(code: &str, directive: &str) -> bool {
-    code.lines()
-        .next()
-        .and_then(|line| line.trim().strip_prefix("#["))
-        .and_then(|x| x.strip_suffix(']'))
-        .map(|i| i.split(',').any(|x| x.trim() == directive))
-        .unwrap_or(false)
 }
 
 // ------ Processing -----------------------------------------------------------
@@ -444,39 +360,33 @@ foo | + 5
 
 def-ty Zog { x:Num }";
 
-        let x = parse_str(src).items;
+        let x = parse_str(src, Location::Shell).unwrap().items;
 
         assert_eq!(
             x,
             vec![
                 BatchItem {
-                    line: 1,
-                    ..BatchItem::new("def foo () { bar }".to_string())
-                },
-                BatchItem {
-                    line: 4,
-                    comment: Some("Use comments!".to_string()),
-                    ..BatchItem::new("foo | + 5".to_string())
-                },
-                BatchItem {
+                    comment: None,
+                    file: Path::new(".").into(),
                     line: 6,
-                    ..BatchItem::new("def-ty Zog { x:Num }".to_string())
-                }
+                    code: "def-ty Zog { x:Num }".to_string(),
+                    ty: ItemType::Type
+                },
+                BatchItem {
+                    comment: None,
+                    file: Path::new(".").into(),
+                    code: "def foo () { bar }".to_string(),
+                    ty: ItemType::Impl,
+                    line: 1,
+                },
+                BatchItem {
+                    file: Path::new(".").into(),
+                    code: "foo | + 5".to_string(),
+                    ty: ItemType::Expr,
+                    comment: Some("Use comments!".to_string()),
+                    line: 4,
+                },
             ]
         );
-    }
-
-    #[test]
-    fn test_directive() {
-        use directive as d;
-        assert!(d("#[hello,world]", "hello"));
-        assert!(d("#[hello,world]", "world"));
-        assert!(d("#[hello, world]", "world"));
-        assert!(!d("#[hello,world]", "foo-bar"));
-        assert!(!d("#[hello,world", "world"));
-        assert!(!d("#hello,world]", "world"));
-        assert!(!d("[hello,world]", "world"));
-        assert!(!d("", ""));
-        assert!(!d("", "hello"));
     }
 }

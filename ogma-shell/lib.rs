@@ -157,7 +157,12 @@ impl RunState {
         } else if let Some(remaining) = input.strip_prefix("run ") {
             // process a batch
             match self.parse_batch(tabid, remaining) {
-                Ok(b) => self.process_batch(tabid, cancelled, buf, b),
+                Ok(b) => match b {
+                    Ok(b) => self.process_batch(tabid, cancelled, buf, b),
+                    Err(e) => {
+                        write_err(e, &self.wsp, buf).ok();
+                    }
+                },
                 Err(e) => (writeln!(buf, "{}", e.to_string().bright_red()).ok(), ()).1,
             }
         } else if ogma::lang::recognise_definition(&input) {
@@ -323,7 +328,11 @@ impl RunState {
         })
     }
 
-    fn parse_batch(&self, tab_id: TabId, file_flags: &str) -> io::Result<Batch> {
+    fn parse_batch(
+        &self,
+        tab_id: TabId,
+        file_flags: &str,
+    ) -> io::Result<Result<Batch, ogma::Error>> {
         let (pflag, fflag) = (" --no-par", " --no-fast-fail");
         let (r, parallelise) = if file_flags.contains(pflag) {
             (file_flags.replace(pflag, ""), Some(false))
@@ -338,11 +347,13 @@ impl RunState {
         self.validate_path(tab_id, r)
             .and_then(ogma::rt::bat::parse_file)
             .map(|mut batch| {
-                if let Some(x) = parallelise {
-                    batch.parallelise = x;
-                }
-                if let Some(x) = fail_fast {
-                    batch.fail_fast = x;
+                if let Ok(batch) = &mut batch {
+                    if let Some(x) = parallelise {
+                        batch.parallelise = x;
+                    }
+                    if let Some(x) = fail_fast {
+                        batch.fail_fast = x;
+                    }
                 }
                 batch
             })
@@ -403,24 +414,28 @@ fn write_result<W: Write>(
             Value::TabRow(_) => write!(wtr, "<table row>"),
             Value::Ogma(data) => write!(wtr, "{}", print_ogma_data(data)),
         },
-        Err(e) => {
-            let mut buf = Vec::new();
-            print_error(&e, &mut buf).ok();
-            let buf = String::from_utf8(buf).expect("help uses valid utf-8");
-            let buf = if buf
-                .lines()
-                .next()
-                .map(|s| s.contains("Help"))
-                .unwrap_or(false)
-            {
-                highlight_help(&buf, wsp)
-            } else {
-                buf
-            };
-            write!(wtr, "{}", buf)
-        }
+        Err(e) => write_err(e, wsp, wtr),
     }
     .expect("failed writing to REPL");
+}
+
+fn write_err<W: Write>(e: ogma::Error, wsp: &Workspace, mut wtr: W) -> io::Result<()> {
+    use ogma::output::*;
+
+    let mut buf = Vec::new();
+    print_error(&e, &mut buf).ok();
+    let buf = String::from_utf8(buf).expect("help uses valid utf-8");
+    let buf = if buf
+        .lines()
+        .next()
+        .map(|s| s.contains("Help"))
+        .unwrap_or(false)
+    {
+        highlight_help(&buf, wsp)
+    } else {
+        buf
+    };
+    write!(wtr, "{}", buf)
 }
 
 // ###### COMPLETIONS ##########################################################

@@ -1,6 +1,8 @@
 //! Language characteristics.
 
 pub(crate) mod defs;
+#[allow(dead_code)] // TODO remove once changed over
+pub(crate) mod defs2;
 pub(crate) mod help;
 pub(crate) mod impls;
 pub(crate) mod syntax;

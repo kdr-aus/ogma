@@ -1,7 +1,10 @@
 //! Parsing source into a AST.
 
+mod file;
 #[cfg(test)]
 mod test;
+
+pub use file::*;
 
 use crate::prelude::{ast::*, err, Definitions, HashSet};
 use ::kserd::Number;
@@ -11,6 +14,17 @@ use nom::{
     error::*, multi::*, sequence::*, IResult, Offset,
 };
 use std::sync::Arc;
+
+#[cfg(test)]
+fn tt(s: &str) -> Tag {
+    Tag_ {
+        anchor: Location::Shell,
+        line: Arc::from(s),
+        start: 0,
+        end: s.len(),
+    }
+    .into()
+}
 
 struct Line {
     line: Arc<str>,
@@ -28,6 +42,14 @@ impl Line {
             end,
         }
         .into()
+    }
+
+    #[cfg(test)]
+    fn from(i: &str) -> Self {
+        Self {
+            line: i.to_string().into(),
+            loc: Location::Shell,
+        }
     }
 }
 
@@ -770,15 +792,7 @@ fn def_impl_inner<'a>(
     loc: Location,
     definitions: &Definitions,
 ) -> IResult<&'a str, DefinitionImpl, ParsingError<'a>> {
-    let (i, name) = ws(preceded(tag("def "), op(line)))(i)?;
-    let name = match name.is_op() {
-        Some(t) => Ok(t.clone()),
-        None => Err(ParsingError::failure(
-            name.tag().into_owned(),
-            "paths cannot be used to define a definition name",
-            Expecting::NONE,
-        )),
-    }?;
+    let (i, name) = def_op(line)(i)?;
     let (i, in_ty) = ws(opt(op_ident(line)))(i)?;
     let x = if in_ty.is_some() {
         Expecting::NONE
@@ -802,6 +816,22 @@ fn def_impl_inner<'a>(
     };
 
     Ok((i, def))
+}
+
+fn def_op(line: &Line) -> impl FnMut(&str) -> IResult<&str, Tag, ParsingError> + '_ {
+    move |i| {
+        let (i, name) = ws(preceded(tag("def "), op(line)))(i)?;
+        let name = match name.is_op() {
+            Some(t) => Ok(t.clone()),
+            None => Err(ParsingError::failure(
+                name.tag().into_owned(),
+                "paths cannot be used to define a definition name",
+                Expecting::NONE,
+            )),
+        }?;
+
+        Ok((i, name))
+    }
 }
 
 fn def_params(line: &Line) -> impl Fn(&str) -> IResult<&str, Vec<Parameter>, ParsingError> + '_ {
@@ -848,7 +878,7 @@ fn def_type_inner<'a>(
 ) -> IResult<&'a str, DefinitionType, ParsingError<'a>> {
     // this does not handle paramterisation _after_ type name definition. This might be lifted
     // in the future.
-    let (i, name) = ws(preceded(tag("def-ty "), op_ident(line)))(i)?;
+    let (i, name) = defty_name(line)(i)?;
     let (i, ty) = match ws::<_, _, ()>(tag("::"))(i) {
         Ok((i, _)) => map(defty_variants(line), TypeVariant::Sum)(i),
         Err(_) => map(defty_fields(line), TypeVariant::Product)(i),
@@ -865,6 +895,10 @@ fn def_type_inner<'a>(
     };
 
     Ok((i, def))
+}
+
+fn defty_name(line: &Line) -> impl FnMut(&str) -> IResult<&str, Tag, ParsingError> + '_ {
+    move |i| ws(preceded(tag("def-ty "), op_ident(line)))(i)
 }
 
 fn defty_variants(line: &Line) -> impl Fn(&str) -> IResult<&str, Vec<Variant>, ParsingError> + '_ {

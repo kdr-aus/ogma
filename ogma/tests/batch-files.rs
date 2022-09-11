@@ -1,4 +1,5 @@
 use libs::divvy::ProgressTx;
+use ogma::lang::ast::Location;
 use ogma::rt;
 use std::path::Path;
 
@@ -21,7 +22,7 @@ foo-bar | + 5
 
 def-ty Foo { x:Num }"#;
 
-    let batch = parse_str(code);
+    let batch = parse_str(code, Location::Shell).unwrap();
     let p = |b| {
         process(&b, root, wd, p, Default::default())
             .into_iter()
@@ -30,7 +31,7 @@ def-ty Foo { x:Num }"#;
     };
     assert_eq!(p(batch), vec![Success, Success, Success]);
 
-    let batch = parse_str(code);
+    let batch = parse_str(code, Location::Shell).unwrap();
     assert_eq!(p(batch), vec![Success, Success, Success]);
 }
 
@@ -59,51 +60,50 @@ def-ty Foo { x:Num y: }"#;
     let batch = Batch {
         parallelise: false,
         fail_fast: true,
-        ..parse_str(code)
+        ..parse_str(code, Location::Shell).unwrap()
     };
     let mut x = process(&batch, root, wd, p, Default::default()).into_iter();
-    assert!(matches!(x.next(), Some((Success, _))));
-    assert!(matches!(x.next(), Some((Outstanding, _))));
-    let x = x.next().map(print).unwrap();
-    println!("{x}");
+    let x_ = x.next().map(print).unwrap(); // type def
+    println!("{x_}");
     assert_eq!(
-        &x,
+        &x_,
         "Parsing Error: could not parse input line
---> '' - line 6:21
+--> '.' - line 6:21
  | def-ty Foo { x:Num y: }
  |                      ^ invalid identifier, expecting alphabetic character, found ` `
---> '' - line 6:21
+--> '.' - line 6:21
  | def-ty Foo { x:Num y: }
  |                      ^^ missing a valid type specifier: `field:Type`
 "
     );
+    assert!(matches!(x.next(), Some((Outstanding, _)))); // impl def
+    assert!(matches!(x.next(), Some((Outstanding, _))));
 
-    let batch = parse_str(code);
+    let batch = parse_str(code, Location::Shell).unwrap();
     let mut x = process(&batch, root, wd, p, Default::default()).into_iter();
+    let y = x.next().map(print).unwrap();
+    println!("{y}");
+    assert_eq!(
+        &y,
+        "Parsing Error: could not parse input line
+--> '.' - line 6:21
+ | def-ty Foo { x:Num y: }
+ |                      ^ invalid identifier, expecting alphabetic character, found ` `
+--> '.' - line 6:21
+ | def-ty Foo { x:Num y: }
+ |                      ^^ missing a valid type specifier: `field:Type`
+"
+    );
     assert!(matches!(x.next(), Some((Success, _))));
     let y = x.next().map(print).unwrap();
     println!("{y}");
     assert_eq!(
         &y,
         r#"Semantics Error: expecting argument with output type `Number`, found `String`
---> '' - line 4:19
+--> '.' - line 4:19
  | foo-bar | + 5 | - 'foo'
  |                    ^^^ this argument returns type `String`
 --> help: commands may require specific argument types, use `--help` to view requirements
 "#
-    );
-
-    let y = x.next().map(print).unwrap();
-    println!("{y}");
-    assert_eq!(
-        &y,
-        "Parsing Error: could not parse input line
---> '' - line 6:21
- | def-ty Foo { x:Num y: }
- |                      ^ invalid identifier, expecting alphabetic character, found ` `
---> '' - line 6:21
- | def-ty Foo { x:Num y: }
- |                      ^^ missing a valid type specifier: `field:Type`
-"
     );
 }
