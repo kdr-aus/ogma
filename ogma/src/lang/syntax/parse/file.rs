@@ -60,7 +60,7 @@ pub struct Import {
 pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
     let line = Line {
         loc: loc.clone(),
-        line: text.clone().into(),
+        line: text.into(),
     };
 
     // first, get all the lines that are comments
@@ -151,10 +151,10 @@ pub fn file(text: &str, loc: Location) -> Result<File, err::Error> {
 }
 
 fn doc_comment(text: &str) -> (String, &str) {
-    let mut lines = text.lines();
+    let lines = text.lines();
     let mut t = text;
     let mut doc = String::new();
-    while let Some(line) = lines.next() {
+    for line in lines {
         match line.trim().strip_prefix('#') {
             Some(l) => {
                 doc.push_str(l.trim());
