@@ -82,13 +82,21 @@ fn process_files(defs: Vec<PathBuf>, files: Vec<PathBuf>, verbose: bool) -> Resu
     let batches = files
         .iter()
         .map(|p| {
-            ogma::rt::bat::parse_file(p).unwrap_or_else(|e| {
-                panic!(
-                    "failed parsing in '{}' as batch process: {}",
-                    p.display(),
-                    e
-                )
-            })
+            ogma::rt::bat::parse_file(p)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "failed parsing in '{}' as batch process: {}",
+                        p.display(),
+                        e
+                    )
+                })
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "failed parsing in '{}' as file:
+{e}",
+                        p.display()
+                    )
+                })
         })
         .collect::<Vec<_>>();
 

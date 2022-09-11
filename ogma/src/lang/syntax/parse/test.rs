@@ -15,7 +15,6 @@ fn line(s: &str) -> Line {
     }
 }
 
-
 fn ops(s: &str) -> Op {
     Op::Single(tt(s))
 }
