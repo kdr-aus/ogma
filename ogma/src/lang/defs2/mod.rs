@@ -83,8 +83,7 @@ impl fmt::Display for ImplNode {
     }
 }
 
-impl Definitions {
-}
+impl Definitions {}
 
 type FsMap = BTreeMap<PathBuf, Vec<File>>;
 
@@ -155,7 +154,7 @@ fn build_fs_map(root: &Path) -> Result<FsMap> {
 fn parse_file(file: PathBuf) -> Result<File> {
     let s = std::fs::read_to_string(&file).map_err(|e| Error {
         cat: err::Category::Parsing,
-        desc: format!("failed to read '{}' as string: {e}", file.display()).into(),
+        desc: format!("failed to read '{}' as string: {e}", file.display()),
         hard: true,
         ..Default::default()
     })?;
