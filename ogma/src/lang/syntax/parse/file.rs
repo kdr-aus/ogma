@@ -54,6 +54,19 @@ pub struct Import {
     pub glob: Glob,
 }
 
+impl File {
+    /// Iterate over the import directives.
+    pub fn iter_imports(&self) -> impl Iterator<Item = &Import> {
+        self.directives
+            .iter()
+            .filter_map(|d| match d {
+                Directive::Import(i) => Some(i),
+                _ => None,
+            })
+            .flatten()
+    }
+}
+
 /// Parse a complete file to return the _item pointers_ and directives that exist in the file.
 ///
 /// Note that the items themselves are not parsed, only the outline of the file.
