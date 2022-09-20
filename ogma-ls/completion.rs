@@ -89,11 +89,11 @@ fn incomplete_completions(
         Some(cmpls(wsp, line, working_dir, Items::TYPES))
     } else if incomplete.exp.contains(Exp::TERM) {
         Some(cmpls(
-	    wsp,
-	    line,
-	    working_dir,
-	    Items::IMPLS | Items::PATHS | Items::SPEC_LIT,
-	))
+            wsp,
+            line,
+            working_dir,
+            Items::IMPLS | Items::PATHS | Items::SPEC_LIT,
+        ))
     } else if incomplete.exp.contains(Exp::SPECLITERAL) {
         Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT))
     } else if incomplete.exp.contains(Exp::NONE) {
