@@ -84,17 +84,22 @@ fn incomplete_completions(
     use ogma::lang::parse::Expecting as Exp;
 
     if incomplete.exp.contains(Exp::IMPL) {
-	Some(cmpls(wsp, line, working_dir, Items::IMPLS))
+        Some(cmpls(wsp, line, working_dir, Items::IMPLS))
     } else if incomplete.exp.contains(Exp::TYPE) {
-	Some(cmpls(wsp, line, working_dir, Items::TYPES))
+        Some(cmpls(wsp, line, working_dir, Items::TYPES))
     } else if incomplete.exp.contains(Exp::TERM) {
-	Some(cmpls(wsp, line, working_dir, Items::IMPLS | Items::PATHS | Items::SPEC_LIT))
+        Some(cmpls(
+	    wsp,
+	    line,
+	    working_dir,
+	    Items::IMPLS | Items::PATHS | Items::SPEC_LIT,
+	))
     } else if incomplete.exp.contains(Exp::SPECLITERAL) {
-	Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT))
+        Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT))
     } else if incomplete.exp.contains(Exp::NONE) {
-	None
+        None
     } else {
-	todo!()
+        todo!()
     }
 }
 
