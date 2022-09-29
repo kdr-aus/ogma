@@ -83,17 +83,17 @@ fn incomplete_completions(
 ) -> Option<Vec<Def>> {
     use ogma::lang::parse::Expecting as Exp;
 
-    match incomplete.exp {
-        Exp::IMPL => Some(cmpls(wsp, line, working_dir, Items::IMPLS)),
-        Exp::TYPE => Some(cmpls(wsp, line, working_dir, Items::TYPES)),
-        Exp::TERM => Some(cmpls(
+    match true {
+        true if incomplete.exp.contains(Exp::IMPL) => Some(cmpls(wsp, line, working_dir, Items::IMPLS)),
+        true if incomplete.exp.contains(Exp::TYPE) => Some(cmpls(wsp, line, working_dir, Items::TYPES)),
+        true if incomplete.exp.contains(Exp::TERM) => Some(cmpls(
             wsp,
             line,
             working_dir,
             Items::IMPLS | Items::PATHS | Items::SPEC_LIT,
         )),
-        Exp::SPECLITERAL => Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT)),
-        Exp::NONE => None,
+        true if incomplete.exp.contains(Exp::SPECLITERAL) => Some(cmpls(wsp, line, working_dir, Items::SPEC_LIT)),
+        true if incomplete.exp.contains(Exp::NONE) => None,
         _ => todo!(),
     }
 }
