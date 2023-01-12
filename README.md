@@ -45,28 +45,3 @@ The project is also open source, hosted on Github. Contributions are encouraged,
 features but important aspects such as bug fixes and documentation.
 There is also a forum in which to ask and answer questions. The forum is a great way to cultivate a
 community around the project and it is encouraged to participate.
-
-## Contributions
-Pull requests are appreciated and encouraged! The request will be subject to a review and will 
-need to pass the CI before being merged in. Please ensure:
-- Tests are added where necessary,
-- `cargo fmt --all -- --check` passes,
-- `cargo clippy --workspace -- -D warnings` passes,
-- `cargo test --workspace` passes,
-- An item describing your pull request is added to [RELEASE.md](./RELEASE.md).
-
-Happy coding!
-
-# Release Process
-
-When a release is ready, simply create a release tag and push it to Github.
-The release workflow will take care of the build and release creation.
-**The release body uses [RELEASE.md](./RELEASE.md) as the release notes.
-Be sure to update this before the tag push!**
-
-```
-# Update RELEASE.md
-git push
-git tag v#.#
-git push origin v#.#
-```
