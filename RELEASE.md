@@ -9,3 +9,4 @@
 - Fix locals graph needing updating bug (https://github.com/kdr-aus/ogma/pull/160)
 
 **✨ Other Updates**
+- Partition graphs now build with a filesystem map (https://github.com/kdr-aus/ogma/pull/183)
