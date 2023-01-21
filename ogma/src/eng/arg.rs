@@ -503,7 +503,7 @@ mod tests {
         use std::mem::size_of;
 
         assert_eq!(size_of::<Argument>(), 48);
-        assert_eq!(size_of::<Hold>(), 64);
-        assert_eq!(size_of::<arg::ArgBuilder>(), 88);
+        assert_eq!(size_of::<Hold>(), 64 - 8);
+        assert_eq!(size_of::<arg::ArgBuilder>(), 88 - 16);
     }
 }

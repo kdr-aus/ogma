@@ -5,16 +5,20 @@ use super::*;
 pub struct File {
     /// A document string.
     pub doc: Option<String>,
+
     /// Any [Directive]s.
     pub directives: Vec<Directive>,
+
     /// All type definitions.
     ///
     /// Each type is keyed with it's name.
     pub types: Vec<(String, Item)>,
+
     /// All implementation definitions.
     ///
     /// Each impl is keyed with it's name.
     pub impls: Vec<(String, Item)>,
+
     /// All expressions _in definition order_.
     pub exprs: Vec<Item>,
 }
@@ -55,6 +59,17 @@ pub struct Import {
 }
 
 impl File {
+    /// Creates an empty file.
+    pub fn empty() -> Self {
+        Self {
+            doc: None,
+            directives: vec![],
+            types: vec![],
+            impls: vec![],
+            exprs: vec![],
+        }
+    }
+
     /// Iterate over the import directives.
     pub fn iter_imports(&self) -> impl Iterator<Item = &Import> {
         self.directives
@@ -64,6 +79,17 @@ impl File {
                 _ => None,
             })
             .flatten()
+    }
+}
+
+impl Item {
+    #[cfg(test)]
+    pub fn dummy() -> Item {
+        Item {
+            doc: None,
+            code: String::new(),
+            line: 0,
+        }
     }
 }
 
