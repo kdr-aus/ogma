@@ -636,7 +636,7 @@ impl AstGraph {
 
     pub fn arg_nodes(&self) -> impl Iterator<Item = ArgNode> + '_ {
         self.node_indices()
-            .filter_map(move |n| self.is_arg_node(n).then(|| ArgNode(n)))
+            .filter_map(move |n| self.is_arg_node(n).then_some(ArgNode(n)))
     }
 
     pub fn def_nodes(&self) -> impl Iterator<Item = DefNode> + '_ {

@@ -496,38 +496,34 @@ impl TypeGraph {
             let to = &self[to_idx];
 
             match flow {
-                Flow::II => match int(&from.input, &to.input) {
-                    Some(i) => {
+                Flow::II => {
+                    if let Some(i) = int(&from.input, &to.input) {
                         self.g[from_idx].input = i.clone().into();
                         self.g[to_idx].input = i.into();
                         chgd = true;
                     }
-                    None => (),
-                },
-                Flow::IO => match int(&from.input, &to.output) {
-                    Some(i) => {
+                }
+                Flow::IO => {
+                    if let Some(i) = int(&from.input, &to.output) {
                         self.g[from_idx].input = i.clone().into();
                         self.g[to_idx].output = i.into();
                         chgd = true;
                     }
-                    None => (),
-                },
-                Flow::OI => match int(&from.output, &to.input) {
-                    Some(i) => {
+                }
+                Flow::OI => {
+                    if let Some(i) = int(&from.output, &to.input) {
                         self.g[from_idx].output = i.clone().into();
                         self.g[to_idx].input = i.into();
                         chgd = true;
                     }
-                    None => (),
-                },
-                Flow::OO => match int(&from.output, &to.output) {
-                    Some(i) => {
+                }
+                Flow::OO => {
+                    if let Some(i) = int(&from.output, &to.output) {
                         self.g[from_idx].output = i.clone().into();
                         self.g[to_idx].output = i.into();
                         chgd = true;
                     }
-                    None => (),
-                },
+                }
             }
         }
 
