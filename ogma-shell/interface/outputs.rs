@@ -126,7 +126,7 @@ fn scroll_location(scroll_area: Rect, outputs_height: usize, scroll: u16) -> Rec
         ((scroll_area_height * scroll_area_height) / (out_height)).trunc() as u16
     };
 
-    let height = scroll_area.height.clamp(1, height);
+    let height = scroll_area.height.clamp(1, height.max(1));
 
     let bar_lim = scroll_area.height.saturating_sub(height);
     let y = (scroll / (out_height - 1.0)) * (bar_lim as f64);
