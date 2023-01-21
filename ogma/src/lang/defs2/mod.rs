@@ -1,7 +1,7 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::parse::File;
+use lang::parse::{File, Import};
 use std::{
     collections::BTreeMap,
     fmt,
@@ -83,7 +83,26 @@ impl fmt::Display for ImplNode {
     }
 }
 
-impl Definitions {}
+impl Definitions {
+    /// Resolve all dependencies incurred by `imports`.
+    ///
+    /// This uses the compiled partition graph to parse/add definitions into `self`.
+    pub fn resolve_imports(&mut self, imports: &[Import]) -> Result<()> {
+        for i in imports {
+            self.resolve_import(i)?;
+        }
+        Ok(())
+    }
+
+    fn resolve_import(&mut self, import: &Import) -> Result<()> {
+        let bn = self
+            .partitions
+            .find_boundary(&import.path)
+            .map_err(|e| e.add_trace(&import.tag(), "within this import".to_string()))?;
+
+        todo!();
+    }
+}
 
 type FsMap = BTreeMap<PathBuf, Vec<File>>;
 

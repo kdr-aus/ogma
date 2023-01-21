@@ -1,3 +1,4 @@
+use super::{BoundaryNode, ImplNode, TypeNode};
 use crate::prelude::*;
 use petgraph::prelude::*;
 use std::path::Path;
@@ -139,9 +140,84 @@ impl Partitions {
 
         Ok(x)
     }
+
+    pub fn find_boundary<'a, P>(&self, path: P) -> Result<BoundaryNode>
+    where
+        P: IntoIterator<Item = &'a Tag>,
+    {
+        let mut a = self.root;
+
+        for p in path {
+            match self
+                .graph
+                .neighbors(a)
+                .find(|&n| self.graph[n].eq_boundary(p))
+            {
+                Some(b) => a = b,
+                None => {
+                    let mut e = Error {
+                        cat: err::Category::Definitions,
+                        desc: format!("{p} does not match any partitions"),
+                        traces: err::trace(p, None),
+                        help_msg: None,
+                        hard: true,
+                    };
+
+                    let x = self
+                        .fuzzy_find(a, p)
+                        .filter_map(|(_, n)| n.is_boundary().then(|| n.name().as_str()))
+                        .collect::<Vec<_>>();
+
+                    if !x.is_empty() {
+                        let m = "Did you mean any of these? ".to_string() + &x.join(", ");
+                        e.help_msg = m.into();
+                    }
+
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(BoundaryNode(a))
+    }
+
+    fn fuzzy_find<P: AsRef<str>>(
+        &self,
+        parent: NodeIndex,
+        n: P,
+    ) -> impl Iterator<Item = (NodeIndex, &Node)> {
+        let mut e = simsearch::SimSearch::new();
+        for n in self.graph.neighbors(parent) {
+            e.insert(n, self.graph[n].name())
+        }
+
+        e.search(n.as_ref())
+            .into_iter()
+            .map(|n| (n, &self.graph[n]))
+    }
 }
 
 impl Node {
+    pub fn name(&self) -> &Str {
+        match self {
+            Node::Boundary { name, .. } => name,
+            Node::Type { name, .. } => name,
+            Node::Impl { name, .. } => name,
+        }
+    }
+
+    pub fn is_boundary(&self) -> bool {
+        matches!(self, Node::Boundary { .. })
+    }
+
+    pub fn is_type(&self) -> bool {
+        matches!(self, Node::Type { .. })
+    }
+
+    pub fn is_impl(&self) -> bool {
+        matches!(self, Node::Impl { .. })
+    }
+
     pub fn eq_boundary<N: PartialEq<str> + ?Sized>(&self, name: &N) -> bool {
         if let Node::Boundary { name: n, .. } = self {
             name.eq(n.as_str())

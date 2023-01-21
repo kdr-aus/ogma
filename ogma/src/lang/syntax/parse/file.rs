@@ -6,7 +6,7 @@ pub struct File {
     /// A document string.
     pub doc: Option<String>,
 
-    /// Any [Directive]s.
+    /// Any [`Directive`]s.
     pub directives: Vec<Directive>,
 
     /// All type definitions.
@@ -90,6 +90,17 @@ impl Item {
             code: String::new(),
             line: 0,
         }
+    }
+}
+
+impl Import {
+    /// Create a tag that spans across the _whole import_.
+    pub fn tag(&self) -> Tag {
+        let Import { path, glob } = self;
+
+        path.get(0)
+            .map(|fst| fst.clone().union(glob))
+            .unwrap_or_else(|| glob.clone())
     }
 }
 
