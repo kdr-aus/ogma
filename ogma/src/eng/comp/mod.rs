@@ -441,7 +441,7 @@ impl<'d> Compiler<'d> {
         let chgd = self.apply_graph_chgs(chgs.chgs.into_iter())?;
 
         (goto_resolve | chgd)
-            .then(|| ())
+            .then_some(())
             .ok_or_else(|| err.expect("error should be some if unsuccessful"))
     }
 

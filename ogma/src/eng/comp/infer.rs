@@ -126,7 +126,7 @@ impl<'d> Compiler<'d> {
             let x = &mut self.output_infer_opnodes;
             // notice the reverse comparison, we do this to get a descending order, trialling the
             // 'deepest' first
-            x.sort_unstable_by(|a, b| b.index().cmp(&a.index()));
+            x.sort_unstable_by_key(|a| std::cmp::Reverse(a.index()));
             x.dedup();
 
             // only take where the output is ambiguous
@@ -183,7 +183,7 @@ impl<'d> Compiler<'d> {
 
     fn assert_inference_depth(&self) -> Result<()> {
         (self.inference_depth < 5)
-            .then(|| ())
+            .then_some(())
             .ok_or_else(crate::Error::inference_depth)
     }
 }

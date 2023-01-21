@@ -257,7 +257,7 @@ fn dedup_table_intrinsic(mut blk: Block) -> Result<Step> {
             None => (0..table.cols_len()).collect(),
         };
         // we need to own the vector for .dedup function
-        let mut t = (&*table).clone().into_raw();
+        let mut t = (*table).clone().into_raw();
         t.dedup_by(|a, b| cols.iter().all(|&c| a[c] == b[c]));
 
         cx.done_o(Table::from(InnerTable::from(t)))

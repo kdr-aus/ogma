@@ -54,7 +54,7 @@ pub fn print_table(table: &Table, wtr: &mut dyn Write) -> io::Result<()> {
         out.add_row(
             once(Str::from(format!(
                 "{} rows elided",
-                table.rows_len() - 10 - if table.header { 1 } else { 0 }
+                table.rows_len() - 10 - usize::from(table.header)
             )))
             .chain(repeat_with(|| Str::from("...")).take(if limit_col {
                 6

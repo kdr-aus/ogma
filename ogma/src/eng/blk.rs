@@ -41,7 +41,7 @@ impl<'a> Block<'a> {
     /// Assert the block as the given input type, constructing an error if not.
     pub fn assert_input(&self, ty: &Type) -> Result<()> {
         (self.in_ty() == ty)
-            .then(|| ())
+            .then_some(())
             .ok_or_else(|| Error::wrong_op_input_type(self.in_ty(), self.op_tag()))
     }
 

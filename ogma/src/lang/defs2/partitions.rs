@@ -102,7 +102,7 @@ impl Partitions {
         let name = name.into();
         let exists = self
             .graph
-            .neighbors(parent.into())
+            .neighbors(parent)
             .any(|n| self.graph[n].eq_type(&name));
 
         if exists {
@@ -123,7 +123,7 @@ impl Partitions {
         let name = name.into();
         let exists = self
             .graph
-            .neighbors(parent.into())
+            .neighbors(parent)
             .any(|n| self.graph[n].eq_impl(&name));
 
         if exists {
