@@ -1,7 +1,7 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::parse::File;
+use lang::parse::{File, Import};
 use std::{
     collections::BTreeMap,
     fmt,

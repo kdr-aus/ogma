@@ -80,6 +80,23 @@ impl Tag {
     pub fn make_mut(&mut self) -> &mut Tag_ {
         Arc::make_mut(&mut self.0)
     }
+
+    /// Union `self` and `b` together, extending the tag.
+    ///
+    /// # Panics
+    /// Panics if the underlying source string is not the same.
+    pub fn union(mut self, b: &Tag) -> Self {
+        assert!(
+            Arc::ptr_eq(&self.line, &b.line),
+            "tag's underlying source string is not the same"
+        );
+
+        let t = self.make_mut();
+        t.start = t.start.min(b.start);
+        t.end = t.end.max(b.end);
+
+        self
+    }
 }
 
 impl AsRef<str> for Tag {
@@ -93,6 +110,13 @@ impl PartialEq for Tag {
         self.str() == rhs.str()
     }
 }
+
+impl PartialEq<str> for Tag {
+    fn eq(&self, rhs: &str) -> bool {
+        self.str() == rhs
+    }
+}
+
 impl Eq for Tag {}
 
 impl fmt::Debug for Tag {
