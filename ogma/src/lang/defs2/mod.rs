@@ -83,26 +83,7 @@ impl fmt::Display for ImplNode {
     }
 }
 
-impl Definitions {
-    /// Resolve all dependencies incurred by `imports`.
-    ///
-    /// This uses the compiled partition graph to parse/add definitions into `self`.
-    pub fn resolve_imports(&mut self, imports: &[Import]) -> Result<()> {
-        for i in imports {
-            self.resolve_import(i)?;
-        }
-        Ok(())
-    }
-
-    fn resolve_import(&mut self, import: &Import) -> Result<()> {
-        let bn = self
-            .partitions
-            .find_boundary(&import.path)
-            .map_err(|e| e.add_trace(&import.tag(), "within this import".to_string()))?;
-
-        todo!();
-    }
-}
+impl Definitions {}
 
 type FsMap = BTreeMap<PathBuf, Vec<File>>;
 

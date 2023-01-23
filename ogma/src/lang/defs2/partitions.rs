@@ -1,4 +1,4 @@
-use super::{BoundaryNode, ImplNode, TypeNode};
+use super::{BoundaryNode, File, Import};
 use crate::prelude::*;
 use petgraph::prelude::*;
 use std::path::Path;
@@ -12,7 +12,7 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Debug)]
-enum Node {
+pub enum Node {
     Boundary { name: Str, exports: NodesList },
     Type { name: Str, imports: NodesList },
     Impl { name: Str, imports: NodesList },
@@ -51,20 +51,75 @@ impl Partitions {
         }
     }
 
-    pub fn extend_root(mut self, fsmap: &super::FsMap) -> Result<Self> {
+    pub fn extend_root(mut self, fsmap: super::FsMap) -> Result<Self> {
+        // Phase 1: Create the structure of the graph given the map
+        //          - we avoid the looking at the imports/exports for now
+        //          - since we destruct the File, the remaining parts need to be stored for later
+
+        let mut exports_map = <HashMap<_, Vec<_>>>::default();
+        let mut imports_col = Vec::new();
+
         let root = self.root;
         for (p, files) in fsmap {
-            let bnd = self.get_or_create_boundary_path(p, root)?;
+            let bnd = self.get_or_create_boundary_path(&p, root)?;
 
             for file in files {
-                for (n, _) in &file.types {
-                    self.add_type(bnd, n)?;
+                // deconstruct the file
+                let File {
+                    doc: _,
+                    directives,
+                    types,
+                    impls,
+                    exprs: _,
+                } = file;
+
+                // deconstruct the imports and exports
+                let (imports, exports) =
+                    directives
+                        .into_iter()
+                        .fold((Vec::new(), Vec::new()), |(mut i, mut e), x| {
+                            match x {
+                                lang::parse::Directive::Import(x) => i.extend(x),
+                                lang::parse::Directive::Export(x) => e.extend(x),
+                                lang::parse::Directive::FailFast
+                                | lang::parse::Directive::NoParallelise => (),
+                            }
+                            (i, e)
+                        });
+
+                // extend the export map with the listed exports from this file,
+                // note that we do not check for names yet, despite knowing the defs
+                if !exports.is_empty() {
+                    exports_map.entry(bnd).or_default().extend(exports);
                 }
 
-                for (n, _) in &file.impls {
-                    self.add_impl(bnd, n)?;
+                // construct a nodes list which imports will be mapped to
+                let mut ns = Vec::with_capacity(types.len() + impls.len());
+
+                for (n, _) in &types {
+                    ns.push(self.add_type(bnd, n)?);
+                }
+
+                for (n, _) in &impls {
+                    ns.push(self.add_impl(bnd, n)?);
+                }
+
+                if !ns.is_empty() && !imports.is_empty() {
+                    imports_col.push((bnd, imports, ns));
                 }
             }
+        }
+
+        // Phase 2: Populate the boundary exports list
+        //          - This list will be required for the imports resolution
+        //          - We also check that all exports exist
+        for (bnd, exports) in exports_map {
+            self.add_exports(bnd, exports)?;
+        }
+
+        // Phase 3: Populate each item's import list
+        for (bnd, imports, nodes) in imports_col {
+            self.add_imports(bnd, imports, nodes)?;
         }
 
         Ok(self)
@@ -141,11 +196,105 @@ impl Partitions {
         Ok(x)
     }
 
-    pub fn find_boundary<'a, P>(&self, path: P) -> Result<BoundaryNode>
+    fn add_exports(&mut self, boundary: NodeIndex, exports: Vec<Tag>) -> Result<()> {
+        if exports.is_empty() {
+            return Ok(());
+        }
+
+        let mut xs = if let Node::Boundary { name: _, exports } = &self.graph[boundary] {
+            exports.to_vec()
+        } else {
+            panic!("`boundary` is not a BoundaryNode");
+        };
+
+        // currently this is a very slow search
+        // <https://github.com/kdr-aus/ogma/issues/184> should be able to speed this up
+        for e in exports {
+            let i = self
+                .graph
+                .neighbors(boundary)
+                .filter(|&n| !self.graph[n].is_boundary())
+                .find(|&n| self.graph[n].name().eq(e.str()))
+                .ok_or_else(|| Error {
+                    cat: err::Category::Definitions,
+                    desc: format!("could not find export item '{e}'"),
+                    traces: err::trace(&e, "exports here".to_string()),
+                    ..Error::default()
+                })?;
+
+            xs.push(i);
+        }
+
+        xs.sort();
+        xs.dedup();
+
+        if let Node::Boundary { name: _, exports } = &mut self.graph[boundary] {
+            *exports = Arc::from(xs);
+        };
+
+        Ok(())
+    }
+
+    fn add_imports(
+        &mut self,
+        boundary: NodeIndex,
+        imports: Vec<Import>,
+        to: Vec<NodeIndex>,
+    ) -> Result<()> {
+        if imports.is_empty() {
+            return Ok(());
+        }
+
+        let mut xs = self.resolve_imports(boundary, imports.iter())?;
+
+        xs.sort();
+        xs.dedup();
+
+        let xs = Arc::from(xs);
+
+        for n in to {
+            match &mut self.graph[n] {
+                Node::Boundary { .. } => (),
+                Node::Type { name: _, imports } => *imports = Arc::clone(&xs),
+                Node::Impl { name: _, imports } => *imports = Arc::clone(&xs),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn resolve_imports<'a, I>(&self, from: NodeIndex, imports: I) -> Result<Vec<NodeIndex>>
+    where
+        I: IntoIterator<Item = &'a Import>,
+    {
+        imports
+            .into_iter()
+            .map(|import| self.resolve_import(from, import))
+            .try_fold(Vec::new(), |mut v, x| {
+                x.map(|x| {
+                    v.extend(x);
+                    v
+                })
+            })
+    }
+
+    fn resolve_import(
+        &self,
+        from: NodeIndex,
+        import: &Import,
+    ) -> Result<impl Iterator<Item = NodeIndex> + '_> {
+        let Import { path, glob } = import;
+
+        let bnd = self.find_boundary(BoundaryNode(from), path)?;
+
+        Ok(self.glob_find(bnd, glob)?.map(|(x, _)| x))
+    }
+
+    pub fn find_boundary<'a, P>(&self, from: BoundaryNode, path: P) -> Result<BoundaryNode>
     where
         P: IntoIterator<Item = &'a Tag>,
     {
-        let mut a = self.root;
+        let mut a = from.into();
 
         for p in path {
             match self
@@ -194,6 +343,27 @@ impl Partitions {
         e.search(n.as_ref())
             .into_iter()
             .map(|n| (n, &self.graph[n]))
+    }
+
+    pub fn glob_find(
+        &self,
+        parent: BoundaryNode,
+        pattern: &Tag,
+    ) -> Result<impl Iterator<Item = (NodeIndex, &Node)>> {
+        let pat = globset::Glob::new(pattern.str())
+            .map_err(|e| Error {
+                cat: err::Category::Parsing,
+                desc: "invalid glob pattern".into(),
+                traces: err::trace(pattern, format!("{e}")),
+                help_msg: None,
+                hard: true,
+            })?
+            .compile_matcher();
+
+        Ok(self.graph.neighbors(parent.into()).filter_map(move |n| {
+            let node = &self.graph[n];
+            pat.is_match(node.name().as_str()).then_some((n, node))
+        }))
     }
 }
 
