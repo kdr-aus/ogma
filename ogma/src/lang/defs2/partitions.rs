@@ -541,14 +541,14 @@ mod tests {
             0:[]
         };
 
-        let p = p.extend_root(&Default::default()).unwrap();
+        let p = p.extend_root(Default::default()).unwrap();
 
         describe! { p =>
             3:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>",}
             0:[]
         };
 
-        let p = p.extend_root(&mkmap([("foo", vec![])])).unwrap();
+        let p = p.extend_root(mkmap([("foo", vec![])])).unwrap();
 
         describe! { p =>
             4:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>", 3: B "foo",}
@@ -556,7 +556,7 @@ mod tests {
         };
 
         let p = p
-            .extend_root(&mkmap([("foo", vec![Ok("TypeA"), Err("impl-a")])]))
+            .extend_root(mkmap([("foo", vec![Ok("TypeA"), Err("impl-a")])]))
             .unwrap();
 
         describe! { p =>
@@ -566,7 +566,7 @@ mod tests {
         };
 
         let p = p
-            .extend_root(&mkmap([("foo/bar/zog", vec![Ok("TypeA"), Err("impl-a")])]))
+            .extend_root(mkmap([("foo/bar/zog", vec![Ok("TypeA"), Err("impl-a")])]))
             .unwrap();
 
         describe! { p =>
@@ -580,7 +580,7 @@ mod tests {
     #[test]
     fn extending_fails() {
         let x = Partitions::new()
-            .extend_root(&mkmap([("foo", vec![Ok("TypeA"), Ok("TypeA")])]))
+            .extend_root(mkmap([("foo", vec![Ok("TypeA"), Ok("TypeA")])]))
             .unwrap_err();
 
         assert_eq!(
@@ -590,12 +590,12 @@ mod tests {
         );
 
         let x = Partitions::new()
-            .extend_root(&mkmap([
+            .extend_root(mkmap([
                 ("foo", vec![Err("impl-a")]),
                 ("foo/bar", vec![Ok("TypeA")]),
             ]))
             .unwrap()
-            .extend_root(&mkmap([("foo", vec![Err("impl-b"), Err("impl-a")])]))
+            .extend_root(mkmap([("foo", vec![Err("impl-b"), Err("impl-a")])]))
             .unwrap_err();
 
         assert_eq!(
@@ -608,12 +608,10 @@ mod tests {
     #[test]
     fn valid_partition_naming() {
         // empty path does not iterate
-        assert!(Partitions::new()
-            .extend_root(&mkmap([("", vec![])]))
-            .is_ok());
+        assert!(Partitions::new().extend_root(mkmap([("", vec![])])).is_ok());
 
         let x = Partitions::new()
-            .extend_root(&mkmap([("🌏", vec![])]))
+            .extend_root(mkmap([("🌏", vec![])]))
             .unwrap_err();
 
         assert_eq!(
@@ -623,7 +621,7 @@ mod tests {
         );
 
         let x = Partitions::new()
-            .extend_root(&mkmap([(" foo", vec![])]))
+            .extend_root(mkmap([(" foo", vec![])]))
             .unwrap_err();
 
         assert_eq!(
@@ -633,7 +631,7 @@ mod tests {
         );
 
         let x = Partitions::new()
-            .extend_root(&mkmap([("1234", vec![])]))
+            .extend_root(mkmap([("1234", vec![])]))
             .unwrap_err();
 
         assert_eq!(
@@ -643,7 +641,7 @@ mod tests {
         );
 
         let x = Partitions::new()
-            .extend_root(&mkmap([("Hello, 🌏", vec![])]))
+            .extend_root(mkmap([("Hello, 🌏", vec![])]))
             .unwrap_err();
 
         assert_eq!(&x.to_string(), "Definition Error: partition name 'Hello, 🌏' is invalid, it contains a character outside of _,-,a-z,A-Z,0-9
