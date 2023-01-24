@@ -1,7 +1,7 @@
 use super::*;
 
 /// File constituents.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct File {
     /// A document string.
     pub doc: Option<String>,
@@ -24,7 +24,7 @@ pub struct File {
 }
 
 /// File directives.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Directive {
     /// Evaluate expressions in order.
     NoParallelise,
@@ -37,7 +37,7 @@ pub enum Directive {
 }
 
 /// An item contains code and an optional documentation string.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Item {
     /// Documentation string.
     pub doc: Option<String>,
@@ -50,12 +50,21 @@ pub struct Item {
 type Glob = Tag;
 
 /// Import path.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Import {
+    /// The prefix location.
+    pub prefix: Prefix,
     /// The leading partition path.
     pub path: Vec<Tag>,
     /// The items glob pattern.
     pub glob: Glob,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Prefix {
+    None,
+    Root,
+    Plugins,
 }
 
 impl File {
@@ -96,7 +105,11 @@ impl Item {
 impl Import {
     /// Create a tag that spans across the _whole import_.
     pub fn tag(&self) -> Tag {
-        let Import { path, glob } = self;
+        let Import {
+            prefix: _,
+            path,
+            glob,
+        } = self;
 
         path.get(0)
             .map(|fst| fst.clone().union(glob))
@@ -292,6 +305,12 @@ fn imports(line: &Line) -> impl FnMut(&str) -> IResult<&str, Vec<Import>, Parsin
 
 fn import(line: &Line) -> impl FnMut(&str) -> IResult<&str, Import, ParsingError> + '_ {
     move |i| {
+        let (i, prefix) = i
+            .strip_prefix("//")
+            .map(|x| (x, Prefix::Plugins))
+            .or_else(|| i.strip_prefix("/").map(|x| (x, Prefix::Root)))
+            .unwrap_or((i, Prefix::None));
+
         let (i, mut path) = separated_list1(
             char('/'),
             take_till1(|c: char| c.is_whitespace() || c == ')' || c == '/'),
@@ -301,10 +320,16 @@ fn import(line: &Line) -> impl FnMut(&str) -> IResult<&str, Import, ParsingError
 
         let path = path
             .into_iter()
-            .map(|p| op_ident(line)(p).map(|(_, x)| x))
+            .map(|p| {
+                if p == ".." {
+                    Ok(line.create_tag(p))
+                } else {
+                    op_ident(line)(p).map(|(_, x)| x)
+                }
+            })
             .collect::<Result<_, _>>()?;
 
-        Ok((i, Import { path, glob }))
+        Ok((i, Import { prefix, path, glob }))
     }
 }
 
@@ -431,17 +456,20 @@ after that"
     #[test]
     fn directive_line_test_03() {
         test_directive_line(
-            "[import(yo yo/path path/?zog)]",
+            "[import(yo yo/path /path/?zog)]",
             Some(vec![Directive::Import(vec![
                 Import {
+                    prefix: Prefix::None,
                     path: vec![],
                     glob: tt("yo"),
                 },
                 Import {
+                    prefix: Prefix::None,
                     path: vec![tt("yo")],
                     glob: tt("path"),
                 },
                 Import {
+                    prefix: Prefix::Root,
                     path: vec![tt("path")],
                     glob: tt("?zog"),
                 },
@@ -452,6 +480,7 @@ after that"
         test_directive_line(
             "[ import( foo ) ]",
             Some(vec![Directive::Import(vec![Import {
+                prefix: Prefix::None,
                 path: vec![],
                 glob: tt("foo"),
             }])]),
@@ -697,6 +726,48 @@ def foo-bar () { }";
     }
 
     #[test]
+    fn file_test_06() {
+        let f = "[import(foo)]
+[import(/zog/../fo?)]
+
+def foo-bar () { }";
+
+        let f = file(f, Location::Shell).unwrap();
+
+        dbg!(&f);
+
+        assert_eq!(f.doc, None);
+        assert_eq!(
+            f.directives,
+            vec![
+                Directive::Import(vec![Import {
+                    prefix: Prefix::None,
+                    path: vec![],
+                    glob: tt("foo"),
+                }]),
+                Directive::Import(vec![Import {
+                    prefix: Prefix::Root,
+                    path: vec![tt("zog"), tt("..")],
+                    glob: tt("fo?"),
+                }]),
+            ]
+        );
+        assert!(f.types.is_empty());
+        assert_eq!(
+            f.impls,
+            vec![(
+                "foo-bar".to_string(),
+                Item {
+                    doc: None,
+                    code: "def foo-bar () { }".to_string(),
+                    line: 4
+                }
+            ),]
+        );
+        assert!(f.exprs.is_empty());
+    }
+
+    #[test]
     fn import_test() {
         fn t(s: &str, exp: Option<Import>) {
             let l = Line::from(s);
@@ -711,6 +782,7 @@ def foo-bar () { }";
         t(
             "yo",
             Some(Import {
+                prefix: Prefix::None,
                 path: vec![],
                 glob: tt("yo"),
             }),
@@ -719,6 +791,7 @@ def foo-bar () { }";
         t(
             "yo/path",
             Some(Import {
+                prefix: Prefix::None,
                 path: vec![tt("yo")],
                 glob: tt("path"),
             }),
@@ -727,6 +800,7 @@ def foo-bar () { }";
         t(
             "yo/path/*",
             Some(Import {
+                prefix: Prefix::None,
                 path: vec![tt("yo"), tt("path")],
                 glob: tt("*"),
             }),
@@ -735,6 +809,7 @@ def foo-bar () { }";
         t(
             "yo/path/{a,b}",
             Some(Import {
+                prefix: Prefix::None,
                 path: vec![tt("yo"), tt("path")],
                 glob: tt("{a,b}"),
             }),
@@ -743,11 +818,39 @@ def foo-bar () { }";
         t(
             "yo/path/[a,b]",
             Some(Import {
+                prefix: Prefix::None,
                 path: vec![tt("yo"), tt("path")],
                 glob: tt("[a,b]"),
             }),
         );
 
         t("yo/*/path", None);
+
+        t(
+            "yo/../path/a",
+            Some(Import {
+                prefix: Prefix::None,
+                path: vec![tt("yo"), tt(".."), tt("path")],
+                glob: tt("a"),
+            }),
+        );
+
+        t(
+            "/yo/../path/a",
+            Some(Import {
+                prefix: Prefix::Root,
+                path: vec![tt("yo"), tt(".."), tt("path")],
+                glob: tt("a"),
+            }),
+        );
+
+        t(
+            "//yo",
+            Some(Import {
+                prefix: Prefix::Plugins,
+                path: vec![],
+                glob: tt("yo"),
+            }),
+        );
     }
 }

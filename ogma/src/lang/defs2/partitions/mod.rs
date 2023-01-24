@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use lang::parse::{File, Import};
+use lang::parse::{File, Import, Prefix};
 use std::{fmt, ops::Index, path::Path};
 
 mod item;
@@ -271,21 +271,22 @@ impl Partitions {
             panic!("`boundary` is not a BoundaryNode");
         };
 
-        // currently this is a very slow search
-        // <https://github.com/kdr-aus/ogma/issues/184> should be able to speed this up
         for e in exports {
-            let i = self
-                .children(boundary)
-                .filter(|&n| !self[n].is_boundary())
-                .find(|&n| self[n].name().eq(e.str()))
-                .ok_or_else(|| Error {
+            let l = xs.len();
+
+            xs.extend(
+                self.glob_find(boundary, &e)?
+                    .filter_map(|(n, node)| (!node.is_boundary()).then_some(n)),
+            );
+
+            if xs.len() == l {
+                return Err(Error {
                     cat: err::Category::Definitions,
-                    desc: format!("could not find export item '{e}'"),
+                    desc: format!("export glob '{e}' does not match any items"),
                     traces: err::trace(&e, "exports here".to_string()),
                     ..Error::default()
-                })?;
-
-            xs.push(i);
+                });
+            }
         }
 
         let xs = PartSet::from_vec(xs, self);
@@ -325,15 +326,24 @@ impl Partitions {
     where
         I: IntoIterator<Item = &'a Import>,
     {
-        imports
-            .into_iter()
-            .map(|import| self.resolve_import(from, import))
-            .try_fold(Vec::new(), |mut v, x| {
-                x.map(|x| {
-                    v.extend(x);
-                    v
+        imports.into_iter().try_fold(Vec::new(), |mut v, import| {
+            let x = self.resolve_import(from, import)?;
+
+            let l = v.len();
+            v.extend(x);
+
+            if v.len() == l {
+                Err(Error {
+                    cat: err::Category::Definitions,
+                    desc: "import directive resulted in no imports".to_string(),
+                    traces: err::trace(&import.tag(), "this import".to_string()),
+                    help_msg: Some("remove the import since it does not do anything".into()),
+                    ..Error::default()
                 })
-            })
+            } else {
+                Ok(v)
+            }
+        })
     }
 
     fn resolve_import(
@@ -341,9 +351,26 @@ impl Partitions {
         from: BoundaryNode,
         import: &Import,
     ) -> Result<impl Iterator<Item = Id> + '_> {
-        let Import { path, glob } = import;
+        let Import { prefix, path, glob } = import;
+        let this = from;
+        let from = match prefix {
+            Prefix::None => from,
+            Prefix::Root => self.root().0,
+            Prefix::Plugins => self.plugins().0,
+        };
         let bnd = self.find_boundary(from, path)?;
-        Ok(self.glob_find(bnd, glob)?.map(|(x, _)| x))
+        let exports = self.exports(bnd);
+        Ok(self
+            .glob_find(bnd, glob)?
+            // do not include the self partition
+            .filter(move |(x, _)| *x != this.id())
+            .filter_map(|(x, n)| {
+                // always import a boundary reference
+                (n.is_boundary() ||
+            // only import if the node is exposed via `export`
+                exports.contains_id(x))
+                .then_some(x)
+            }))
     }
 
     pub fn find_boundary<'a, P>(&self, from: BoundaryNode, path: P) -> Result<BoundaryNode>
@@ -353,6 +380,22 @@ impl Partitions {
         let mut a = from;
 
         for p in path {
+            if p == ".." {
+                // go up a level
+                a = match self[a].parent {
+                    Some(x) => x,
+                    None => {
+                        return Err(Error {
+                            cat: err::Category::Definitions,
+                            desc: "import path goes beyond root".to_string(),
+                            traces: err::trace(p, "this goes beyond the root partiton".to_string()),
+                            ..Error::default()
+                        });
+                    }
+                };
+                continue;
+            }
+
             match self.children(a).find(|&n| self[n].eq_boundary(p)) {
                 Some(b) => a = BoundaryNode(b),
                 None => {
@@ -414,6 +457,10 @@ impl Partitions {
             let node = &self[n];
             pat.is_match(node.name().as_str()).then_some((n, node))
         }))
+    }
+
+    pub fn exports(&self, bnd: BoundaryNode) -> &PartSet {
+        self[bnd].item.exports().expect("boundary node")
     }
 }
 

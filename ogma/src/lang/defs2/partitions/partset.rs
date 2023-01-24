@@ -25,6 +25,22 @@ impl PartSet {
     pub fn to_vec(&self) -> Vec<Id> {
         self.0.to_vec()
     }
+
+    /// Does a linear search for an id match.
+    pub fn contains_id(&self, id: Id) -> bool {
+        self.0.contains(&id)
+    }
+
+    #[cfg(test)]
+    pub fn eq_names(&self, parts: &Partitions, names: &[&str]) -> bool {
+        let names_ = self
+            .0
+            .iter()
+            .map(|&x| parts[x].name().as_str())
+            .collect::<Vec<_>>();
+
+        dbg!(names_).eq(names)
+    }
 }
 
 /// Total ordering for two nodes.
@@ -53,16 +69,20 @@ fn node_cmp(a: &Node, b: &Node) -> Ordering {
 
 #[cfg(test)]
 mod tests {
-    use partset::EMPTY;
     use super::*;
+    use partset::EMPTY;
     use quickcheck::{Arbitrary, Gen};
 
     impl Arbitrary for Node {
         fn arbitrary(g: &mut Gen) -> Self {
             let item = match u8::arbitrary(g) % 3 {
                 0 => Item::empty_boundary(),
-                1 => Item::Type { imports: EMPTY.clone() },
-                2 => Item::Impl { imports: EMPTY.clone() },
+                1 => Item::Type {
+                    imports: EMPTY.clone(),
+                },
+                2 => Item::Impl {
+                    imports: EMPTY.clone(),
+                },
                 _ => unreachable!(),
             };
             Node {

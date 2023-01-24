@@ -1,4 +1,6 @@
 use super::*;
+use lang::parse::*;
+use std::{collections::BTreeMap, path::PathBuf};
 
 macro_rules! describe {
         ($part:expr => $nl:literal:{$($ns:tt)*} [$($es:tt)*]) => {{
@@ -102,7 +104,6 @@ fn extending_partition_graph_with_fsmap() {
         .extend_root(mkmap([("foo", vec![Ok("TypeA"), Err("impl-a")])]))
         .unwrap();
 
-    dbg!(&p);
     describe! { p =>
         6:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>", 3: B "foo",
            4: T "TypeA", 5: I "impl-a", }
@@ -190,4 +191,156 @@ fn valid_partition_naming() {
 
     assert_eq!(&x.to_string(), "Definition Error: partition name 'Hello, 🌏' is invalid, it contains a character outside of _,-,a-z,A-Z,0-9
 ");
+}
+
+fn file(s: &str) -> File {
+    lang::parse::file(s, ast::Location::Shell).unwrap()
+}
+
+#[test]
+fn imports_and_exports_smoke_test() {
+    let mut map = BTreeMap::from_iter([(
+        PathBuf::from("bar"),
+        vec![file(
+            "[export(fin)]
+
+def fin () { }",
+        )],
+    )]);
+
+    let p = Partitions::new().extend_root(map.clone()).unwrap();
+    assert!(p.exports(BoundaryNode(3)).eq_names(&p, &["fin"]));
+
+    map.extend([(
+        PathBuf::from("foo"),
+        vec![file(
+            "[export(*og)]
+
+def zog () {}
+
+def-ty Zog { }",
+        )],
+    )]);
+
+    let p = Partitions::new().extend_root(map.clone()).unwrap();
+    assert!(p.exports(BoundaryNode(3)).eq_names(&p, &["fin"]));
+    assert!(dbg!(p.exports(BoundaryNode(5))).eq_names(&p, &["Zog", "zog"]));
+
+    // test that export does not export boundary
+    map.extend([(
+        PathBuf::from("foo/fog"),
+        vec![file(
+            "
+def zog () {}
+
+def-ty Zog { }",
+        )],
+    )]);
+
+    let p = Partitions::new().extend_root(map.clone()).unwrap();
+    assert!(p.exports(BoundaryNode(3)).eq_names(&p, &["fin"]));
+    assert!(dbg!(p.exports(BoundaryNode(5))).eq_names(&p, &["Zog", "zog"]));
+
+    // test that the export doesn't exist errors
+    let mut err = map.clone();
+    err.extend([(
+        PathBuf::from("foo/foo"),
+        vec![file(
+            "[export(reg)]
+
+def-ty erg { }",
+        )],
+    )]);
+
+    let p = Partitions::new().extend_root(err).unwrap_err().to_string();
+    println!("{p}");
+    assert_eq!(
+        &p,
+        "Definition Error: export glob 'reg' does not match any items
+--> shell:8
+ | [export(reg)]
+ |         ^^^ exports here
+"
+    );
+
+    // test successful imports
+    map.extend([
+        (
+            PathBuf::from("foo/bar"),
+            vec![file(
+                "[import(/bar/*in)]
+[import(../*)]
+[import(inner/*)]
+
+def cool () {}",
+            )],
+        ),
+        (
+            PathBuf::from("foo/bar/inner"),
+            vec![file(
+                "[export(za)]
+
+def za () { }
+
+def zb () { }",
+            )],
+        ),
+    ]);
+
+    let p = Partitions::new().extend_root(map.clone()).unwrap();
+    assert!(p.exports(BoundaryNode(3)).eq_names(&p, &["fin"]));
+    assert!(dbg!(p.exports(BoundaryNode(5))).eq_names(&p, &["Zog", "zog"]));
+    assert!(dbg!(&p[9])
+        .item
+        .imports()
+        .unwrap()
+        .eq_names(&p, &["Zog", "fin", "fog", "za", "zog"]));
+    // notice that foo/fog (boundary) gets imported!
+
+    // test that no import matches results in an error
+    let mut err = map.clone();
+    err.extend([(
+        PathBuf::from("foo/bar"),
+        vec![file(
+            "[import(../fog/zog)]
+    
+def-ty erg { }",
+        )],
+    )]);
+
+    let p = Partitions::new().extend_root(err).unwrap_err().to_string();
+    println!("{p}");
+    assert_eq!(
+        &p,
+        "Definition Error: import directive resulted in no imports
+--> shell:8
+ | [import(../fog/zog)]
+ |         ^^^^^^^^^^ this import
+--> help: remove the import since it does not do anything
+"
+    );
+
+    // test that import path goes beyond root fails
+    let mut err = map.clone();
+    err.extend([(
+        PathBuf::from("foo/bar"),
+        vec![file(
+            "[import(/../foo)]
+    
+def-ty erg { }
+
+def erg { }",
+        )],
+    )]);
+
+    let p = Partitions::new().extend_root(err).unwrap_err().to_string();
+    println!("{p}");
+    assert_eq!(
+        &p,
+        "Definition Error: import path goes beyond root
+--> shell:9
+ | [import(/../foo)]
+ |          ^^ this goes beyond the root partiton
+"
+    );
 }
