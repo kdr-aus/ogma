@@ -60,10 +60,17 @@ pub struct Import {
     pub glob: Glob,
 }
 
+/// Import prefix.
+///
+/// - `/`: root
+/// - `//`: plugins
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Prefix {
+    /// No prefix.
     None,
+    /// From the root.
     Root,
+    /// From the plugins folder.
     Plugins,
 }
 
@@ -308,7 +315,7 @@ fn import(line: &Line) -> impl FnMut(&str) -> IResult<&str, Import, ParsingError
         let (i, prefix) = i
             .strip_prefix("//")
             .map(|x| (x, Prefix::Plugins))
-            .or_else(|| i.strip_prefix("/").map(|x| (x, Prefix::Root)))
+            .or_else(|| i.strip_prefix('/').map(|x| (x, Prefix::Root)))
             .unwrap_or((i, Prefix::None));
 
         let (i, mut path) = separated_list1(

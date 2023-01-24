@@ -1,10 +1,9 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::parse::{File, Import};
+use lang::parse::File;
 use std::{
     collections::BTreeMap,
-    fmt,
     path::{Path, PathBuf},
 };
 
