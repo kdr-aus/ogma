@@ -1,65 +1,96 @@
-use super::{BoundaryNode, File, Import};
 use crate::prelude::*;
-use petgraph::prelude::*;
-use std::path::Path;
+use lang::parse::{File, Import};
+use std::{fmt, ops::Index, path::Path};
 
+mod item;
+mod node;
+mod partset;
 #[cfg(test)]
 mod tests;
 
+use partset::PartSet;
+
 type Id = u32;
 
-type Inner = StableGraph<Node, (), Directed, u32>;
-
-type NodesList = Arc<[NodeIndex]>;
-
-lazy_static::lazy_static! {
-    static ref EMPTY: Arc<[NodeIndex]> = Arc::new([]);
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     name: Str,
-    id: Id,
-    parent: Option<Id>,
+    parent: Option<BoundaryNode>,
     item: Item,
 }
 
+#[derive(Debug, Clone)]
 enum Item {
-    Boundary { exports: Vec<Id>, children: Vec<Id> },
-    Type { imports: NodesList },
-    Impl { imports: NodesList },
+    Boundary { exports: PartSet, children: Vec<Id> },
+    Type { imports: PartSet },
+    Impl { imports: PartSet },
 }
 
+// Partitions are stored as a flat list of nodes
+// Each node has a tree like structure, an optional parent and optional children
+// There is no way to remove nodes, so node indices are stable
+// There are 3 root nodes, [root, shell, plugins]
+
 #[derive(Debug)]
-pub struct Partitions {
-    root: Id,
-    shell: Id,
-    plugins: Id,
-    nodes: Vec<Node>,
+pub struct Partitions(Vec<Node>);
+
+macro_rules! node_wrapper {
+    ($($n:ident)*) => {
+        $(
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct $n(pub Id);
+impl $n {
+    pub fn id(self) -> Id {
+        self.0
+    }
 }
+impl From<$n> for Id {
+    fn from(n: $n) -> Self {
+        n.id()
+    }
+}
+impl fmt::Display for $n {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+        )*
+    }
+}
+
+node_wrapper! { BoundaryNode TypeNode ImplNode }
 
 impl Partitions {
     pub fn new() -> Self {
-        let mut graph = Inner::new();
-        let root = graph.add_node(Node::Boundary {
+        let root = Node {
             name: "<root>".into(),
-            exports: EMPTY.clone(),
-        });
-        let shell = graph.add_node(Node::Boundary {
+            parent: None,
+            item: Item::empty_boundary(),
+        };
+        let shell = Node {
             name: "<shell>".into(),
-            exports: EMPTY.clone(),
-        });
-        let plugins = graph.add_node(Node::Boundary {
+            parent: None,
+            item: Item::empty_boundary(),
+        };
+        let plugins = Node {
             name: "<plugins>".into(),
-            exports: EMPTY.clone(),
-        });
+            parent: None,
+            item: Item::empty_boundary(),
+        };
 
-        Self {
-            root,
-            shell,
-            plugins,
-            graph,
-        }
+        Partitions(vec![root, shell, plugins])
+    }
+
+    pub fn root(&self) -> (BoundaryNode, &Node) {
+        (BoundaryNode(0), &self.0[0])
+    }
+
+    pub fn shell(&self) -> (BoundaryNode, &Node) {
+        (BoundaryNode(1), &self.0[1])
+    }
+
+    pub fn plugins(&self) -> (BoundaryNode, &Node) {
+        (BoundaryNode(2), &self.0[2])
     }
 
     pub fn extend_root(mut self, fsmap: super::FsMap) -> Result<Self> {
@@ -70,7 +101,7 @@ impl Partitions {
         let mut exports_map = <HashMap<_, Vec<_>>>::default();
         let mut imports_col = Vec::new();
 
-        let root = self.root;
+        let root = self.root().0;
         for (p, files) in fsmap {
             let bnd = self.get_or_create_boundary_path(&p, root)?;
 
@@ -108,11 +139,11 @@ impl Partitions {
                 let mut ns = Vec::with_capacity(types.len() + impls.len());
 
                 for (n, _) in &types {
-                    ns.push(self.add_type(bnd, n)?);
+                    ns.push(self.add_type(bnd, n)?.id());
                 }
 
                 for (n, _) in &impls {
-                    ns.push(self.add_impl(bnd, n)?);
+                    ns.push(self.add_impl(bnd, n)?.id());
                 }
 
                 if !ns.is_empty() && !imports.is_empty() {
@@ -136,83 +167,105 @@ impl Partitions {
         Ok(self)
     }
 
-    fn get_or_create_boundary_path(&mut self, path: &Path, root: NodeIndex) -> Result<NodeIndex> {
+    /// General adding of a node.
+    ///
+    /// Since all the nodes must have a parent (the root nodes are initialised), this handles
+    /// linking the child and the parent. Returns the id of the new child.
+    fn add_node<N>(&mut self, parent: BoundaryNode, name: N, item: Item) -> Id
+    where
+        N: Into<Str>,
+    {
+        let child = self.0.len() as Id;
+        self.0.push(Node {
+            name: name.into(),
+            parent: Some(parent),
+            item,
+        });
+        if let Item::Boundary { children, .. } = &mut self.get_mut(parent).item {
+            children.push(child);
+        }
+
+        child
+    }
+
+    /// # Panics
+    /// Panics if `node` is not within `self`.
+    ///
+    /// There is no optional way to get something by index, so leave this function private.
+    fn get_mut<I: Into<Id>>(&mut self, node: I) -> &mut Node {
+        &mut self.0[node.into() as usize]
+    }
+
+    fn get_or_create_boundary_path(
+        &mut self,
+        path: &Path,
+        root: BoundaryNode,
+    ) -> Result<BoundaryNode> {
         let mut a = root;
         for p in path.iter() {
-            let b = self
-                .graph
-                .neighbors(root)
-                .find(|&n| self.graph[n].eq_boundary(p));
+            let b = self.children(a).find(|&n| self[n].eq_boundary(p));
             let b = match b {
                 Some(b) => b,
                 None => {
                     let name = p.to_str().map(Str::new).unwrap_or_default();
-
                     is_valid_part_name(&name)?;
-
-                    let b = self.graph.add_node(Node::Boundary {
-                        name,
-                        exports: EMPTY.clone(),
-                    });
-                    self.graph.add_edge(a, b, ());
-                    b
+                    self.add_node(a, name, Item::empty_boundary())
                 }
             };
 
-            a = b; // next node
+            a = BoundaryNode(b); // next node
         }
 
         Ok(a)
     }
 
-    fn add_type<N: Into<Str>>(&mut self, parent: NodeIndex, name: N) -> Result<NodeIndex> {
+    fn children(&self, bnd: BoundaryNode) -> impl ExactSizeIterator<Item = Id> + '_ {
+        match &self[bnd].item {
+            Item::Boundary { children, .. } => children.iter().copied(),
+            _ => panic!("{bnd} is not a boundary node"),
+        }
+    }
+
+    fn add_type<N: Into<Str>>(&mut self, parent: BoundaryNode, name: N) -> Result<TypeNode> {
         let name = name.into();
-        let exists = self
-            .graph
-            .neighbors(parent)
-            .any(|n| self.graph[n].eq_type(&name));
+        let exists = self.children(parent).any(|n| self[n].eq_type(&name));
 
         if exists {
             return Err(item_already_defined("type", &name));
         }
 
-        let x = self.graph.add_node(Node::Type {
+        Ok(TypeNode(self.add_node(
+            parent,
             name,
-            imports: EMPTY.clone(),
-        });
-
-        self.graph.add_edge(parent, x, ());
-
-        Ok(x)
+            Item::Type {
+                imports: partset::EMPTY.clone(),
+            },
+        )))
     }
 
-    fn add_impl<N: Into<Str>>(&mut self, parent: NodeIndex, name: N) -> Result<NodeIndex> {
+    fn add_impl<N: Into<Str>>(&mut self, parent: BoundaryNode, name: N) -> Result<ImplNode> {
         let name = name.into();
-        let exists = self
-            .graph
-            .neighbors(parent)
-            .any(|n| self.graph[n].eq_impl(&name));
+        let exists = self.children(parent).any(|n| self[n].eq_impl(&name));
 
         if exists {
             return Err(item_already_defined("impl", &name));
         }
 
-        let x = self.graph.add_node(Node::Impl {
+        Ok(ImplNode(self.add_node(
+            parent,
             name,
-            imports: EMPTY.clone(),
-        });
-
-        self.graph.add_edge(parent, x, ());
-
-        Ok(x)
+            Item::Impl {
+                imports: partset::EMPTY.clone(),
+            },
+        )))
     }
 
-    fn add_exports(&mut self, boundary: NodeIndex, exports: Vec<Tag>) -> Result<()> {
+    fn add_exports(&mut self, boundary: BoundaryNode, exports: Vec<Tag>) -> Result<()> {
         if exports.is_empty() {
             return Ok(());
         }
 
-        let mut xs = if let Node::Boundary { name: _, exports } = &self.graph[boundary] {
+        let mut xs = if let Item::Boundary { exports, .. } = &self[boundary].item {
             exports.to_vec()
         } else {
             panic!("`boundary` is not a BoundaryNode");
@@ -222,10 +275,9 @@ impl Partitions {
         // <https://github.com/kdr-aus/ogma/issues/184> should be able to speed this up
         for e in exports {
             let i = self
-                .graph
-                .neighbors(boundary)
-                .filter(|&n| !self.graph[n].is_boundary())
-                .find(|&n| self.graph[n].name().eq(e.str()))
+                .children(boundary)
+                .filter(|&n| !self[n].is_boundary())
+                .find(|&n| self[n].name().eq(e.str()))
                 .ok_or_else(|| Error {
                     cat: err::Category::Definitions,
                     desc: format!("could not find export item '{e}'"),
@@ -236,11 +288,10 @@ impl Partitions {
             xs.push(i);
         }
 
-        xs.sort();
-        xs.dedup();
+        let xs = PartSet::from_vec(xs, self);
 
-        if let Node::Boundary { name: _, exports } = &mut self.graph[boundary] {
-            *exports = Arc::from(xs);
+        if let Item::Boundary { exports, .. } = &mut self.get_mut(boundary).item {
+            *exports = xs;
         };
 
         Ok(())
@@ -248,33 +299,29 @@ impl Partitions {
 
     fn add_imports(
         &mut self,
-        boundary: NodeIndex,
+        boundary: BoundaryNode,
         imports: Vec<Import>,
-        to: Vec<NodeIndex>,
+        to: Vec<Id>,
     ) -> Result<()> {
         if imports.is_empty() {
             return Ok(());
         }
 
-        let mut xs = self.resolve_imports(boundary, imports.iter())?;
-
-        xs.sort();
-        xs.dedup();
-
-        let xs = Arc::from(xs);
+        let xs = self.resolve_imports(boundary, imports.iter())?;
+        let xs = PartSet::from_vec(xs, self);
 
         for n in to {
-            match &mut self.graph[n] {
-                Node::Boundary { .. } => (),
-                Node::Type { name: _, imports } => *imports = Arc::clone(&xs),
-                Node::Impl { name: _, imports } => *imports = Arc::clone(&xs),
+            match &mut self.get_mut(n).item {
+                Item::Boundary { .. } => (),
+                Item::Type { imports } => *imports = xs.clone(),
+                Item::Impl { imports } => *imports = xs.clone(),
             }
         }
 
         Ok(())
     }
 
-    fn resolve_imports<'a, I>(&self, from: NodeIndex, imports: I) -> Result<Vec<NodeIndex>>
+    fn resolve_imports<'a, I>(&self, from: BoundaryNode, imports: I) -> Result<Vec<Id>>
     where
         I: IntoIterator<Item = &'a Import>,
     {
@@ -291,13 +338,11 @@ impl Partitions {
 
     fn resolve_import(
         &self,
-        from: NodeIndex,
+        from: BoundaryNode,
         import: &Import,
-    ) -> Result<impl Iterator<Item = NodeIndex> + '_> {
+    ) -> Result<impl Iterator<Item = Id> + '_> {
         let Import { path, glob } = import;
-
-        let bnd = self.find_boundary(BoundaryNode(from), path)?;
-
+        let bnd = self.find_boundary(from, path)?;
         Ok(self.glob_find(bnd, glob)?.map(|(x, _)| x))
     }
 
@@ -305,15 +350,11 @@ impl Partitions {
     where
         P: IntoIterator<Item = &'a Tag>,
     {
-        let mut a = from.into();
+        let mut a = from;
 
         for p in path {
-            match self
-                .graph
-                .neighbors(a)
-                .find(|&n| self.graph[n].eq_boundary(p))
-            {
-                Some(b) => a = b,
+            match self.children(a).find(|&n| self[n].eq_boundary(p)) {
+                Some(b) => a = BoundaryNode(b),
                 None => {
                     let mut e = Error {
                         cat: err::Category::Definitions,
@@ -338,29 +379,27 @@ impl Partitions {
             }
         }
 
-        Ok(BoundaryNode(a))
+        Ok(a)
     }
 
     fn fuzzy_find<P: AsRef<str>>(
         &self,
-        parent: NodeIndex,
+        parent: BoundaryNode,
         n: P,
-    ) -> impl Iterator<Item = (NodeIndex, &Node)> {
+    ) -> impl Iterator<Item = (Id, &Node)> {
         let mut e = simsearch::SimSearch::new();
-        for n in self.graph.neighbors(parent) {
-            e.insert(n, self.graph[n].name())
+        for n in self.children(parent) {
+            e.insert(n, self[n].name())
         }
 
-        e.search(n.as_ref())
-            .into_iter()
-            .map(|n| (n, &self.graph[n]))
+        e.search(n.as_ref()).into_iter().map(|n| (n, &self[n]))
     }
 
     pub fn glob_find(
         &self,
         parent: BoundaryNode,
         pattern: &Tag,
-    ) -> Result<impl Iterator<Item = (NodeIndex, &Node)>> {
+    ) -> Result<impl Iterator<Item = (Id, &Node)>> {
         let pat = globset::Glob::new(pattern.str())
             .map_err(|e| Error {
                 cat: err::Category::Parsing,
@@ -371,56 +410,48 @@ impl Partitions {
             })?
             .compile_matcher();
 
-        Ok(self.graph.neighbors(parent.into()).filter_map(move |n| {
-            let node = &self.graph[n];
+        Ok(self.children(parent).filter_map(move |n| {
+            let node = &self[n];
             pat.is_match(node.name().as_str()).then_some((n, node))
         }))
     }
 }
 
-impl Node {
-    pub fn name(&self) -> &Str {
-        match self {
-            Node::Boundary { name, .. } => name,
-            Node::Type { name, .. } => name,
-            Node::Impl { name, .. } => name,
-        }
-    }
+impl Index<BoundaryNode> for Partitions {
+    type Output = Node;
 
-    pub fn is_boundary(&self) -> bool {
-        matches!(self, Node::Boundary { .. })
+    fn index(&self, i: BoundaryNode) -> &Node {
+        let x = &self.0[i.id() as usize];
+        assert!(x.is_boundary());
+        x
     }
+}
 
-    pub fn is_type(&self) -> bool {
-        matches!(self, Node::Type { .. })
+impl Index<TypeNode> for Partitions {
+    type Output = Node;
+
+    fn index(&self, i: TypeNode) -> &Node {
+        let x = &self.0[i.id() as usize];
+        assert!(x.is_type());
+        x
     }
+}
 
-    pub fn is_impl(&self) -> bool {
-        matches!(self, Node::Impl { .. })
+impl Index<ImplNode> for Partitions {
+    type Output = Node;
+
+    fn index(&self, i: ImplNode) -> &Node {
+        let x = &self.0[i.id() as usize];
+        assert!(x.is_impl());
+        x
     }
+}
 
-    pub fn eq_boundary<N: PartialEq<str> + ?Sized>(&self, name: &N) -> bool {
-        if let Node::Boundary { name: n, .. } = self {
-            name.eq(n.as_str())
-        } else {
-            false
-        }
-    }
+impl Index<Id> for Partitions {
+    type Output = Node;
 
-    pub fn eq_type<N: PartialEq<str> + ?Sized>(&self, name: &N) -> bool {
-        if let Node::Type { name: n, .. } = self {
-            name.eq(n.as_str())
-        } else {
-            false
-        }
-    }
-
-    pub fn eq_impl<N: PartialEq<str> + ?Sized>(&self, name: &N) -> bool {
-        if let Node::Impl { name: n, .. } = self {
-            name.eq(n.as_str())
-        } else {
-            false
-        }
+    fn index(&self, i: Id) -> &Node {
+        &self.0[i as usize]
     }
 }
 

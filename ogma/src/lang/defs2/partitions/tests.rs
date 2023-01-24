@@ -1,10 +1,8 @@
-
 use super::*;
 
 macro_rules! describe {
-        ($part:expr => $nl:literal:{$($ns:tt)*} $el:literal:[$($es:tt)*]) => {{
-            assert_eq!($part.graph.node_count(), $nl);
-            assert_eq!($part.graph.edge_count(), $el);
+        ($part:expr => $nl:literal:{$($ns:tt)*} [$($es:tt)*]) => {{
+            assert_eq!($part.0.len(), $nl);
             describe!(@node $part, $($ns)*);
             describe!(@edge $part, $($es)*);
         }};
@@ -12,33 +10,23 @@ macro_rules! describe {
             $(describe!(@node1 $t $part, $idx, $name);)*
         }};
         (@node1 B $part:expr, $idx:literal, $name:literal) => {{
-            let n = $part.graph.node_weight(NodeIndex::from($idx))
-                .expect(&format!("node with index {}", $idx));
-            match n {
-                Node::Boundary { name , .. } => assert_eq!(name, $name),
-                x => panic!("expecting Boundary node at {}, found: {x:?}", $idx),
-            };
+            let n = $part.0.get($idx).expect(&format!("node with index {}", $idx));
+            assert_eq!(n.name(), $name);
+            assert!(n.is_boundary(), "expecting Boundary node at {}", $idx);
         }};
         (@node1 T $part:expr, $idx:literal, $name:literal) => {{
-            let n = $part.graph.node_weight(NodeIndex::from($idx))
-                .expect(&format!("node with index {}", $idx));
-            match n {
-                Node::Type { name , .. } => assert_eq!(name, $name),
-                x => panic!("expecting Type node at {}, found: {x:?}", $idx),
-            };
+            let n = $part.0.get($idx).expect(&format!("node with index {}", $idx));
+            assert_eq!(n.name(), $name);
+            assert!(n.is_type(), "expecting Type node at {}", $idx);
         }};
         (@node1 I $part:expr, $idx:literal, $name:literal) => {{
-            let n = $part.graph.node_weight(NodeIndex::from($idx))
-                .expect(&format!("node with index {}", $idx));
-            match n {
-                Node::Impl { name , .. } => assert_eq!(name, $name),
-                x => panic!("expecting Boundary node at {}, found: {x:?}", $idx),
-            };
+            let n = $part.0.get($idx).expect(&format!("node with index {}", $idx));
+            assert_eq!(n.name(), $name);
+            assert!(n.is_impl(), "expecting Impl node at {}", $idx);
         }};
         (@edge $part:expr, $($a:literal -> $b:literal ,)*) => {{
             $(
-                assert!($part.graph.contains_edge(
-                    NodeIndex::from($a), NodeIndex::from($b)));
+                assert!($part.children(BoundaryNode($a)).any(|n| n == $b));
             )*
         }};
     }
@@ -72,36 +60,53 @@ where
 }
 
 #[test]
+fn assert_root_nodes() {
+    let p = Partitions::new();
+    let (a, b) = p.root();
+    assert_eq!(a, BoundaryNode(0));
+    assert_eq!(b.name(), "<root>");
+
+    let (a, b) = p.shell();
+    assert_eq!(a, BoundaryNode(1));
+    assert_eq!(b.name(), "<shell>");
+
+    let (a, b) = p.plugins();
+    assert_eq!(a, BoundaryNode(2));
+    assert_eq!(b.name(), "<plugins>");
+}
+
+#[test]
 fn extending_partition_graph_with_fsmap() {
     let p = Partitions::new();
 
     describe! { p =>
         3:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>",}
-        0:[]
+        []
     };
 
     let p = p.extend_root(Default::default()).unwrap();
 
     describe! { p =>
         3:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>",}
-        0:[]
+        []
     };
 
     let p = p.extend_root(mkmap([("foo", vec![])])).unwrap();
 
     describe! { p =>
         4:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>", 3: B "foo",}
-        1:[0 -> 3,]
+        [0 -> 3,]
     };
 
     let p = p
         .extend_root(mkmap([("foo", vec![Ok("TypeA"), Err("impl-a")])]))
         .unwrap();
 
+    dbg!(&p);
     describe! { p =>
         6:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>", 3: B "foo",
            4: T "TypeA", 5: I "impl-a", }
-        3:[0->3, 3->4, 3->5,]
+        [0->3, 3->4, 3->5,]
     };
 
     let p = p
@@ -112,7 +117,7 @@ fn extending_partition_graph_with_fsmap() {
         10:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>", 3: B "foo",
             4: T "TypeA", 5: I "impl-a",
             6: B "bar", 7: B "zog", 8: T "TypeA", 9: I "impl-a",}
-        7:[0->3,3->4,3->5,3->6,6->7,7->8,7->9,]
+        [0->3,3->4,3->5,3->6,6->7,7->8,7->9,]
     };
 }
 

@@ -1,6 +1,11 @@
 //! Table expression system.
 #![warn(missing_docs)]
-#![recursion_limit = "256"]
+
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
 
 pub mod common;
 pub mod eng;

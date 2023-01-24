@@ -28,6 +28,11 @@ serde = { version = "1", features = ["derive"] }
 simsearch = "0.2"
 time = { version = "0.3", features = ["formatting", "macros"] }
 
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"
+
 [[test]]
 name = "commands"
 path = "tests/commands/mod.rs"
+
