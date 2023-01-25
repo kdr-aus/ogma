@@ -19,7 +19,15 @@ pub struct Definitions {
     types: HashMap<TypeNode, ()>,
 }
 
-impl Definitions {}
+impl Definitions {
+    pub fn new() -> Self {
+        Self {
+            partitions: Partitions::new(),
+            impls: HashMap::default(),
+            types: HashMap::default(),
+        }
+    }
+}
 
 type FsMap = BTreeMap<PathBuf, Vec<File>>;
 

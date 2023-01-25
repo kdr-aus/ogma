@@ -140,14 +140,9 @@ fn extending_fails() {
             ("foo/bar", vec![Ok("TypeA")]),
         ]))
         .unwrap()
-        .extend_root(mkmap([("foo", vec![Err("impl-b"), Err("impl-a")])]))
-        .unwrap_err();
+        .extend_root(mkmap([("foo", vec![Err("impl-b"), Err("impl-a")])]));
 
-    assert_eq!(
-        &x.to_string(),
-        "Definition Error: the impl 'impl-a' is already defined
-"
-    );
+    assert!(x.is_ok()); // duplicate impls allowed (to allow for type input variance)
 }
 
 #[test]
@@ -343,4 +338,28 @@ def erg { }",
  |          ^^ this goes beyond the root partiton
 "
     );
+}
+
+#[test]
+fn duplicate_defs_on_types_work() {
+    let p = Partitions::new()
+        .extend_root(FromIterator::from_iter([(
+            PathBuf::from("foo"),
+            vec![
+                file("def foo () { }"),
+                file(
+                    "def foo Num () { }
+
+def foo Str () { }",
+                ),
+            ],
+        )]))
+        .unwrap();
+
+    describe! { p =>
+        7:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>"
+          ,3: B "foo", 4: I "foo", 5: I "foo", 6: I "foo"
+          ,}
+        []
+    };
 }

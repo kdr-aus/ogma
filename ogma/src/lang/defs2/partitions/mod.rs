@@ -245,11 +245,6 @@ impl Partitions {
 
     fn add_impl<N: Into<Str>>(&mut self, parent: BoundaryNode, name: N) -> Result<ImplNode> {
         let name = name.into();
-        let exists = self.children(parent).any(|n| self[n].eq_impl(&name));
-
-        if exists {
-            return Err(item_already_defined("impl", &name));
-        }
 
         Ok(ImplNode(self.add_node(
             parent,
