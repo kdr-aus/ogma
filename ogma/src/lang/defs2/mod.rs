@@ -27,6 +27,14 @@ impl Definitions {
             types: HashMap::default(),
         }
     }
+
+    pub fn impls(&self) -> Impls {
+        Impls(self)
+    }
+
+    pub fn types(&self) -> Types {
+        Types(self)
+    }
 }
 
 type FsMap = BTreeMap<PathBuf, Vec<File>>;
@@ -104,4 +112,134 @@ fn parse_file(file: PathBuf) -> Result<File> {
     })?;
     let loc = Location::File(file.into(), 0);
     lang::parse::file(&s, loc)
+}
+
+/// A trait for polymorphic fallible return values when getting from a data structure.
+///
+/// The trait is intended to be used where a result return is only able to be made when the key has
+/// enough information to build an `Error`.
+///
+/// For now, the trait is concrete in a few types since it is designed for use with the
+/// [`Definitions`].
+///
+/// The `R` specifies the wrapped success value.
+///
+/// A blanket implementation would look for all `R` is advised.
+pub trait PolyGet<R> {
+    /// The output type (ie `Option<R>` or `Result<R, Error>`).
+    type Output;
+
+    /// There needs to be a common key which is used.
+    fn key(&self) -> &str;
+
+    /// Wrap a successful get.
+    fn success(r: R) -> Self::Output;
+
+    /// On unsuccessful get, if a `&Tag` can be provided, an `Error`
+    /// can be built. Since the `Error` is contextual from the function,
+    /// a closure is supplied as the builder.
+    /// The implementor decides whether to invoke the function or not.
+    fn fail<E>(e: E) -> Self::Output
+    where
+        E: FnOnce(&Tag) -> Error;
+}
+
+/// Consistent access API of definition items.
+pub trait DefItems {
+    type Item;
+    type Iter: Iterator;
+
+    /// Contains the item under key.
+    fn contains(&self, key: &str) -> bool;
+
+    /// Get the item under key.
+    fn get<'a, K>(&'a self, key: &K) -> K::Output
+    where
+        K: PolyGet<&'a Self::Item>;
+
+    /// Get the item's help under key.
+    fn help<K>(&self, key: &K) -> K::Output
+    where
+        K: PolyGet<Error>;
+
+    /// Return an iterator over all the items.
+    fn iter(&self) -> Self::Iter;
+}
+
+pub struct Impls<'a>(&'a Definitions);
+
+pub struct Types<'a>(&'a Definitions);
+
+impl<'a> DefItems for Impls<'a> {
+    type Item = Implementation;
+    type Iter = ImplsIter;
+
+    fn contains(&self, key: &str) -> bool {
+        todo!()
+    }
+
+    fn get<'b, K>(&'b self, key: &K) -> K::Output
+    where
+        K: PolyGet<&'b Self::Item>,
+    {
+        todo!()
+    }
+
+    fn help<K>(&self, key: &K) -> K::Output
+    where
+        K: PolyGet<Error>,
+    {
+        todo!()
+    }
+
+    fn iter(&self) -> Self::Iter {
+        todo!()
+    }
+}
+
+impl<'a> DefItems for Types<'a> {
+    type Item = Type;
+    type Iter = TypesIter;
+
+    fn contains(&self, key: &str) -> bool {
+        todo!()
+    }
+
+    fn get<'b, K>(&'b self, key: &K) -> K::Output
+    where
+        K: PolyGet<&'b Self::Item>,
+    {
+        todo!()
+    }
+
+    fn help<K>(&self, key: &K) -> K::Output
+    where
+        K: PolyGet<Error>,
+    {
+        todo!()
+    }
+
+    fn iter(&self) -> Self::Iter {
+        todo!()
+    }
+}
+
+pub struct ImplsIter {}
+
+pub struct TypesIter {}
+
+impl Iterator for ImplsIter {
+    type Item = ();
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
+impl Iterator for TypesIter {
+    type Item = ();
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
 }
