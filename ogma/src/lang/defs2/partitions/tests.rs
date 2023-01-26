@@ -363,3 +363,69 @@ def foo Str () { }",
         []
     };
 }
+
+#[test]
+fn assert_partset_find_characteristics() {
+    let p = Partitions::new()
+        .extend_root(FromIterator::from_iter([
+            (
+                PathBuf::from("foo"),
+                vec![file(
+                    "def foo () { }
+
+def-ty Foo () { }",
+                )],
+            ),
+            (
+                PathBuf::from("foo/bar"),
+                vec![file(
+                    "
+def foo () { }
+
+def bar () { }
+
+def zog () { }
+
+def zog () { }",
+                )],
+            ),
+        ]))
+        .unwrap();
+
+    describe! { p =>
+        11:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>"
+          ,3: B "foo", 4: T "Foo", 5: I "foo"
+          ,6: B "bar", 7: I "foo", 8: I "bar", 9: I "zog", 10: I "zog"
+          ,}
+        []
+    };
+
+    let ps = PartSet::from_vec(vec![], &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("zog", &p).collect::<Vec<u32>>().is_empty());
+
+    let ps = PartSet::from_vec(vec![3, 7], &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("zog", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("bar", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("foo", &p).collect::<Vec<u32>>(), vec![3, 7]);
+
+    let ps = PartSet::from_vec(vec![3, 7, 4, 9], &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("zog", &p).collect::<Vec<u32>>(), vec![9]);
+    assert!(ps.find("bar", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("foo", &p).collect::<Vec<u32>>(), vec![3, 7]);
+    assert_eq!(ps.find("Foo", &p).collect::<Vec<u32>>(), vec![4]);
+
+    let ps = PartSet::from_vec((0..11).collect(), &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("as", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("foo", &p).collect::<Vec<u32>>(), vec![3, 5, 7]);
+    assert_eq!(ps.find("Foo", &p).collect::<Vec<u32>>(), vec![4]);
+    assert_eq!(ps.find("bar", &p).collect::<Vec<u32>>(), vec![6, 8]);
+    assert_eq!(ps.find("zog", &p).collect::<Vec<u32>>(), vec![9, 10]);
+}
