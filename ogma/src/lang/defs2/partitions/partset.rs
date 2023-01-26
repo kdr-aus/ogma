@@ -20,11 +20,15 @@ impl PartSet {
     }
 
     pub fn from_vec(mut ids: Vec<Id>, parts: &Partitions) -> Self {
-        ids.sort(); // first sort by Id to deduplicate
-        ids.dedup(); // remove duplicate ids
-        ids.sort_by(|&a, &b| node_cmp(&parts[a], &parts[b])); // sort for retrieval
+        if ids.is_empty() {
+            EMPTY.clone()
+        } else {
+            ids.sort(); // first sort by Id to deduplicate
+            ids.dedup(); // remove duplicate ids
+            ids.sort_by(|&a, &b| node_cmp(&parts[a], &parts[b])); // sort for retrieval
 
-        PartSet(Arc::from(ids))
+            PartSet(Arc::from(ids))
+        }
     }
 
     pub fn to_vec(&self) -> Vec<Id> {

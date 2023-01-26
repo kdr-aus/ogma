@@ -429,3 +429,77 @@ def zog () { }",
     assert_eq!(ps.find("bar", &p).collect::<Vec<u32>>(), vec![6, 8]);
     assert_eq!(ps.find("zog", &p).collect::<Vec<u32>>(), vec![9, 10]);
 }
+
+#[test]
+fn assert_find_characteristics() {
+    let p = Partitions::new()
+        .extend_root(FromIterator::from_iter([
+            (
+                PathBuf::from("foo"),
+                vec![file(
+                    "def foo () { }
+
+def-ty Foo () { }",
+                )],
+            ),
+            (
+                PathBuf::from("foo/bar"),
+                vec![file(
+                    "
+def foo () { }
+
+def bar () { }
+
+def zog () { }
+
+def zog () { }",
+                )],
+            ),
+        ]))
+        .unwrap();
+
+    describe! { p =>
+        11:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>"
+          ,3: B "foo", 4: T "Foo", 5: I "foo"
+          ,6: B "bar", 7: I "foo", 8: I "bar", 9: I "zog", 10: I "zog"
+          ,}
+        [0->3,3->4,3->5,
+         3->6,6->7,6->8,6->9,6->10,
+        ]
+    };
+
+    assert!(p.find(p.root().0, PartSet::empty(), "zog").is_empty());
+    assert!(p.find(p.root().0, PartSet::empty(), "foo/zog").is_empty());
+    assert!(p.find(p.root().0, PartSet::empty(), "..").is_empty());
+    assert!(p.find(p.root().0, PartSet::empty(), "../foo").is_empty());
+
+    assert_eq!(
+        p.find(p.root().0, PartSet::empty(), "foo/bar/zog"),
+        vec![9, 10]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![3], &p), "foo/bar/zog"),
+        vec![9, 10]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![6], &p), "bar/zog"),
+        vec![9, 10]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![6], &p), "bar/../Foo"),
+        vec![4]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![3], &p), "foo/foo"),
+        vec![5]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![3, 6], &p), "foo/foo"),
+        vec![5]
+    );
+    assert_eq!(p.find(BoundaryNode(6), PartSet::empty(), "../Foo"), vec![4]);
+    assert_eq!(
+        p.find(BoundaryNode(6), PartSet::empty(), "../../foo"),
+        vec![3]
+    );
+}
