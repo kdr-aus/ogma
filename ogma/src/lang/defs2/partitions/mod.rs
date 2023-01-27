@@ -10,7 +10,7 @@ mod tests;
 
 use partset::PartSet;
 
-type Id = u32;
+pub type Id = u32;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -490,7 +490,7 @@ impl Partitions {
     fn find(&self, within: BoundaryNode, imports: &PartSet, path: &str) -> Vec<Id> {
         debug_assert!(!path.is_empty(), "path string cannot be empty");
 
-        let (mut bnds, mut path) = if let Some(path) = path.strip_prefix("//") {
+        let (mut bnds, path) = if let Some(path) = path.strip_prefix("//") {
             (vec![self.plugins().0.id()], path.split('/'))
         } else if let Some(path) = path.strip_prefix('/') {
             (vec![self.root().0.id()], path.split('/'))
@@ -516,7 +516,7 @@ impl Partitions {
 
         let scratch = &mut Vec::new();
 
-        while let Some(x) = path.next() {
+        for x in path {
             scratch.clear();
 
             if x == ".." {
@@ -541,6 +541,16 @@ impl Partitions {
         bnds.dedup();
 
         bnds
+    }
+
+    pub fn bnd_and_imports<I: Into<Id>>(&self, id: I) -> (BoundaryNode, &PartSet) {
+        let id = id.into();
+        let n = &self[id];
+        match (n.parent, &n.item) {
+            (None, _) => (self.root().0, PartSet::empty()),
+            (Some(x), Item::Boundary { .. }) => (x, PartSet::empty()),
+            (Some(x), Item::Type { imports } | Item::Impl { imports }) => (x, imports),
+        }
     }
 }
 
