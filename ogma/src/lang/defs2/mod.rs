@@ -24,11 +24,25 @@ pub struct Definitions {
 
 impl Definitions {
     pub fn new() -> Self {
-        Self {
+        let this = Self {
             partitions: Partitions::new(),
             impls: HashMap::default(),
             types: HashMap::default(),
+        };
+
+        // initialise the core types
+        let (this, tydefs) = types::init(this);
+
+        // initialise the core impls
+        let mut this = lang::impls::init(this);
+
+        // add in the initialisation impls for tydefs
+        for x in tydefs {
+            lang::impls::add_typedef_init_impls2(&mut this, x);
         }
+
+        // add derived impls
+        lang::impls::init_derived_impls(this)
     }
 
     /// Build the definitions defined on disk, using `root` as root folder to search.
@@ -47,9 +61,26 @@ impl Definitions {
         Ok(this)
     }
 
-    pub(crate) fn insert_intrinsic<I, F>(
+    /// Insert a core type, this is used for initialisation.
+    pub(crate) fn insert_core_type(&mut self, path: &'static str, ty: Type) {
+        let id = self.partitions.add_intrinsic_type(path);
+
+        debug_assert!(
+            self.partitions
+                .find_types(ROOT, PartSet::empty(), &path)
+                .filter(|n| self.types[n] == ty)
+                .count()
+                == 0,
+            "core items should not overwrite one another"
+        );
+
+        self.types.insert(id, ty);
+    }
+
+    /// Insert a core impl, this is used for initialisation.
+    pub(crate) fn insert_core_impl<I, F>(
         &mut self,
-        op: &'static str,
+        path: &'static str,
         in_ty: I,
         f: F,
         loc: Location,
@@ -59,7 +90,7 @@ impl Definitions {
         I: Into<Option<Type>>,
         F: Fn(eng::Block) -> Result<eng::Step> + Send + Sync + 'static,
     {
-        let name = op;
+        let name = path;
 
         let id = self.partitions.add_intrinsic_impl(&name);
 
@@ -71,7 +102,7 @@ impl Definitions {
                 .filter(|n| self.impls[n].inty == inty)
                 .count()
                 == 0,
-            "intrinsics should not overwrite one another"
+            "core items should not overwrite one another"
         );
 
         let impl_ = Impl2 {

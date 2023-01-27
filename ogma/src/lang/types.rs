@@ -615,6 +615,43 @@ impl Field {
     }
 }
 
+/// Initialise the standard types into [`Definitions`].
+///
+/// Returns a vector of typedefs that need to
+/// have their initialisation impls added ([`lang::impls::add_typedef_init_impls2`]).
+pub fn init(mut defs: defs2::Definitions) -> (defs2::Definitions, Vec<Arc<TypeDef>>) {
+    defs.insert_core_type("Nil", Type::Nil);
+    defs.insert_core_type("Bool", Type::Bool);
+    defs.insert_core_type("Num", Type::Num);
+    defs.insert_core_type("Str", Type::Str);
+    defs.insert_core_type("Table", Type::Tab);
+    defs.insert_core_type("TableRow", Type::TabRow);
+
+    // we add in the ogma primitive types, each one adding onto defs.
+    // we can unwrap here as these should always parse just fine (and is tested)
+    // we also initialise the associated static references
+    let mut xs = Vec::new();
+    macro_rules! init {
+            ($($id:ident, $ac:literal, $code:literal)|*) => {{
+                $(
+                let loc = Location::Ogma;
+                let dt = lang::parse::definition_type($code, loc).unwrap();
+                let dt = TypeDef::from_parsed_def2(dt, None, &defs, defs2::ROOT).unwrap();
+                let x = Arc::new(dt);
+                defs.insert_core_type($ac, Type::Def(x.clone()));
+                $id.set(x.clone());
+                xs.push(x);
+                )*
+            }};
+        }
+
+    init! {
+        ORD, "Ord", "def-ty Ord :: Lt | Eq | Gt"
+    };
+
+    (defs, xs)
+}
+
 // ###### PRIM #################################################################
 pub struct PrimTyDef(RwLock<Option<Arc<TypeDef>>>);
 

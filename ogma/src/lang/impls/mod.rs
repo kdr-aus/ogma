@@ -3,7 +3,7 @@ mod intrinsics;
 use crate::prelude::*;
 use ast::{Location, Tag};
 use eng::{Block, Step};
-use lang::help::*;
+use lang::{defs2, help::*};
 use libs::divvy::Str;
 use std::{fmt, iter::*};
 
@@ -302,6 +302,14 @@ impl Implementations {
     }
 }
 
+pub fn init(mut defs: defs2::Definitions) -> defs2::Definitions {
+    todo!()
+}
+
+pub fn init_derived_impls(mut defs: defs2::Definitions) -> defs2::Definitions {
+    todo!()
+}
+
 // ------ Expr Impl ------------------------------------------------------------
 pub fn usr_impl_help(def: &ast::DefinitionImpl) -> HelpMessage {
     let desc: Str = format!("user defined implementation in {}\n`{}`", def.loc, def.src).into();
@@ -327,6 +335,10 @@ pub fn usr_impl_help(def: &ast::DefinitionImpl) -> HelpMessage {
 }
 
 // ------ TypeDef Init ---------------------------------------------------------
+pub fn add_typedef_init_impls2(defs: &mut defs2::Definitions, tydef: Arc<types::TypeDef>) {
+    todo!()
+}
+
 pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<types::TypeDef>) {
     fn insert_intrinsic(
         impls: &mut Implementations,
