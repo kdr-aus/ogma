@@ -249,7 +249,7 @@ impl<'a> DefItems<Type> for Impls<'a> {
         }
     }
 
-    fn help<K>(&self, key: &K) -> K::Output
+    fn help<K>(&self, _key: &K) -> K::Output
     where
         K: PolyGet<Error>,
     {
@@ -307,7 +307,7 @@ impl<'a> DefItems<()> for Types<'a> {
         }
     }
 
-    fn help<K>(&self, key: &K) -> K::Output
+    fn help<K>(&self, _key: &K) -> K::Output
     where
         K: PolyGet<Error>,
     {
