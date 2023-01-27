@@ -8,7 +8,7 @@ mod partset;
 #[cfg(test)]
 mod tests;
 
-use partset::PartSet;
+pub use partset::PartSet;
 
 pub type Id = u32;
 
@@ -222,6 +222,25 @@ impl Partitions {
         }
 
         child
+    }
+
+    /// General adding of a node and parent boundary path.
+    ///
+    /// Since all the nodes must have a parent (the root nodes are initialised), this handles
+    /// linking the child and the parent. Returns the id of the new child.
+    fn add_node_along(&mut self, mut parent: BoundaryNode, path: &'static str, item: Item) -> Id {
+        let mut path = path.split('/').peekable();
+
+        loop {
+            match (path.next(), path.peek()) {
+                (Some(a), Some(_)) => {
+                    // create the boundary node
+                    parent = BoundaryNode(self.add_node(parent, a, Item::empty_boundary()));
+                }
+                (Some(x), None) => break self.add_node(parent, x, item),
+                _ => unreachable!("should be at least one Some"),
+            }
+        }
     }
 
     /// # Panics
@@ -610,6 +629,34 @@ impl Partitions {
             .iter()
             .enumerate()
             .filter_map(|(i, n)| n.is_impl().then_some((ImplNode(i as Id), n)))
+    }
+
+    /// Add an intrinsic impl node.
+    ///
+    /// This creates the node from the root verbatim without any checking.
+    pub(crate) fn add_intrinsic_impl(&mut self, path: &'static str) -> ImplNode {
+        ImplNode(self.add_node_along(
+            self.root().0,
+            path,
+            Item::Impl {
+                imports: partset::EMPTY.clone(),
+                item: None,
+            },
+        ))
+    }
+
+    /// Add an intrinsic type node.
+    ///
+    /// This creates the node from the root verbatim without any checking.
+    pub(crate) fn add_intrinsic_type(&mut self, path: &'static str) -> TypeNode {
+        TypeNode(self.add_node_along(
+            self.root().0,
+            path,
+            Item::Type {
+                imports: partset::EMPTY.clone(),
+                item: None,
+            },
+        ))
     }
 }
 

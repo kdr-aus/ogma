@@ -1,7 +1,7 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::parse::File;
+use lang::{impls::Impl2, parse::File};
 use std::{
     collections::{BTreeMap, VecDeque},
     path::{Path, PathBuf},
@@ -18,7 +18,7 @@ pub const ROOT: BoundaryNode = BoundaryNode(0);
 
 pub struct Definitions {
     partitions: Partitions,
-    impls: HashMap<ImplNode, (Option<Type>, Implementation)>,
+    impls: HashMap<ImplNode, Impl2>,
     types: HashMap<TypeNode, Type>,
 }
 
@@ -45,6 +45,46 @@ impl Definitions {
         this.parse_items()?;
 
         Ok(this)
+    }
+
+    pub(crate) fn insert_intrinsic<I, F>(
+        &mut self,
+        op: &'static str,
+        in_ty: I,
+        f: F,
+        loc: Location,
+        cat: lang::impls::OperationCategory,
+        help: lang::help::HelpMessage,
+    ) where
+        I: Into<Option<Type>>,
+        F: Fn(eng::Block) -> Result<eng::Step> + Send + Sync + 'static,
+    {
+        let name = op;
+
+        let id = self.partitions.add_intrinsic_impl(&name);
+
+        let inty = in_ty.into();
+
+        debug_assert!(
+            self.partitions
+                .find_impls(ROOT, PartSet::empty(), &name)
+                .filter(|n| self.impls[n].inty == inty)
+                .count()
+                == 0,
+            "intrinsics should not overwrite one another"
+        );
+
+        let impl_ = Impl2 {
+            inner: Implementation::Intrinsic {
+                loc,
+                f: Arc::new(f),
+            },
+            inty,
+            cat,
+            help,
+        };
+
+        self.impls.insert(id, impl_);
     }
 
     /// Parse the stored items in partitons as concrete implementations and types.
@@ -109,9 +149,16 @@ impl Definitions {
                 .map(|x| self.types().get(x, idx).map(Clone::clone))
                 .transpose()?;
 
-            let x = Implementation::Definition(Box::new(x));
+            let help = lang::impls::usr_impl_help(&x);
 
-            if let Some(_) = self.impls.insert(idx, (inty, x)) {
+            let x = Impl2 {
+                inner: Implementation::Definition(Box::new(x)),
+                inty,
+                cat: lang::impls::OperationCategory::UserDefined,
+                help,
+            };
+
+            if let Some(_) = self.impls.insert(idx, x) {
                 return Err(Error {
                     cat: err::Category::Internal,
                     desc: "duplicate definition".to_string(),
@@ -305,13 +352,15 @@ impl<'a> Impls<'a> {
         let chk_ty = ty;
         let mut ambig = None;
         let mut found = None;
+
         for n in self.0.partitions.find_impls(bnd, imports, key) {
-            let (ty, impl_) = self
+            let impl_ = self
                 .0
                 .impls
                 .get(&n)
                 .expect("implementation should be defined in map");
-            match ty {
+
+            match &impl_.inty {
                 Some(ty) if ty == chk_ty => match found {
                     Some(_) => {
                         return k_.fail(|tag| {
@@ -324,7 +373,7 @@ impl<'a> Impls<'a> {
                     }
                         })
                     }
-                    None => found = Some(impl_),
+                    None => found = Some(&impl_.inner),
                 },
                 Some(_) => (), // skip, type doesn't match
                 None => match ambig {
@@ -339,7 +388,7 @@ impl<'a> Impls<'a> {
                     }
                         });
                     }
-                    None => ambig = Some(impl_),
+                    None => ambig = Some(&impl_.inner),
                 },
             }
         }

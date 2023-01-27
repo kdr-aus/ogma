@@ -55,6 +55,13 @@ impl fmt::Display for OperationCategory {
 
 type Impl = (Implementation, OperationCategory, HelpMessage);
 
+pub struct Impl2 {
+    pub inner: Implementation,
+    pub inty: Option<Type>,
+    pub cat: OperationCategory,
+    pub help: HelpMessage,
+}
+
 #[derive(Clone)]
 // Structure is a nested map of maps, first by the command name, then by the input type.
 pub struct Implementations(HashMap<Str, Keys>);
