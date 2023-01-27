@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"ogma":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.67.0/core/hash/trait.Hash.html\" title=\"trait core::hash::Hash\">Hash</a> for <a class=\"struct\" href=\"ogma/lang/parse/struct.Expecting.html\" title=\"struct ogma::lang::parse::Expecting\">Expecting</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.67.0/core/hash/trait.Hash.html\" title=\"trait core::hash::Hash\">Hash</a> for <a class=\"enum\" href=\"ogma/lang/enum.Type.html\" title=\"enum ogma::lang::Type\">Type</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

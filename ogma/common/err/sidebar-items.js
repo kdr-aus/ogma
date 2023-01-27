@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["Category","Error categories."]],"fn":[["help_as_error","Represent a help message using the [`Error`] infrastructure."],["trace","Create a single trace item using the tag."]],"struct":[["Error","Ubiquitous error."],["Trace","A single trace item for error messages."]]};
