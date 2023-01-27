@@ -42,3 +42,35 @@ fn fs_structure_building() {
         "Parsing Error: the partition 'foo' is defined adjacent and as a directory\n"
     );
 }
+
+#[test]
+fn ensure_unit_root() {
+    let p = Partitions::new();
+    assert_eq!(ROOT, p.root().0);
+}
+
+#[test]
+fn api_smoke_test() {
+    let d = Definitions::new();
+
+    let k = String::from("foo");
+
+    let _: Option<_> = d.types().get(k.as_str(), ROOT);
+
+    let _: Option<_> = d.impls().get(&(k.as_str(), &Type::Nil), ROOT);
+
+    drop(k); // ensure d outlives k
+
+    let k = Tag::from(ast::Tag_ {
+        line: "foo".into(),
+        start: 0,
+        end: 3,
+        anchor: ast::Location::Shell,
+    });
+
+    let _: Result<_> = d.types().get(&k, ROOT);
+
+    let _: Result<_> = d.impls().get(&(&k, &Type::Nil), ROOT);
+
+    drop(k); // ensure d outlives k
+}

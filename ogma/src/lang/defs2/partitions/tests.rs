@@ -140,14 +140,9 @@ fn extending_fails() {
             ("foo/bar", vec![Ok("TypeA")]),
         ]))
         .unwrap()
-        .extend_root(mkmap([("foo", vec![Err("impl-b"), Err("impl-a")])]))
-        .unwrap_err();
+        .extend_root(mkmap([("foo", vec![Err("impl-b"), Err("impl-a")])]));
 
-    assert_eq!(
-        &x.to_string(),
-        "Definition Error: the impl 'impl-a' is already defined
-"
-    );
+    assert!(x.is_ok()); // duplicate impls allowed (to allow for type input variance)
 }
 
 #[test]
@@ -342,5 +337,169 @@ def erg { }",
  | [import(/../foo)]
  |          ^^ this goes beyond the root partiton
 "
+    );
+}
+
+#[test]
+fn duplicate_defs_on_types_work() {
+    let p = Partitions::new()
+        .extend_root(FromIterator::from_iter([(
+            PathBuf::from("foo"),
+            vec![
+                file("def foo () { }"),
+                file(
+                    "def foo Num () { }
+
+def foo Str () { }",
+                ),
+            ],
+        )]))
+        .unwrap();
+
+    describe! { p =>
+        7:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>"
+          ,3: B "foo", 4: I "foo", 5: I "foo", 6: I "foo"
+          ,}
+        []
+    };
+}
+
+#[test]
+fn assert_partset_find_characteristics() {
+    let p = Partitions::new()
+        .extend_root(FromIterator::from_iter([
+            (
+                PathBuf::from("foo"),
+                vec![file(
+                    "def foo () { }
+
+def-ty Foo () { }",
+                )],
+            ),
+            (
+                PathBuf::from("foo/bar"),
+                vec![file(
+                    "
+def foo () { }
+
+def bar () { }
+
+def zog () { }
+
+def zog () { }",
+                )],
+            ),
+        ]))
+        .unwrap();
+
+    describe! { p =>
+        11:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>"
+          ,3: B "foo", 4: T "Foo", 5: I "foo"
+          ,6: B "bar", 7: I "foo", 8: I "bar", 9: I "zog", 10: I "zog"
+          ,}
+        []
+    };
+
+    let ps = PartSet::from_vec(vec![], &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("zog", &p).collect::<Vec<u32>>().is_empty());
+
+    let ps = PartSet::from_vec(vec![3, 7], &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("zog", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("bar", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("foo", &p).collect::<Vec<u32>>(), vec![3, 7]);
+
+    let ps = PartSet::from_vec(vec![3, 7, 4, 9], &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("zog", &p).collect::<Vec<u32>>(), vec![9]);
+    assert!(ps.find("bar", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("foo", &p).collect::<Vec<u32>>(), vec![3, 7]);
+    assert_eq!(ps.find("Foo", &p).collect::<Vec<u32>>(), vec![4]);
+
+    let ps = PartSet::from_vec((0..11).collect(), &p);
+
+    assert!(ps.find("", &p).collect::<Vec<u32>>().is_empty());
+    assert!(ps.find("as", &p).collect::<Vec<u32>>().is_empty());
+    assert_eq!(ps.find("foo", &p).collect::<Vec<u32>>(), vec![3, 5, 7]);
+    assert_eq!(ps.find("Foo", &p).collect::<Vec<u32>>(), vec![4]);
+    assert_eq!(ps.find("bar", &p).collect::<Vec<u32>>(), vec![6, 8]);
+    assert_eq!(ps.find("zog", &p).collect::<Vec<u32>>(), vec![9, 10]);
+}
+
+#[test]
+fn assert_find_characteristics() {
+    let p = Partitions::new()
+        .extend_root(FromIterator::from_iter([
+            (
+                PathBuf::from("foo"),
+                vec![file(
+                    "def foo () { }
+
+def-ty Foo () { }",
+                )],
+            ),
+            (
+                PathBuf::from("foo/bar"),
+                vec![file(
+                    "
+def foo () { }
+
+def bar () { }
+
+def zog () { }
+
+def zog () { }",
+                )],
+            ),
+        ]))
+        .unwrap();
+
+    describe! { p =>
+        11:{0: B "<root>", 1: B "<shell>", 2: B "<plugins>"
+          ,3: B "foo", 4: T "Foo", 5: I "foo"
+          ,6: B "bar", 7: I "foo", 8: I "bar", 9: I "zog", 10: I "zog"
+          ,}
+        [0->3,3->4,3->5,
+         3->6,6->7,6->8,6->9,6->10,
+        ]
+    };
+
+    assert!(p.find(p.root().0, PartSet::empty(), "zog").is_empty());
+    assert!(p.find(p.root().0, PartSet::empty(), "foo/zog").is_empty());
+    assert!(p.find(p.root().0, PartSet::empty(), "..").is_empty());
+    assert!(p.find(p.root().0, PartSet::empty(), "../foo").is_empty());
+
+    assert_eq!(
+        p.find(p.root().0, PartSet::empty(), "foo/bar/zog"),
+        vec![9, 10]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![3], &p), "foo/bar/zog"),
+        vec![9, 10]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![6], &p), "bar/zog"),
+        vec![9, 10]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![6], &p), "bar/../Foo"),
+        vec![4]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![3], &p), "foo/foo"),
+        vec![5]
+    );
+    assert_eq!(
+        p.find(p.root().0, &PartSet::from_vec(vec![3, 6], &p), "foo/foo"),
+        vec![5]
+    );
+    assert_eq!(p.find(BoundaryNode(6), PartSet::empty(), "../Foo"), vec![4]);
+    assert_eq!(
+        p.find(BoundaryNode(6), PartSet::empty(), "../../foo"),
+        vec![3]
     );
 }

@@ -14,12 +14,21 @@ lazy_static::lazy_static! {
 pub struct PartSet(Arc<[Id]>);
 
 impl PartSet {
-    pub fn from_vec(mut ids: Vec<Id>, parts: &Partitions) -> Self {
-        ids.sort(); // first sort by Id to deduplicate
-        ids.dedup(); // remove duplicate ids
-        ids.sort_by(|&a, &b| node_cmp(&parts[a], &parts[b])); // sort for retrieval
+    /// A cheap static empty partition set.
+    pub fn empty() -> &'static PartSet {
+        &EMPTY
+    }
 
-        PartSet(Arc::from(ids))
+    pub fn from_vec(mut ids: Vec<Id>, parts: &Partitions) -> Self {
+        if ids.is_empty() {
+            EMPTY.clone()
+        } else {
+            ids.sort(); // first sort by Id to deduplicate
+            ids.dedup(); // remove duplicate ids
+            ids.sort_by(|&a, &b| node_cmp(&parts[a], &parts[b])); // sort for retrieval
+
+            PartSet(Arc::from(ids))
+        }
     }
 
     pub fn to_vec(&self) -> Vec<Id> {
@@ -29,6 +38,21 @@ impl PartSet {
     /// Does a linear search for an id match.
     pub fn contains_id(&self, id: Id) -> bool {
         self.0.contains(&id)
+    }
+
+    /// Does an efficient search for all [`Id`]s that use `name`.
+    pub fn find(&self, name: &str, parts: &Partitions) -> impl ExactSizeIterator<Item = Id> + '_ {
+        // [T]::partition_point works by assuming a partitioned slice on the predicate
+        // since array is ordered on `node_cmp`, we can leverage this to get a range that matches
+        // `name`.
+        // There are few important notes:
+        // - slice is assumed partitioned where `true` is on _left_ of partition point
+        // - since node_cmp orders by name first, anything < `name` should be at the start
+        // - to get the upr point, the partition point will be when it **stops equaling `name`**
+        let lwr = self.0.partition_point(|&i| parts[i].name() < name);
+        let upr = self.0.partition_point(|&i| parts[i].name() <= name);
+
+        self.0[lwr..upr].iter().copied()
     }
 
     #[cfg(test)]

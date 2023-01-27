@@ -10,7 +10,7 @@ mod tests;
 
 use partset::PartSet;
 
-type Id = u32;
+pub type Id = u32;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -245,11 +245,6 @@ impl Partitions {
 
     fn add_impl<N: Into<Str>>(&mut self, parent: BoundaryNode, name: N) -> Result<ImplNode> {
         let name = name.into();
-        let exists = self.children(parent).any(|n| self[n].eq_impl(&name));
-
-        if exists {
-            return Err(item_already_defined("impl", &name));
-        }
 
         Ok(ImplNode(self.add_node(
             parent,
@@ -461,6 +456,101 @@ impl Partitions {
 
     pub fn exports(&self, bnd: BoundaryNode) -> &PartSet {
         self[bnd].item.exports().expect("boundary node")
+    }
+
+    /// Finds the type nodes which match `path` from the given `within` partition.
+    ///
+    /// Looks within the `imports`, use [`PartSet::empty`] if no imports.
+    pub fn find_types(
+        &self,
+        within: BoundaryNode,
+        imports: &PartSet,
+        path: &str,
+    ) -> impl Iterator<Item = TypeNode> + '_ {
+        self.find(within, imports, path)
+            .into_iter()
+            .filter_map(|n| self[n].is_type().then_some(TypeNode(n)))
+    }
+
+    /// Finds the impl nodes which match `path` from the given `within` partition.
+    ///
+    /// Looks within the `imports`, use [`PartSet::empty`] if no imports.
+    pub fn find_impls(
+        &self,
+        within: BoundaryNode,
+        imports: &PartSet,
+        path: &str,
+    ) -> impl Iterator<Item = ImplNode> + '_ {
+        self.find(within, imports, path)
+            .into_iter()
+            .filter_map(|n| self[n].is_impl().then_some(ImplNode(n)))
+    }
+
+    /// Find all [`Id]s that match `path`, from `within` the partition and `imports`.
+    fn find(&self, within: BoundaryNode, imports: &PartSet, path: &str) -> Vec<Id> {
+        debug_assert!(!path.is_empty(), "path string cannot be empty");
+
+        let (mut bnds, path) = if let Some(path) = path.strip_prefix("//") {
+            (vec![self.plugins().0.id()], path.split('/'))
+        } else if let Some(path) = path.strip_prefix('/') {
+            (vec![self.root().0.id()], path.split('/'))
+        } else {
+            let mut path = path.split('/');
+            let fst = path.next().expect("at least one path item");
+
+            let roots = if fst == ".." {
+                self[within]
+                    .parent
+                    .into_iter()
+                    .map(BoundaryNode::id)
+                    .collect()
+            } else {
+                self.children(within)
+                    .filter(|&n| self[n].name().eq(fst))
+                    .chain(imports.find(fst, self))
+                    .collect::<Vec<_>>()
+            };
+
+            (roots, path)
+        };
+
+        let scratch = &mut Vec::new();
+
+        for x in path {
+            scratch.clear();
+
+            if x == ".." {
+                scratch.extend(
+                    bnds.drain(..)
+                        .filter_map(|n| self[n].parent)
+                        .map(BoundaryNode::id),
+                );
+            } else {
+                scratch.extend(
+                    bnds.drain(..)
+                        .filter(|&n| self[n].is_boundary())
+                        .flat_map(|n| self.children(BoundaryNode(n)))
+                        .filter(|&n| self[n].name().eq(x)),
+                );
+            }
+
+            std::mem::swap(&mut bnds, scratch);
+        }
+
+        bnds.sort_unstable();
+        bnds.dedup();
+
+        bnds
+    }
+
+    pub fn bnd_and_imports<I: Into<Id>>(&self, id: I) -> (BoundaryNode, &PartSet) {
+        let id = id.into();
+        let n = &self[id];
+        match (n.parent, &n.item) {
+            (None, _) => (self.root().0, PartSet::empty()),
+            (Some(x), Item::Boundary { .. }) => (x, PartSet::empty()),
+            (Some(x), Item::Type { imports } | Item::Impl { imports }) => (x, imports),
+        }
     }
 }
 
