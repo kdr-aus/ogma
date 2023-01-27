@@ -32,8 +32,7 @@ impl Item {
     pub fn imports(&self) -> Option<&PartSet> {
         match self {
             Boundary { .. } => None,
-            Type { imports } => Some(imports),
-            Impl { imports } => Some(imports),
+            Type { imports, .. } | Impl { imports, .. } => Some(imports),
         }
     }
 }

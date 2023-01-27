@@ -6,6 +6,7 @@ use ::libs::{
     parking_lot::{const_rwlock, RwLock},
 };
 use ast::Location;
+use lang::defs2::{self, DefItems};
 use lang::help::HelpMessage;
 use std::{convert::TryFrom, fmt, hash, ops, sync::Arc};
 use table::Entry;
@@ -474,6 +475,43 @@ impl TypeDef {
         })
     }
 
+    pub fn from_parsed_def2<N: Into<defs2::Id>>(
+        def: ast::DefinitionType,
+        help: Option<String>,
+        defs: &defs2::Definitions,
+        within: N,
+    ) -> Result<Self> {
+        let ast::DefinitionType { loc, src, name, ty } = def;
+        let types = defs.types();
+        let within = within.into();
+        let ty: TypeVariant = match ty {
+            ast::TypeVariant::Sum(variants) => {
+                let mut v = Vec::with_capacity(variants.len());
+                for var in variants {
+                    let ast::Variant { name, fields } = var;
+                    let fields = if let Some(fields) = fields {
+                        Some(from_parsed_fields2(fields, types, within)?)
+                    } else {
+                        None
+                    };
+                    v.push(Variant { name, fields });
+                }
+                TypeVariant::Sum(v)
+            }
+            ast::TypeVariant::Product(fields) => {
+                TypeVariant::Product(from_parsed_fields2(fields, types, within)?)
+            }
+        };
+
+        Ok(Self {
+            loc,
+            src,
+            help,
+            name,
+            ty,
+        })
+    }
+
     pub fn name(&self) -> &Tag {
         &self.name
     }
@@ -512,6 +550,32 @@ fn from_parsed_fields(fields: Vec<ast::Field>, types: &Types) -> Result<Vec<Fiel
         let mut params = Vec::with_capacity(x.len());
         for param in x {
             params.push(types.get_using_tag(&param)?.clone());
+        }
+
+        v.push(Field {
+            name,
+            _typedef: typedef,
+            ty,
+            _params: params,
+        });
+    }
+    Ok(v)
+}
+
+fn from_parsed_fields2(
+    fields: Vec<ast::Field>,
+    types: defs2::Types,
+    within: defs2::Id,
+) -> Result<Vec<Field>> {
+    let mut v = Vec::with_capacity(fields.len());
+    for field in fields {
+        let ast::Field { name, ty, params } = field;
+        let typedef = ty;
+        let ty = types.get(&typedef, within)?.clone();
+        let x = params;
+        let mut params = Vec::with_capacity(x.len());
+        for param in x {
+            params.push(types.get(&param, within)?.clone());
         }
 
         v.push(Field {

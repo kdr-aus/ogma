@@ -21,9 +21,18 @@ pub struct Node {
 
 #[derive(Debug, Clone)]
 enum Item {
-    Boundary { exports: PartSet, children: Vec<Id> },
-    Type { imports: PartSet },
-    Impl { imports: PartSet },
+    Boundary {
+        exports: PartSet,
+        children: Vec<Id>,
+    },
+    Type {
+        imports: PartSet,
+        item: Option<PItem>,
+    },
+    Impl {
+        imports: PartSet,
+        item: Option<PItem>,
+    },
 }
 
 // Partitions are stored as a flat list of nodes
@@ -59,6 +68,12 @@ impl fmt::Display for $n {
 }
 
 node_wrapper! { BoundaryNode TypeNode ImplNode }
+
+#[derive(Debug, Clone)]
+pub struct PItem {
+    pub item: lang::parse::Item,
+    pub path: Arc<Path>,
+}
 
 impl Partitions {
     pub fn new() -> Self {
@@ -104,6 +119,7 @@ impl Partitions {
         let root = self.root().0;
         for (p, files) in fsmap {
             let bnd = self.get_or_create_boundary_path(&p, root)?;
+            let path: Arc<Path> = Arc::from(p);
 
             for file in files {
                 // deconstruct the file
@@ -138,12 +154,32 @@ impl Partitions {
                 // construct a nodes list which imports will be mapped to
                 let mut ns = Vec::with_capacity(types.len() + impls.len());
 
-                for (n, _) in &types {
-                    ns.push(self.add_type(bnd, n)?.id());
+                for (n, item) in types {
+                    ns.push(
+                        self.add_type(
+                            bnd,
+                            n,
+                            PItem {
+                                item,
+                                path: path.clone(),
+                            },
+                        )?
+                        .id(),
+                    );
                 }
 
-                for (n, _) in &impls {
-                    ns.push(self.add_impl(bnd, n)?.id());
+                for (n, item) in impls {
+                    ns.push(
+                        self.add_impl(
+                            bnd,
+                            n,
+                            PItem {
+                                item,
+                                path: path.clone(),
+                            },
+                        )?
+                        .id(),
+                    );
                 }
 
                 if !ns.is_empty() && !imports.is_empty() {
@@ -226,7 +262,11 @@ impl Partitions {
         }
     }
 
-    fn add_type<N: Into<Str>>(&mut self, parent: BoundaryNode, name: N) -> Result<TypeNode> {
+    fn add_type<N, I>(&mut self, parent: BoundaryNode, name: N, item: I) -> Result<TypeNode>
+    where
+        N: Into<Str>,
+        I: Into<Option<PItem>>,
+    {
         let name = name.into();
         let exists = self.children(parent).any(|n| self[n].eq_type(&name));
 
@@ -239,11 +279,16 @@ impl Partitions {
             name,
             Item::Type {
                 imports: partset::EMPTY.clone(),
+                item: item.into(),
             },
         )))
     }
 
-    fn add_impl<N: Into<Str>>(&mut self, parent: BoundaryNode, name: N) -> Result<ImplNode> {
+    fn add_impl<N, I>(&mut self, parent: BoundaryNode, name: N, item: I) -> Result<ImplNode>
+    where
+        N: Into<Str>,
+        I: Into<Option<PItem>>,
+    {
         let name = name.into();
 
         Ok(ImplNode(self.add_node(
@@ -251,6 +296,7 @@ impl Partitions {
             name,
             Item::Impl {
                 imports: partset::EMPTY.clone(),
+                item: item.into(),
             },
         )))
     }
@@ -309,8 +355,7 @@ impl Partitions {
         for n in to {
             match &mut self.get_mut(n).item {
                 Item::Boundary { .. } => (),
-                Item::Type { imports } => *imports = xs.clone(),
-                Item::Impl { imports } => *imports = xs.clone(),
+                Item::Type { imports, .. } | Item::Impl { imports, .. } => *imports = xs.clone(),
             }
         }
 
@@ -546,11 +591,25 @@ impl Partitions {
     pub fn bnd_and_imports<I: Into<Id>>(&self, id: I) -> (BoundaryNode, &PartSet) {
         let id = id.into();
         let n = &self[id];
-        match (n.parent, &n.item) {
-            (None, _) => (self.root().0, PartSet::empty()),
-            (Some(x), Item::Boundary { .. }) => (x, PartSet::empty()),
-            (Some(x), Item::Type { imports } | Item::Impl { imports }) => (x, imports),
-        }
+
+        (
+            n.parent.unwrap_or(self.root().0),
+            n.item.imports().unwrap_or(PartSet::empty()),
+        )
+    }
+
+    pub fn all_types(&self) -> impl Iterator<Item = (TypeNode, &Node)> {
+        self.0
+            .iter()
+            .enumerate()
+            .filter_map(|(i, n)| n.is_type().then_some((TypeNode(i as Id), n)))
+    }
+
+    pub fn all_impls(&self) -> impl Iterator<Item = (ImplNode, &Node)> {
+        self.0
+            .iter()
+            .enumerate()
+            .filter_map(|(i, n)| n.is_impl().then_some((ImplNode(i as Id), n)))
     }
 }
 

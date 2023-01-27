@@ -3,7 +3,7 @@ use crate::prelude::*;
 use ast::Location;
 use lang::parse::File;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     path::{Path, PathBuf},
 };
 
@@ -13,6 +13,7 @@ mod tests;
 
 use partitions::*;
 
+pub use partitions::Id;
 pub const ROOT: BoundaryNode = BoundaryNode(0);
 
 pub struct Definitions {
@@ -28,6 +29,99 @@ impl Definitions {
             impls: HashMap::default(),
             types: HashMap::default(),
         }
+    }
+
+    /// Build the definitions defined on disk, using `root` as root folder to search.
+    pub fn from_root<P: AsRef<Path>>(root: P) -> Result<Self> {
+        let fsmap = build_fs_map(root.as_ref())?;
+        let partitions = Partitions::new().extend_root(fsmap)?;
+
+        let mut this = Self {
+            partitions,
+            types: Default::default(),
+            impls: Default::default(),
+        };
+
+        this.parse_items()?;
+
+        Ok(this)
+    }
+
+    /// Parse the stored items in partitons as concrete implementations and types.
+    ///
+    /// Note that this checks for duplicate definitions, if called on a definitions that has
+    /// already been parsed, an error would occur.
+    /// If wanting to append/overwrite, it is best to clear out the definitions first, or just
+    /// construct a new one.
+    fn parse_items(&mut self) -> Result<()> {
+        // the types are first, since we will need the type info when adding an implementation
+        self.parse_types()?;
+
+        self.parse_impls()
+    }
+
+    fn parse_types(&mut self) -> Result<()> {
+        let mut todo = self
+            .partitions
+            .all_types()
+            .filter_map(|(i, n)| n.item().map(|x| (i, x)))
+            .collect::<VecDeque<_>>();
+
+        while let Some((idx, PItem { item, path })) = todo.pop_front() {
+            let code = item.code.clone();
+            let loc = Location::File(path.clone(), item.line);
+
+            let dt = lang::parse::definition_type(code, loc).map_err(|x| x.0)?;
+
+            let dt = types::TypeDef::from_parsed_def2(dt, item.doc.clone(), self, idx)?;
+
+            if let Some(exists) = self.types.insert(idx, Type::Def(dt.into())) {
+                return Err(Error {
+                    cat: err::Category::Internal,
+                    desc: "duplicate definition".to_string(),
+                    help_msg: format!("{exists} is already defined").into(),
+                    ..Error::default()
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_impls(&mut self) -> Result<()> {
+        let mut todo = self
+            .partitions
+            .all_impls()
+            .filter_map(|(i, n)| n.item().map(|x| (i, n, x)))
+            .collect::<VecDeque<_>>();
+
+        while let Some((idx, node, PItem { item, path })) = todo.pop_front() {
+            let code = item.code.clone();
+            let loc = Location::File(path.clone(), item.line);
+
+            todo!("we'll need to switch over to defs2::Definitions for parse module before this works");
+
+            let x = lang::parse::definition_impl2(code, loc, self, idx).map_err(|x| x.0)?;
+
+            let inty = x
+                .in_ty
+                .as_ref()
+                .map(|x| self.types().get(x, idx).map(Clone::clone))
+                .transpose()?;
+
+            let x = Implementation::Definition(Box::new(x));
+
+            if let Some(_) = self.impls.insert(idx, (inty, x)) {
+                return Err(Error {
+                    cat: err::Category::Internal,
+                    desc: "duplicate definition".to_string(),
+                    help_msg: format!("{} is already defined", node.name()).into(),
+                    ..Error::default()
+                });
+            }
+        }
+
+        Ok(())
     }
 
     pub fn impls(&self) -> Impls {
@@ -171,8 +265,10 @@ pub trait DefItems<'a, Key: 'a> {
     fn iter(&self) -> Self::Iter;
 }
 
+#[derive(Copy, Clone)]
 pub struct Impls<'a>(&'a Definitions);
 
+#[derive(Copy, Clone)]
 pub struct Types<'a>(&'a Definitions);
 
 impl<'a> Impls<'a> {
