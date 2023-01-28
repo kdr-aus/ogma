@@ -202,7 +202,7 @@ impl<'a> Impls<'a> {
 
     fn get_<K>(&self, key: &str, ty: &Type, within: Id, k_: K) -> K::Output
     where
-        K: PolyGet<&'a Implementation>
+        K: PolyGet<&'a Implementation>,
     {
         let (bnd, imports) = self.0.partitions.bnd_and_imports(within);
 
@@ -400,8 +400,7 @@ impl<'a, 'd> DefItems<'a, (&'a str, &'a Type)> for ImplsIn<'d> {
         K: AsKey<(&'a str, &'a Type)>,
     {
         let (key_, ty) = key.as_key();
-        self.impls
-            .get_(key_, ty, self.partition, key)
+        self.impls.get_(key_, ty, self.partition, key)
     }
 
     fn help<K>(&self, _key: K) -> K::Output
