@@ -55,9 +55,11 @@ fn api_smoke_test() {
 
     let k = String::from("foo");
 
-    let _: Option<_> = d.types().get(k.as_str(), ROOT);
+    let _: Option<_> = d.types().get((k.as_str(), ROOT));
+    let _: Option<_> = d.impls().get((k.as_str(), &Type::Nil, ROOT));
 
-    let _: Option<_> = d.impls().get(&(k.as_str(), &Type::Nil), ROOT);
+    let _: Option<_> = d.types().within(ROOT).get(k.as_str());
+    let _: Option<_> = d.impls().within(ROOT).get((k.as_str(), &Type::Nil));
 
     drop(k); // ensure d outlives k
 
@@ -68,9 +70,11 @@ fn api_smoke_test() {
         anchor: ast::Location::Shell,
     });
 
-    let _: Result<_> = d.types().get(&k, ROOT);
+    let _: Result<_> = d.types().get((&k, ROOT));
+    let _: Result<_> = d.impls().get((&k, &Type::Nil, ROOT));
 
-    let _: Result<_> = d.impls().get(&(&k, &Type::Nil), ROOT);
+    let _: Result<_> = d.types().within(ROOT).get(&k);
+    let _: Result<_> = d.impls().within(ROOT).get((&k, &Type::Nil));
 
     drop(k); // ensure d outlives k
 }
