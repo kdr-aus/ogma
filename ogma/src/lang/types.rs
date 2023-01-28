@@ -482,15 +482,14 @@ impl TypeDef {
         within: N,
     ) -> Result<Self> {
         let ast::DefinitionType { loc, src, name, ty } = def;
-        let types = defs.types();
-        let within = within.into();
+        let types = defs.types().within(within);
         let ty: TypeVariant = match ty {
             ast::TypeVariant::Sum(variants) => {
                 let mut v = Vec::with_capacity(variants.len());
                 for var in variants {
                     let ast::Variant { name, fields } = var;
                     let fields = if let Some(fields) = fields {
-                        Some(from_parsed_fields2(fields, types, within)?)
+                        Some(from_parsed_fields2(fields, types)?)
                     } else {
                         None
                     };
@@ -499,7 +498,7 @@ impl TypeDef {
                 TypeVariant::Sum(v)
             }
             ast::TypeVariant::Product(fields) => {
-                TypeVariant::Product(from_parsed_fields2(fields, types, within)?)
+                TypeVariant::Product(from_parsed_fields2(fields, types)?)
             }
         };
 
@@ -564,18 +563,17 @@ fn from_parsed_fields(fields: Vec<ast::Field>, types: &Types) -> Result<Vec<Fiel
 
 fn from_parsed_fields2(
     fields: Vec<ast::Field>,
-    types: defs2::Types,
-    within: defs2::Id,
+    types: defs2::TypesIn,
 ) -> Result<Vec<Field>> {
     let mut v = Vec::with_capacity(fields.len());
     for field in fields {
         let ast::Field { name, ty, params } = field;
         let typedef = ty;
-        let ty = types.get(&typedef, within)?.clone();
+        let ty = types.get(&typedef)?.clone();
         let x = params;
         let mut params = Vec::with_capacity(x.len());
         for param in x {
-            params.push(types.get(&param, within)?.clone());
+            params.push(types.get(&param)?.clone());
         }
 
         v.push(Field {
@@ -1002,11 +1000,11 @@ impl Tuple {
         }
     }
 
-    pub fn parse_name(tuple: &str, tys: defs2::Types) -> Option<Type> {
+    pub fn parse_name(tuple: &str, tys: &Types) -> Option<Type> {
         Split::parse(tuple).and_then(|x| Self::convert_split(x, tys))
     }
 
-    fn convert_split(split: Split, tys: defs2::Types) -> Option<Type> {
+    fn convert_split(split: Split, tys: &Types) -> Option<Type> {
         match split {
             Split::Tuple(v) => {
                 let mut args = Vec::with_capacity(v.len());
@@ -1015,7 +1013,7 @@ impl Tuple {
                 }
                 Some(Type::Def(Arc::new(Self::ty(args))))
             }
-            Split::Ty(t) => tys.get(t, within).cloned(),
+            Split::Ty(t) => tys.get_using_str(t).cloned(),
         }
     }
 }

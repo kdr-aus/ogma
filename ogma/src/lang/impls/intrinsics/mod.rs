@@ -5,7 +5,7 @@ use ::paste::paste;
 use ::table::Entry;
 use ast::{Location, Tag};
 use eng::{AnonTypes, Block, Context, Step};
-use lang::{help::*, impls::OperationCategory, defs2::Definitions};
+use lang::{help::*, impls::OperationCategory};
 use std::{
     convert::{TryFrom, TryInto},
     iter::*,
@@ -203,7 +203,7 @@ fn type_flag(blk: &mut Block) -> Result<Option<Type>> {
             };
             match x {
                 Some(x) => Ok(x),
-                None => blk.defs().types().get(&ty, blk.partition).map(Clone::clone),
+                None => blk.defs().types().get_using_tag(&ty).map(Clone::clone),
             }
         })
         .transpose()

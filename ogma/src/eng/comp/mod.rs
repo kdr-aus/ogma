@@ -622,6 +622,8 @@ impl<'a> Block<'a> {
         flags.reverse();
         args.reverse();
 
+        let partition = todo!("need to work out where this comes from, (CmdNode?)");
+
         Block {
             node: opnode,
             compiler,
@@ -632,6 +634,7 @@ impl<'a> Block<'a> {
             chgs,
             #[cfg(debug_assertions)]
             output_ty: None,
+            partition
         }
     }
 }

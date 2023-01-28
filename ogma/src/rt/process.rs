@@ -40,8 +40,7 @@ pub fn handle_help(expr: &ast::Expression, definitions: &Definitions) -> Result<
             .any(|x| matches!(x, ast::Term::Flag(f) if f.str() == "help"));
 
         if help_flagged {
-            todo!("understand how the help is retrieved for API use");
-            let x = definitions.impls().help(&*block.op())?;
+            let x = definitions.impls().get_help_with_err(&*block.op())?;
             Err(x)
         } else {
             Ok(())

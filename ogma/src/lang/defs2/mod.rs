@@ -33,6 +33,8 @@ impl Definitions {
         // initialise the core types
         let (this, tydefs) = types::init(this);
 
+        return this;
+
         // initialise the core impls
         let mut this = lang::impls::init(this);
 
@@ -68,7 +70,7 @@ impl Definitions {
         debug_assert!(
             self.partitions
                 .find_types(ROOT, PartSet::empty(), &path)
-                .filter(|n| self.types[n] == ty)
+                .filter(|n| self.types.get(n) == Some(&ty))
                 .count()
                 == 0,
             "core items should not overwrite one another"
@@ -177,7 +179,7 @@ impl Definitions {
             let inty = x
                 .in_ty
                 .as_ref()
-                .map(|x| self.types().get(x, idx).map(Clone::clone))
+                .map(|x| self.types().get((x, idx)).map(Clone::clone))
                 .transpose()?;
 
             let help = lang::impls::usr_impl_help(&x);
@@ -371,7 +373,7 @@ impl<'a> Impls<'a> {
         self.0
             .partitions
             .find_impls(bnd, imports, key)
-            .any(|x| self.0.impls[&x].0.as_ref() == Some(ty))
+            .any(|x| self.0.impls[&x].inty.as_ref() == Some(ty))
     }
 
     fn get_<K>(&self, key: &str, ty: &Type, within: Id, k_: K) -> K::Output
@@ -548,11 +550,13 @@ impl<'a, 'd> DefItems<'a, (&'a str, Id)> for Types<'d> {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct ImplsIn<'a> {
     pub impls: Impls<'a>,
     pub partition: Id,
 }
 
+#[derive(Copy, Clone)]
 pub struct TypesIn<'a> {
     pub types: Types<'a>,
     pub partition: Id,

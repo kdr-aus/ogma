@@ -11,8 +11,7 @@ pub mod common;
 pub mod eng;
 pub mod lang;
 pub mod output;
-// TODO: switch back on once changed over to partitions
-// pub mod rt;
+pub mod rt;
 
 pub use common::err::Error;
 
@@ -26,7 +25,8 @@ mod prelude {
     pub(crate) use super::eng;
     pub(crate) use super::lang::{
         self,
-        defs2::{Definitions, DefItems},
+        Definitions,
+        defs2::{self, DefItems},
         impls::{Implementation, Implementations},
         syntax::ast::{self, Tag},
         types::{self, AsType, OgmaData, Table, TableRow, Tuple, Type, Value},

@@ -103,9 +103,11 @@ mod tests {
                 0 => Item::empty_boundary(),
                 1 => Item::Type {
                     imports: EMPTY.clone(),
+                    item: None,
                 },
                 2 => Item::Impl {
                     imports: EMPTY.clone(),
+                    item: None,
                 },
                 _ => unreachable!(),
             };

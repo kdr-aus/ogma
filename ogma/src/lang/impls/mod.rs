@@ -303,7 +303,8 @@ impl Implementations {
 }
 
 pub fn init(mut defs: defs2::Definitions) -> defs2::Definitions {
-    intrinsics::add_intrinsics(&mut defs);
+    // TODO: enable
+    // intrinsics::add_intrinsics(&mut defs);
     defs
 }
 

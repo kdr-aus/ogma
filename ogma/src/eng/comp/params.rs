@@ -110,7 +110,7 @@ pub(super) fn map_def_params_into_variables(
             let impl_ = tg[op.idx()]
                 .input
                 .ty()
-                .and_then(|inty| defs.impls().get(optag, inty))
+                .and_then(|inty| defs.impls().get_impl(optag.str(), inty))
                 .or_else(|| {
                     defs.impls()
                         .iter_op(optag.str())

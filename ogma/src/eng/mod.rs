@@ -11,7 +11,7 @@ mod graphs;
 mod step;
 mod var;
 
-use lang::defs2::Definitions;
+use lang::defs2;
 
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
