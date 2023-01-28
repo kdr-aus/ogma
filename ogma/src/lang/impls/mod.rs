@@ -161,8 +161,9 @@ impl Implementations {
     /// **Builds** the help message which concatenates all applicable input types.
     /// If `op` is not found, returns an error.
     pub fn get_help_with_err(&self, op: &Tag) -> Result<Error> {
-        self.get_help_all(op.str())
-            .ok_or_else(|| Error::op_not_found(op, None, false, self))
+        todo!("implement")
+        //         self.get_help_all(op.str())
+        //             .ok_or_else(|| Error::op_not_found(op, None, false, self))
     }
 
     /// Find the appropriate [`Implementation`] for the command `op` with the input `ty`pe.
@@ -174,12 +175,13 @@ impl Implementations {
 
     /// Helper which is the same as [`Self::get_impl`] but creates an [`Error`] upon failure.
     pub fn get_impl_with_err(&self, op: &Tag, ty: &Type) -> Result<&Implementation> {
-        match self.contains_op(op.str()) {
-            true => self
-                .get_impl(op.str(), ty)
-                .ok_or_else(|| Error::impl_not_found(op, ty)),
-            false => Err(Error::op_not_found(op, Some(ty), false, self)),
-        }
+        todo!("implement");
+        //         match self.contains_op(op.str()) {
+        //             true => self
+        //                 .get_impl(op.str(), ty)
+        //                 .ok_or_else(|| Error::impl_not_found(op, ty)),
+        //             false => Err(Error::op_not_found(op, Some(ty), false, self)),
+        //         }
     }
 
     fn insert_intrinsic<O, I, F>(

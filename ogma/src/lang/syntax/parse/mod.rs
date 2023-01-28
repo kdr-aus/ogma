@@ -564,7 +564,10 @@ fn op_ident(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + 
 fn known_op<'a>(line: &'a Line, defs: &'a Definitions) -> impl Fn(&str) -> bool + 'a {
     move |i| match op(line)(i) {
         Ok((_, op)) => match op.is_op() {
-            Some(t) => defs.impls().contains_op(t.str()),
+            Some(t) => {
+                todo!("need partition info");
+                //                 defs.impls().contains_op(t.str())
+            }
             None => false, // TODO handle this once `defs` can have path queries
         },
         _ => false,

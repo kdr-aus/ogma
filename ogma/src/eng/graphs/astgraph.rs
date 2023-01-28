@@ -291,106 +291,110 @@ impl AstGraph {
 
         let impls = defs.impls();
 
-        if !impls.contains_op(op.str()) {
-            return Err(Error::op_not_found(&op, None, false, impls));
-        }
+        todo!("work out the partition id here");
 
-        let op_impls = impls.iter_op(op.str());
+        //         if !impls.contains_op(op.str()) {
+        //             return Err(Error::op_not_found(&op, None, false, impls));
+        //         }
+
+        let op_impls = impls.iter().op(op.str());
 
         recursion_detector.clear_cache();
 
         let mut expanded = false;
 
-        for lang::impls::ImplEntry {
-            name,
-            ty,
-            cat: _,
-            help: _,
-            impl_,
-        } in op_impls
-        {
-            // sub-root
-            let cmd = match impl_ {
-                // always include an intrinsic
-                Implementation::Intrinsic { loc: _, f } => self.0.add_node(AstNode::Intrinsic {
-                    op: op.clone(),
-                    intrinsic: f.clone(),
-                }),
-                Implementation::Definition(def) => {
-                    // first, test that this def is not already being used in the call chain,
-                    // detecting recursion.
-                    // make an exception for unkeyed impls, since the path taken may be differing
-                    let id = ty.map(|ty| format!("{name}:{ty}"));
+        todo!("implement this");
 
-                    if id
-                        .as_ref()
-                        .map(|id| recursion_detector.detect(self, opnode, id))
-                        .unwrap_or(false)
-                    {
-                        continue;
-                    }
-
-                    // no recursion detected, this id will need to be added to the detector
-                    let tys = defs.types();
-                    let params = def
-                        .params
-                        .iter()
-                        .map(|p| Parameter::from_ast(p, tys))
-                        .collect::<Result<Vec<Parameter>>>()?;
-
-                    let cmd = self.0.add_node(AstNode::Def {
-                        expr: def.expr.tag.clone(),
-                        params,
-                    });
-                    let expr = self.flatten_expr(def.expr.clone(), chgs, defs)?;
-                    // link cmd to expr
-                    self.0.add_edge(cmd, expr, Relation::Normal);
-                    // add the id into the recursion detector
-                    if let Some(id) = id {
-                        recursion_detector.add_id(cmd, id);
-                    }
-
-                    cmd
-                }
-            };
-
-            let g = &mut self.0;
-
-            // link the op with this subroot, keyed by the key!
-            g.add_edge(opnode_, cmd, Relation::Keyed(ty.cloned()));
-
-            // link the op's terms to this subroot
-            // REVERSED since the neighbors are returned in reverse add order
-            // flags first
-            for (i, flag) in g
-                .edges(opnode_)
-                .filter(|e| e.weight().is_normal())
-                .filter(|e| g[e.target()].flag().is_some())
-                .map(|e| e.target())
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .enumerate()
-            {
-                g.add_edge(flag, cmd, Relation::Term(i as u8));
-            }
-            // now args, normal connections that aren't flags
-            for (i, arg) in g
-                .edges(opnode_)
-                .filter(|e| e.weight().is_normal())
-                .filter(|e| g[e.target()].flag().is_none())
-                .map(|e| e.target())
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .enumerate()
-            {
-                g.add_edge(arg, cmd, Relation::Term(i as u8));
-            }
-
-            // if we got this far, update the flag
-            expanded = true;
-        }
+        //         for lang::impls::Impl2 {
+        //             inner,
+        //             ty,
+        //             cat: _,
+        //             help: _,
+        //             impl_,
+        //         } in op_impls
+        //         {
+        //             // sub-root
+        //             let cmd = match impl_ {
+        //                 // always include an intrinsic
+        //                 Implementation::Intrinsic { loc: _, f } => self.0.add_node(AstNode::Intrinsic {
+        //                     op: op.clone(),
+        //                     intrinsic: f.clone(),
+        //                 }),
+        //                 Implementation::Definition(def) => {
+        //                     // first, test that this def is not already being used in the call chain,
+        //                     // detecting recursion.
+        //                     // make an exception for unkeyed impls, since the path taken may be differing
+        //                     let id = ty.map(|ty| format!("{name}:{ty}"));
+        //
+        //                     if id
+        //                         .as_ref()
+        //                         .map(|id| recursion_detector.detect(self, opnode, id))
+        //                         .unwrap_or(false)
+        //                     {
+        //                         continue;
+        //                     }
+        //
+        //                     // no recursion detected, this id will need to be added to the detector
+        //                     let tys = defs.types();
+        //                     let params = def
+        //                         .params
+        //                         .iter()
+        //                         .map(|p| Parameter::from_ast(p, tys))
+        //                         .collect::<Result<Vec<Parameter>>>()?;
+        //
+        //                     let cmd = self.0.add_node(AstNode::Def {
+        //                         expr: def.expr.tag.clone(),
+        //                         params,
+        //                     });
+        //                     let expr = self.flatten_expr(def.expr.clone(), chgs, defs)?;
+        //                     // link cmd to expr
+        //                     self.0.add_edge(cmd, expr, Relation::Normal);
+        //                     // add the id into the recursion detector
+        //                     if let Some(id) = id {
+        //                         recursion_detector.add_id(cmd, id);
+        //                     }
+        //
+        //                     cmd
+        //                 }
+        //             };
+        //
+        //             let g = &mut self.0;
+        //
+        //             // link the op with this subroot, keyed by the key!
+        //             g.add_edge(opnode_, cmd, Relation::Keyed(ty.cloned()));
+        //
+        //             // link the op's terms to this subroot
+        //             // REVERSED since the neighbors are returned in reverse add order
+        //             // flags first
+        //             for (i, flag) in g
+        //                 .edges(opnode_)
+        //                 .filter(|e| e.weight().is_normal())
+        //                 .filter(|e| g[e.target()].flag().is_some())
+        //                 .map(|e| e.target())
+        //                 .collect::<Vec<_>>()
+        //                 .into_iter()
+        //                 .rev()
+        //                 .enumerate()
+        //             {
+        //                 g.add_edge(flag, cmd, Relation::Term(i as u8));
+        //             }
+        //             // now args, normal connections that aren't flags
+        //             for (i, arg) in g
+        //                 .edges(opnode_)
+        //                 .filter(|e| e.weight().is_normal())
+        //                 .filter(|e| g[e.target()].flag().is_none())
+        //                 .map(|e| e.target())
+        //                 .collect::<Vec<_>>()
+        //                 .into_iter()
+        //                 .rev()
+        //                 .enumerate()
+        //             {
+        //                 g.add_edge(arg, cmd, Relation::Term(i as u8));
+        //             }
+        //
+        //             // if we got this far, update the flag
+        //             expanded = true;
+        //         }
 
         Ok(expanded)
     }
@@ -403,8 +407,9 @@ impl AstGraph {
 }
 
 fn map_ty_tag(tag: Option<Tag>, defs: &Definitions) -> Result<Option<Type>> {
-    tag.map(|t| defs.types().get_using_tag(&t).map(|x| x.clone()))
-        .transpose()
+    todo!("work out the partition location");
+    //     tag.map(|t| defs.types().get(&t).map(Clone::clone))
+    //         .transpose()
 }
 
 #[derive(Default)]
@@ -847,7 +852,7 @@ impl fmt::Display for Relation {
 }
 
 impl Parameter {
-    fn from_ast(param: &ast::Parameter, tys: &types::Types) -> Result<Self> {
+    fn from_ast(param: &ast::Parameter, tys: &defs2::TypesIn) -> Result<Self> {
         let ast::Parameter { ident, ty } = param;
 
         let name = ident.clone();
@@ -855,7 +860,7 @@ impl Parameter {
         let ty = if ty.map(|t| t.str() == "Expr").unwrap_or(false) {
             ParameterTy::Expr
         } else {
-            ty.map(|t| tys.get_using_tag(t))
+            ty.map(|t| tys.get(t))
                 .transpose()?
                 .map(Clone::clone)
                 .map(ParameterTy::Specified)

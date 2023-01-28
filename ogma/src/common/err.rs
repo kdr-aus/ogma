@@ -2,6 +2,7 @@
 
 use crate::{
     lang::{
+        defs2,
         help::*,
         syntax::ast::*,
         types::{Type, TypeDef},
@@ -184,13 +185,13 @@ impl Error {
         op: &Tag,
         inty: Option<&Type>,
         recursion_detected: bool,
-        impls: &Implementations,
+        impls: defs2::Impls,
     ) -> Self {
         fn tystr(x: Option<&Type>) -> String {
             x.map(|x| x.to_string()).unwrap_or_else(|| "<any>".into())
         }
 
-        let ty = impls.iter_op(op.str()).collect::<Vec<_>>();
+        let ty = impls.iter().op(op.str()).collect::<Vec<_>>();
 
         let hlp = if recursion_detected {
             "recursion is not supported.
@@ -198,10 +199,11 @@ impl Error {
         } else if ty.is_empty() {
             "view a list of definitions using `def --list`".into()
         } else {
-            ty.into_iter().fold(
-                format!("`{op}` is implemented for the following input types:"),
-                |s, t| s + " " + &tystr(t.ty),
-            )
+            todo!("implement")
+            //             ty.into_iter().fold(
+            //                 format!("`{op}` is implemented for the following input types:"),
+            //                 |s, t| s + " " + &tystr(t.inty),
+            //             )
         };
 
         Error {

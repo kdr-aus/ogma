@@ -5,7 +5,7 @@ use ::paste::paste;
 use ::table::Entry;
 use ast::{Location, Tag};
 use eng::{AnonTypes, Block, Context, Step};
-use lang::{help::*, impls::OperationCategory, defs2::Definitions};
+use lang::{defs2::Definitions, help::*, impls::OperationCategory};
 use std::{
     convert::{TryFrom, TryInto},
     iter::*,
@@ -49,13 +49,13 @@ macro_rules! add {
 // mod pipeline;
 
 pub fn add_intrinsics(impls: &mut Definitions) {
-//     arithmetic::add_intrinsics(impls);
-//     cmp::add_intrinsics(impls);
-//     diagnostics::add_intrinsics(impls);
-//     io::add_intrinsics(impls);
-//     logic::add_intrinsics(impls);
-//     morphism::add_intrinsics(impls);
-//     pipeline::add_intrinsics(impls);
+    //     arithmetic::add_intrinsics(impls);
+    //     cmp::add_intrinsics(impls);
+    //     diagnostics::add_intrinsics(impls);
+    //     io::add_intrinsics(impls);
+    //     logic::add_intrinsics(impls);
+    //     morphism::add_intrinsics(impls);
+    //     pipeline::add_intrinsics(impls);
 }
 
 // ------ Helpers --------------------------------------------------------------
@@ -197,13 +197,17 @@ fn type_flag(blk: &mut Block) -> Result<Option<Type>> {
     blk.get_flag(None)
         .map(|ty| {
             let x = if ty.str().starts_with("U_") {
-                Tuple::parse_name(ty.str(), blk.defs().types())
+                Tuple::parse_name(ty.str(), blk.defs().types().within(blk.partition))
             } else {
                 None
             };
             match x {
                 Some(x) => Ok(x),
-                None => blk.defs().types().get(&ty, blk.partition).map(Clone::clone),
+                None => blk
+                    .defs()
+                    .types()
+                    .get((&ty, blk.partition))
+                    .map(Clone::clone),
             }
         })
         .transpose()

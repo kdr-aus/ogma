@@ -104,44 +104,45 @@ pub(super) fn map_def_params_into_variables(
     for (idx, param) in params.iter().enumerate() {
         let idx = idx as u8;
         // point of failure
-        let argnode = arg::pop(&mut args, idx, blk_tag).map_err(|_| {
-            let op = defnode.parent(ag);
-            let optag = op.op_tag(ag);
-            let impl_ = tg[op.idx()]
-                .input
-                .ty()
-                .and_then(|inty| defs.impls().get(optag, inty))
-                .or_else(|| {
-                    defs.impls()
-                        .iter_op(optag.str())
-                        .map(|x| x.impl_)
-                        // TODO: this returns on the first match, but I don't think that is a reasonable
-                        // option???
-                        // Maybe it should fail if not typed???, dunno...
-                        .next()
-                })
-                .and_then(|i| match i {
-                    Implementation::Definition(x) => Some(x.as_ref()),
-                    _ => None,
-                });
-
-            Error::insufficient_args(blk_tag, idx, impl_)
-        })?;
-
-        if param.ty.is_expr() {
-            // the parameter is lazy
-            if let Err(chg) = map_lazy_param(compiler, argnode, defnode, param) {
-                chgs.chgs.push(chg.into());
-                lg_chg = true;
-            }
-        } else {
-            // the parameter is to be resolved at the call site
-            match map_callsite_param(compiler, argnode, defnode, idx, param, chgs)? {
-                Ok(Some(cp)) => callsite_params.push(cp),
-                Ok(None) => lg_chg = true,
-                Err(li) => return Ok(li),
-            }
-        }
+        todo!("not sure what to do here");
+        //         let argnode = arg::pop(&mut args, idx, blk_tag).map_err(|_| {
+        //             let op = defnode.parent(ag);
+        //             let optag = op.op_tag(ag);
+        //             let impl_ = tg[op.idx()]
+        //                 .input
+        //                 .ty()
+        //                 .and_then(|inty| defs.impls().get(optag, inty))
+        //                 .or_else(|| {
+        //                     defs.impls()
+        //                         .iter().op(optag.str())
+        //                         .map(|x| x.inner)
+        //                         // TODO: this returns on the first match, but I don't think that is a reasonable
+        //                         // option???
+        //                         // Maybe it should fail if not typed???, dunno...
+        //                         .next()
+        //                 })
+        //                 .and_then(|i| match i {
+        //                     Implementation::Definition(x) => Some(x.as_ref()),
+        //                     _ => None,
+        //                 });
+        //
+        //             Error::insufficient_args(blk_tag, idx, impl_)
+        //         })?;
+        //
+        //         if param.ty.is_expr() {
+        //             // the parameter is lazy
+        //             if let Err(chg) = map_lazy_param(compiler, argnode, defnode, param) {
+        //                 chgs.chgs.push(chg.into());
+        //                 lg_chg = true;
+        //             }
+        //         } else {
+        //             // the parameter is to be resolved at the call site
+        //             match map_callsite_param(compiler, argnode, defnode, idx, param, chgs)? {
+        //                 Ok(Some(cp)) => callsite_params.push(cp),
+        //                 Ok(None) => lg_chg = true,
+        //                 Err(li) => return Ok(li),
+        //             }
+        //         }
     }
 
     finalise_args(&args, ag)?;

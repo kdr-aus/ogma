@@ -26,13 +26,13 @@ mod prelude {
     pub(crate) use super::eng;
     pub(crate) use super::lang::{
         self,
-        defs2::{Definitions, DefItems},
+        defs2::{DefItems, Definitions},
         impls::{Implementation, Implementations},
         syntax::ast::{self, Tag},
         types::{self, AsType, OgmaData, Table, TableRow, Tuple, Type, Value},
     };
     pub(crate) use super::output::print;
-    pub(crate) use super::rt;
+    // pub(crate) use super::rt; // TODO turn back on
     pub(crate) use super::{HashMap, HashSet, Result};
 
     pub(crate) use ::libs::divvy::Str;
