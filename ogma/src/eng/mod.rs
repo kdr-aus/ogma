@@ -101,7 +101,7 @@ pub struct Block<'a> {
     ///
     /// This is used for fetching types and names, since only a subset of items will be available
     /// based on the `partition`.
-    pub partition: defs2::Id
+    pub partition: defs2::Id,
 }
 
 /// Compiler changes to apply.

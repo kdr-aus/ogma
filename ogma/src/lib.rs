@@ -25,11 +25,11 @@ mod prelude {
     pub(crate) use super::eng;
     pub(crate) use super::lang::{
         self,
-        Definitions,
         defs2::{self, DefItems},
         impls::{Implementation, Implementations},
         syntax::ast::{self, Tag},
         types::{self, AsType, OgmaData, Table, TableRow, Tuple, Type, Value},
+        Definitions,
     };
     pub(crate) use super::output::print;
     pub(crate) use super::rt;

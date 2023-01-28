@@ -561,10 +561,7 @@ fn from_parsed_fields(fields: Vec<ast::Field>, types: &Types) -> Result<Vec<Fiel
     Ok(v)
 }
 
-fn from_parsed_fields2(
-    fields: Vec<ast::Field>,
-    types: defs2::TypesIn,
-) -> Result<Vec<Field>> {
+fn from_parsed_fields2(fields: Vec<ast::Field>, types: defs2::TypesIn) -> Result<Vec<Field>> {
     let mut v = Vec::with_capacity(fields.len());
     for field in fields {
         let ast::Field { name, ty, params } = field;

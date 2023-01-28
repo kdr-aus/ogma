@@ -49,13 +49,13 @@ macro_rules! add {
 // mod pipeline;
 
 pub fn add_intrinsics(impls: &mut Definitions) {
-//     arithmetic::add_intrinsics(impls);
-//     cmp::add_intrinsics(impls);
-//     diagnostics::add_intrinsics(impls);
-//     io::add_intrinsics(impls);
-//     logic::add_intrinsics(impls);
-//     morphism::add_intrinsics(impls);
-//     pipeline::add_intrinsics(impls);
+    //     arithmetic::add_intrinsics(impls);
+    //     cmp::add_intrinsics(impls);
+    //     diagnostics::add_intrinsics(impls);
+    //     io::add_intrinsics(impls);
+    //     logic::add_intrinsics(impls);
+    //     morphism::add_intrinsics(impls);
+    //     pipeline::add_intrinsics(impls);
 }
 
 // ------ Helpers --------------------------------------------------------------

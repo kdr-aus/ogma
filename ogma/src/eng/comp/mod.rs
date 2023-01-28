@@ -634,7 +634,7 @@ impl<'a> Block<'a> {
             chgs,
             #[cfg(debug_assertions)]
             output_ty: None,
-            partition
+            partition,
         }
     }
 }
