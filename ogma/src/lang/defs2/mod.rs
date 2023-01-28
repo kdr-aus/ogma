@@ -177,7 +177,7 @@ impl Definitions {
             let inty = x
                 .in_ty
                 .as_ref()
-                .map(|x| self.types().get((x, idx)).map(Clone::clone))
+                .map(|x| self.types().get(x, idx).map(Clone::clone))
                 .transpose()?;
 
             let help = lang::impls::usr_impl_help(&x);
@@ -371,7 +371,7 @@ impl<'a> Impls<'a> {
         self.0
             .partitions
             .find_impls(bnd, imports, key)
-            .any(|x| self.0.impls[&x].inty.as_ref() == Some(ty))
+            .any(|x| self.0.impls[&x].0.as_ref() == Some(ty))
     }
 
     fn get_<K>(&self, key: &str, ty: &Type, within: Id, k_: K) -> K::Output
@@ -548,13 +548,11 @@ impl<'a, 'd> DefItems<'a, (&'a str, Id)> for Types<'d> {
     }
 }
 
-#[derive(Copy, Clone)]
 pub struct ImplsIn<'a> {
     pub impls: Impls<'a>,
     pub partition: Id,
 }
 
-#[derive(Copy, Clone)]
 pub struct TypesIn<'a> {
     pub types: Types<'a>,
     pub partition: Id,
@@ -629,15 +627,8 @@ pub struct ImplsIter {}
 
 pub struct TypesIter {}
 
-impl ImplsIter {
-    pub fn op(self, op: &str) -> impl Iterator<Item = <Self as Iterator>::Item> {
-        todo!("filter correctly");
-        self
-    }
-}
-
 impl Iterator for ImplsIter {
-    type Item = lang::impls::Impl2;
+    type Item = ();
 
     fn next(&mut self) -> Option<Self::Item> {
         todo!()

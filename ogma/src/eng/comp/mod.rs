@@ -622,19 +622,17 @@ impl<'a> Block<'a> {
         flags.reverse();
         args.reverse();
 
-        todo!("need the partition node here")
-
-        //         Block {
-        //             node: opnode,
-        //             compiler,
-        //             in_ty,
-        //             flags,
-        //             args,
-        //             args_count: 0,
-        //             chgs,
-        //             #[cfg(debug_assertions)]
-        //             output_ty: None,
-        //         }
+        Block {
+            node: opnode,
+            compiler,
+            in_ty,
+            flags,
+            args,
+            args_count: 0,
+            chgs,
+            #[cfg(debug_assertions)]
+            output_ty: None,
+        }
     }
 }
 

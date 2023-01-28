@@ -11,7 +11,7 @@ mod graphs;
 mod step;
 mod var;
 
-use lang::defs2::{self, Definitions};
+use lang::defs2::Definitions;
 
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
@@ -101,7 +101,7 @@ pub struct Block<'a> {
     ///
     /// This is used for fetching types and names, since only a subset of items will be available
     /// based on the `partition`.
-    pub partition: defs2::Id,
+    pub partition: defs2::Id
 }
 
 /// Compiler changes to apply.
