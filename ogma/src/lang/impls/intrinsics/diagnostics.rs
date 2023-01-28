@@ -1,7 +1,7 @@
 use super::*;
 use std::time::Instant;
 
-pub fn add_intrinsics(impls: &mut Implementations) {
+pub fn add_intrinsics(impls: &mut Definitions) {
     add! { impls,
         (benchmark, Diagnostics)
         (typify, Diagnostics)

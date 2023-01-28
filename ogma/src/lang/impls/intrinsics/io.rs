@@ -2,7 +2,7 @@ use super::*;
 use rt::fscache::FSCACHE;
 use std::io::{self, Write};
 
-pub fn add_intrinsics(impls: &mut Implementations) {
+pub fn add_intrinsics(impls: &mut Definitions) {
     add! { impls,
         ("ls", Table, ls_table, Io)
         (ls, Io)

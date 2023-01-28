@@ -1,9 +1,9 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::parse::File;
+use lang::{impls::Impl2, parse::File};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     path::{Path, PathBuf},
 };
 
@@ -13,21 +13,195 @@ mod tests;
 
 use partitions::*;
 
+pub use partitions::Id;
 pub const ROOT: BoundaryNode = BoundaryNode(0);
 
 pub struct Definitions {
     partitions: Partitions,
-    impls: HashMap<ImplNode, (Option<Type>, Implementation)>,
+    impls: HashMap<ImplNode, Impl2>,
     types: HashMap<TypeNode, Type>,
 }
 
 impl Definitions {
     pub fn new() -> Self {
-        Self {
+        let this = Self {
             partitions: Partitions::new(),
             impls: HashMap::default(),
             types: HashMap::default(),
+        };
+
+        // initialise the core types
+        let (this, tydefs) = types::init(this);
+
+        return this;
+
+        // initialise the core impls
+        let mut this = lang::impls::init(this);
+
+        // add in the initialisation impls for tydefs
+        for x in tydefs {
+            lang::impls::add_typedef_init_impls2(&mut this, x);
         }
+
+        // add derived impls
+        lang::impls::init_derived_impls(this)
+    }
+
+    /// Build the definitions defined on disk, using `root` as root folder to search.
+    pub fn from_root<P: AsRef<Path>>(root: P) -> Result<Self> {
+        let fsmap = build_fs_map(root.as_ref())?;
+        let partitions = Partitions::new().extend_root(fsmap)?;
+
+        let mut this = Self {
+            partitions,
+            types: Default::default(),
+            impls: Default::default(),
+        };
+
+        this.parse_items()?;
+
+        Ok(this)
+    }
+
+    /// Insert a core type, this is used for initialisation.
+    pub(crate) fn insert_core_type(&mut self, path: &'static str, ty: Type) {
+        let id = self.partitions.add_intrinsic_type(path);
+
+        debug_assert!(
+            self.partitions
+                .find_types(ROOT, PartSet::empty(), &path)
+                .filter(|n| self.types.get(n) == Some(&ty))
+                .count()
+                == 0,
+            "core items should not overwrite one another"
+        );
+
+        self.types.insert(id, ty);
+    }
+
+    /// Insert a core impl, this is used for initialisation.
+    pub(crate) fn insert_core_impl<I, F>(
+        &mut self,
+        path: &'static str,
+        in_ty: I,
+        f: F,
+        loc: Location,
+        cat: lang::impls::OperationCategory,
+        help: lang::help::HelpMessage,
+    ) where
+        I: Into<Option<Type>>,
+        F: Fn(eng::Block) -> Result<eng::Step> + Send + Sync + 'static,
+    {
+        let name = path;
+
+        let id = self.partitions.add_intrinsic_impl(&name);
+
+        let inty = in_ty.into();
+
+        debug_assert!(
+            self.partitions
+                .find_impls(ROOT, PartSet::empty(), &name)
+                .filter(|n| self.impls[n].inty == inty)
+                .count()
+                == 0,
+            "core items should not overwrite one another"
+        );
+
+        let impl_ = Impl2 {
+            inner: Implementation::Intrinsic {
+                loc,
+                f: Arc::new(f),
+            },
+            inty,
+            cat,
+            help,
+        };
+
+        self.impls.insert(id, impl_);
+    }
+
+    /// Parse the stored items in partitons as concrete implementations and types.
+    ///
+    /// Note that this checks for duplicate definitions, if called on a definitions that has
+    /// already been parsed, an error would occur.
+    /// If wanting to append/overwrite, it is best to clear out the definitions first, or just
+    /// construct a new one.
+    fn parse_items(&mut self) -> Result<()> {
+        // the types are first, since we will need the type info when adding an implementation
+        self.parse_types()?;
+
+        self.parse_impls()
+    }
+
+    fn parse_types(&mut self) -> Result<()> {
+        let mut todo = self
+            .partitions
+            .all_types()
+            .filter_map(|(i, n)| n.item().map(|x| (i, x)))
+            .collect::<VecDeque<_>>();
+
+        while let Some((idx, PItem { item, path })) = todo.pop_front() {
+            let code = item.code.clone();
+            let loc = Location::File(path.clone(), item.line);
+
+            let dt = lang::parse::definition_type(code, loc).map_err(|x| x.0)?;
+
+            let dt = types::TypeDef::from_parsed_def2(dt, item.doc.clone(), self, idx)?;
+
+            if let Some(exists) = self.types.insert(idx, Type::Def(dt.into())) {
+                return Err(Error {
+                    cat: err::Category::Internal,
+                    desc: "duplicate definition".to_string(),
+                    help_msg: format!("{exists} is already defined").into(),
+                    ..Error::default()
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_impls(&mut self) -> Result<()> {
+        let mut todo = self
+            .partitions
+            .all_impls()
+            .filter_map(|(i, n)| n.item().map(|x| (i, n, x)))
+            .collect::<VecDeque<_>>();
+
+        while let Some((idx, node, PItem { item, path })) = todo.pop_front() {
+            let code = item.code.clone();
+            let loc = Location::File(path.clone(), item.line);
+
+            todo!("we'll need to switch over to defs2::Definitions for parse module before this works");
+
+            let x = lang::parse::definition_impl2(code, loc, self, idx).map_err(|x| x.0)?;
+
+            let inty = x
+                .in_ty
+                .as_ref()
+                .map(|x| self.types().get((x, idx)).map(Clone::clone))
+                .transpose()?;
+
+            let help = lang::impls::usr_impl_help(&x);
+
+            let x = Impl2 {
+                inner: Implementation::Definition(Box::new(x)),
+                inty,
+                cat: lang::impls::OperationCategory::UserDefined,
+                help,
+            };
+
+            if let Some(_) = self.impls.insert(idx, x) {
+                return Err(Error {
+                    cat: err::Category::Internal,
+                    desc: "duplicate definition".to_string(),
+                    help_msg: format!("{} is already defined", node.name()).into(),
+                    ..Error::default()
+                });
+            }
+        }
+
+        Ok(())
     }
 
     pub fn impls(&self) -> Impls {
@@ -171,8 +345,10 @@ pub trait DefItems<'a, Key: 'a> {
     fn iter(&self) -> Self::Iter;
 }
 
+#[derive(Copy, Clone)]
 pub struct Impls<'a>(&'a Definitions);
 
+#[derive(Copy, Clone)]
 pub struct Types<'a>(&'a Definitions);
 
 impl<'a> Impls<'a> {
@@ -197,7 +373,7 @@ impl<'a> Impls<'a> {
         self.0
             .partitions
             .find_impls(bnd, imports, key)
-            .any(|x| self.0.impls[&x].0.as_ref() == Some(ty))
+            .any(|x| self.0.impls[&x].inty.as_ref() == Some(ty))
     }
 
     fn get_<K>(&self, key: &str, ty: &Type, within: Id, k_: K) -> K::Output
@@ -209,13 +385,15 @@ impl<'a> Impls<'a> {
         let chk_ty = ty;
         let mut ambig = None;
         let mut found = None;
+
         for n in self.0.partitions.find_impls(bnd, imports, key) {
-            let (ty, impl_) = self
+            let impl_ = self
                 .0
                 .impls
                 .get(&n)
                 .expect("implementation should be defined in map");
-            match ty {
+
+            match &impl_.inty {
                 Some(ty) if ty == chk_ty => match found {
                     Some(_) => {
                         return k_.fail(|tag| {
@@ -228,7 +406,7 @@ impl<'a> Impls<'a> {
                     }
                         })
                     }
-                    None => found = Some(impl_),
+                    None => found = Some(&impl_.inner),
                 },
                 Some(_) => (), // skip, type doesn't match
                 None => match ambig {
@@ -243,7 +421,7 @@ impl<'a> Impls<'a> {
                     }
                         });
                     }
-                    None => ambig = Some(impl_),
+                    None => ambig = Some(&impl_.inner),
                 },
             }
         }
@@ -372,11 +550,13 @@ impl<'a, 'd> DefItems<'a, (&'a str, Id)> for Types<'d> {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct ImplsIn<'a> {
     pub impls: Impls<'a>,
     pub partition: Id,
 }
 
+#[derive(Copy, Clone)]
 pub struct TypesIn<'a> {
     pub types: Types<'a>,
     pub partition: Id,

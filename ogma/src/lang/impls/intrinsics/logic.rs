@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn add_intrinsics(impls: &mut Implementations) {
+pub fn add_intrinsics(impls: &mut Definitions) {
     add! { impls,
         (and, Logic)
         (if, Logic)

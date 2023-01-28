@@ -5,6 +5,13 @@ impl Node {
         &self.name
     }
 
+    pub fn item(&self) -> Option<&PItem> {
+        match &self.item {
+            Item::Boundary { .. } => None,
+            Item::Type { item, .. } | Item::Impl { item, .. } => item.as_ref(),
+        }
+    }
+
     pub fn is_boundary(&self) -> bool {
         self.item.is_boundary()
     }

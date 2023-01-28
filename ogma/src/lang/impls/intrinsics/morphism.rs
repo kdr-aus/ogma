@@ -1,7 +1,7 @@
 use super::*;
 use std::{cell::RefCell, cmp, collections::BTreeMap, mem, rc::Rc};
 
-pub fn add_intrinsics(impls: &mut Implementations) {
+pub fn add_intrinsics(impls: &mut Definitions) {
     add! { impls,
     ("append", Table, append_table, Morphism)
     ("append-row", Table, append_row, Morphism)

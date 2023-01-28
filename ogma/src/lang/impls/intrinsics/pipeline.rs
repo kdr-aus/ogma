@@ -1,7 +1,7 @@
 use super::*;
 use libs::fastrand;
 
-pub fn add_intrinsics(impls: &mut Implementations) {
+pub fn add_intrinsics(impls: &mut Definitions) {
     add! { impls,
         ("get", TableRow, get_tabrow, Pipeline)
         (get, Pipeline)

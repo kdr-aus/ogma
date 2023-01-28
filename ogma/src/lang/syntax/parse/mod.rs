@@ -6,7 +6,12 @@ mod test;
 
 pub use file::*;
 
-use crate::prelude::{ast::*, err, Definitions, HashSet};
+use crate::prelude::{
+    ast::*,
+    err,
+    lang::defs2::{self, DefItems},
+    Definitions, HashSet,
+};
 use ::kserd::Number;
 use ::libs::divvy::Str;
 use nom::{
@@ -110,6 +115,16 @@ pub fn definition_impl<S: Into<Arc<str>>>(
     self::def_impl_inner(&line.line, &line, location.clone(), definitions)
         .map(|x| x.1)
         .map_err(|e| convert_parse_error(e, &line.line, location))
+}
+
+/// Parse a definition implementation (`def`).
+pub fn definition_impl2<S: Into<Arc<str>>, N: Into<defs2::Id>>(
+    _def: S,
+    _location: Location,
+    _defs: &defs2::Definitions,
+    _within: N,
+) -> Result<DefinitionImpl, ParseFail> {
+    panic!("switch to defs2::Definitions for parse module");
 }
 
 /// Parse a definition type (`def-ty`).

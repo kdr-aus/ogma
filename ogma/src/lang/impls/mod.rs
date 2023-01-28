@@ -3,7 +3,7 @@ mod intrinsics;
 use crate::prelude::*;
 use ast::{Location, Tag};
 use eng::{Block, Step};
-use lang::help::*;
+use lang::{defs2, help::*};
 use libs::divvy::Str;
 use std::{fmt, iter::*};
 
@@ -55,6 +55,13 @@ impl fmt::Display for OperationCategory {
 
 type Impl = (Implementation, OperationCategory, HelpMessage);
 
+pub struct Impl2 {
+    pub inner: Implementation,
+    pub inty: Option<Type>,
+    pub cat: OperationCategory,
+    pub help: HelpMessage,
+}
+
 #[derive(Clone)]
 // Structure is a nested map of maps, first by the command name, then by the input type.
 pub struct Implementations(HashMap<Str, Keys>);
@@ -97,7 +104,7 @@ impl Keys {
 impl Default for Implementations {
     fn default() -> Self {
         let mut impls = Implementations(HashMap::default());
-        intrinsics::add_intrinsics(&mut impls);
+        // intrinsics::add_intrinsics(&mut impls);
         impls
     }
 }
@@ -295,6 +302,16 @@ impl Implementations {
     }
 }
 
+pub fn init(mut defs: defs2::Definitions) -> defs2::Definitions {
+    // TODO: enable
+    // intrinsics::add_intrinsics(&mut defs);
+    defs
+}
+
+pub fn init_derived_impls(mut defs: defs2::Definitions) -> defs2::Definitions {
+    todo!()
+}
+
 // ------ Expr Impl ------------------------------------------------------------
 pub fn usr_impl_help(def: &ast::DefinitionImpl) -> HelpMessage {
     let desc: Str = format!("user defined implementation in {}\n`{}`", def.loc, def.src).into();
@@ -320,6 +337,10 @@ pub fn usr_impl_help(def: &ast::DefinitionImpl) -> HelpMessage {
 }
 
 // ------ TypeDef Init ---------------------------------------------------------
+pub fn add_typedef_init_impls2(defs: &mut defs2::Definitions, tydef: Arc<types::TypeDef>) {
+    todo!()
+}
+
 pub fn add_typedef_init_impls(impls: &mut Implementations, tydef: Arc<types::TypeDef>) {
     fn insert_intrinsic(
         impls: &mut Implementations,
