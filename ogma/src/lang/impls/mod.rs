@@ -104,7 +104,7 @@ impl Keys {
 impl Default for Implementations {
     fn default() -> Self {
         let mut impls = Implementations(HashMap::default());
-        intrinsics::add_intrinsics(&mut impls);
+        // intrinsics::add_intrinsics(&mut impls);
         impls
     }
 }
@@ -303,7 +303,8 @@ impl Implementations {
 }
 
 pub fn init(mut defs: defs2::Definitions) -> defs2::Definitions {
-    todo!()
+    intrinsics::add_intrinsics(&mut defs);
+    defs
 }
 
 pub fn init_derived_impls(mut defs: defs2::Definitions) -> defs2::Definitions {

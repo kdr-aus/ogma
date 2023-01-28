@@ -11,6 +11,8 @@ mod graphs;
 mod step;
 mod var;
 
+use lang::defs2::Definitions;
+
 type IndexSet = crate::HashSet<usize>;
 type IndexMap<V> = crate::HashMap<usize, V>;
 
@@ -74,12 +76,14 @@ pub struct Block<'a> {
     ///
     /// > Stored in reverse order as a stack.
     flags: Vec<Tag>,
+
     /// The blocks arguments, stored as indices into the ast graph.
     ///
     /// Must be empty upon finalisation, unused args return error.
     ///
     /// > Stored in reverse order as a stack.
     args: Vec<graphs::ArgNode>,
+
     /// Counter of the arguments used.
     ///
     /// Only 255 arguments are supported.
@@ -92,6 +96,12 @@ pub struct Block<'a> {
     /// Only available and checked in debug builds.
     #[cfg(debug_assertions)]
     output_ty: Option<Type>,
+
+    /// The location where this block is compiling in.
+    ///
+    /// This is used for fetching types and names, since only a subset of items will be available
+    /// based on the `partition`.
+    pub partition: defs2::Id
 }
 
 /// Compiler changes to apply.

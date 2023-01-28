@@ -1002,11 +1002,11 @@ impl Tuple {
         }
     }
 
-    pub fn parse_name(tuple: &str, tys: &Types) -> Option<Type> {
+    pub fn parse_name(tuple: &str, tys: defs2::Types) -> Option<Type> {
         Split::parse(tuple).and_then(|x| Self::convert_split(x, tys))
     }
 
-    fn convert_split(split: Split, tys: &Types) -> Option<Type> {
+    fn convert_split(split: Split, tys: defs2::Types) -> Option<Type> {
         match split {
             Split::Tuple(v) => {
                 let mut args = Vec::with_capacity(v.len());
@@ -1015,7 +1015,7 @@ impl Tuple {
                 }
                 Some(Type::Def(Arc::new(Self::ty(args))))
             }
-            Split::Ty(t) => tys.get_using_str(t).cloned(),
+            Split::Ty(t) => tys.get(t, within).cloned(),
         }
     }
 }

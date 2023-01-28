@@ -1,7 +1,7 @@
 use super::*;
 use std::cmp;
 
-pub fn add_intrinsics(impls: &mut Implementations) {
+pub fn add_intrinsics(impls: &mut Definitions) {
     add! { impls,
         ("cmp", (), cmp_nil, Cmp)
         ("cmp", bool, cmp_bool, Cmp)
