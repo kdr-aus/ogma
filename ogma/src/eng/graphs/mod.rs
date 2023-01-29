@@ -123,13 +123,13 @@ mod tests {
     use tygraph::*;
 
     fn init_graphs(expr: &str) -> (AstGraph, TypeGraph) {
-        init_graphs_w_defs(expr, &Definitions::default())
+        init_graphs_w_defs(expr, &Definitions::default(), &defs2::Definitions::new())
     }
 
-    fn init_graphs_w_defs(expr: &str, defs: &Definitions) -> (AstGraph, TypeGraph) {
+    fn init_graphs_w_defs(expr: &str, defs: &Definitions, defs2: &defs2::Definitions) -> (AstGraph, TypeGraph) {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
-        let (ag, _) = astgraph::init(expr, defs).unwrap();
+        let (ag, _) = astgraph::init(expr, defs2).unwrap();
         let tg = TypeGraph::build(&ag, defs.types());
         (ag, tg)
     }
@@ -521,6 +521,8 @@ mod tests {
     #[test]
     fn def_tg_linking_def_and_intrinsic() {
         let defs = &mut Definitions::default();
+        let defs2 = &mut defs2::Definitions::new();
+
         lang::process_definition(
             "def cmp Table (a b) { \\ #t }",
             Default::default(),
@@ -529,7 +531,7 @@ mod tests {
         )
         .unwrap();
 
-        let (ag, mut tg) = init_graphs_w_defs("cmp 'one' 'two'", defs);
+        let (ag, mut tg) = init_graphs_w_defs("cmp 'one' 'two'", defs, defs2);
 
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
@@ -566,6 +568,8 @@ mod tests {
     #[test]
     fn def_tg_linking_multiple_defs_params() {
         let defs = &mut Definitions::default();
+        let defs2 = &mut defs2::Definitions::new();
+
         lang::process_definition(
             "def foo Nil (a b c) { \\ #t }",
             Default::default(),
@@ -588,7 +592,7 @@ mod tests {
         )
         .unwrap();
 
-        let (ag, mut tg) = init_graphs_w_defs("foo 1 2 3", defs);
+        let (ag, mut tg) = init_graphs_w_defs("foo 1 2 3", defs, defs2);
 
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
@@ -650,6 +654,8 @@ mod tests {
     #[test]
     fn tg_types_with_keyed_some() {
         let defs = &mut Definitions::default();
+        let defs2 = &mut defs2::Definitions::new();
+
         lang::process_definition(
             "def foo Nil (a b) { \\ #t }",
             Default::default(),
@@ -658,7 +664,7 @@ mod tests {
         )
         .unwrap();
 
-        let (ag, mut tg) = init_graphs_w_defs("foo 2", defs);
+        let (ag, mut tg) = init_graphs_w_defs("foo 2", defs, defs2);
 
         tg.apply_ast_types(&ag);
         tg.apply_ast_edges(&ag);
@@ -678,6 +684,8 @@ mod tests {
     #[test]
     fn ag_init_endless_loop() {
         let defs = &mut Definitions::default();
+        let defs2 = &mut defs2::Definitions::new();
+
         // point def
         lang::process_definition(
             "def-ty Point { x:Num y:Num }",
@@ -688,13 +696,14 @@ mod tests {
         .unwrap();
         lang::process_definition("def + Point (rhs) { Point { get x | + { \\ $rhs | get x } } { get y | + { \\ $rhs | get y } } }", Default::default(), None, defs).unwrap();
 
-        let _ = init_graphs_w_defs("Point 1 3", defs);
-        let _ = init_graphs_w_defs("Point 1 3 | + Point -2 2", defs);
+        let _ = init_graphs_w_defs("Point 1 3", defs, defs2);
+        let _ = init_graphs_w_defs("Point 1 3 | + Point -2 2", defs, defs2);
     }
 
     #[test]
     fn ag_recursion_testing() {
         let defs = &mut Definitions::default();
+        let defs2 = &mut defs2::Definitions::new();
 
         lang::process_definition("def-ty Foo :: Bar", Default::default(), None, defs).unwrap();
         lang::process_definition(
@@ -705,7 +714,7 @@ mod tests {
         )
         .unwrap();
 
-        init_graphs_w_defs("Foo::Bar | + Foo::Bar", defs);
+        init_graphs_w_defs("Foo::Bar | + Foo::Bar", defs, defs2);
     }
 
     #[test]

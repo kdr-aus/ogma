@@ -54,7 +54,7 @@ fn fmt(s: &mut String, blk: &Block, node: petgraph::prelude::NodeIndex, v: bool)
             write!(s, " }}").unwrap();
             fmt_ty(s, out_ty)
         }
-        Op { op: _, blk: _ } => fmt_op(s, blk, OpNode(node), v),
+        Op { op: _, blk: _, within: _ } => fmt_op(s, blk, OpNode(node), v),
         Def { .. } | Intrinsic { .. } | Flag { .. } => unreachable!(),
     }
 }

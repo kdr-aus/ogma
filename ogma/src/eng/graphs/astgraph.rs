@@ -24,6 +24,9 @@ pub enum AstNode {
     Op {
         op: Tag,
         blk: Tag,
+
+        /// The invocation location of the op.
+        within: DefId,
     },
     Intrinsic {
         op: Tag,
@@ -145,6 +148,7 @@ impl AstGraph {
         } = expr;
 
         let root = g.add_node(AstNode::Expr(tag));
+        let tys = defs.types().within(within);
 
         // rather than building a recursive function, we'll use a queue of expressions to process,
         // since expressions are the recursive element
@@ -159,7 +163,7 @@ impl AstGraph {
         q.push_back(Qi {
             root,
             blocks,
-            out_ty: map_ty_tag(out_ty, defs.types().within(within))?,
+            out_ty: map_ty_tag(out_ty, tys)?,
         });
 
         // FIFO -- breadth-first
@@ -189,11 +193,9 @@ impl AstGraph {
                     }
                 };
 
-                let op = g.add_node(AstNode::Op { op, blk: blk_tag });
+                let op = g.add_node(AstNode::Op { op, blk: blk_tag, within });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 
-                let tys = defs.types().within(defs2::ROOT);
-                todo!("figure out partition location");
                 if let Some(t) = map_ty_tag(in_ty, tys)? {
                     chgs.push(Chg::ObligeInput(op, t));
                 }
@@ -263,16 +265,15 @@ impl AstGraph {
         let ops = self
             .node_indices()
             // is an Op
-            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
+            .filter_map(|n| self[n].op().map(|x| (OpNode(n), x.2)))
             // have not already expanded it
-            .filter(|&n| !self.op_expanded(n))
+            .filter(|n| !self.op_expanded(n.0))
             .collect::<Vec<_>>();
 
         let mut expanded = false;
 
-        for op in ops {
-            todo!("figure out partition location");
-            let x = self.expand_def(op, chgs, defs, todo!(), recursion_detector)?;
+        for (op, within) in ops {
+            let x = self.expand_def(op, chgs, defs, within, recursion_detector)?;
             expanded |= x;
         }
 
@@ -334,6 +335,7 @@ impl AstGraph {
 
                     // no recursion detected, this id will need to be added to the detector
                     // TODO: use something other than ROOT
+                    todo!();
                     let tys = defs.types().within(defs2::ROOT);
                     let params = def
                         .params
@@ -714,9 +716,9 @@ impl AstGraph {
 
 impl AstNode {
     /// If this is an op node, returns the `(op, blk)` tags.
-    pub fn op(&self) -> Option<(&Tag, &Tag)> {
+    pub fn op(&self) -> Option<(&Tag, &Tag, DefId)> {
         match self {
-            AstNode::Op { op, blk } => Some((op, blk)),
+            AstNode::Op { op, blk, within } => Some((op, blk, *within)),
             _ => None,
         }
     }
@@ -757,7 +759,7 @@ impl AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk: _ } => op,
+            Op { op, blk: _, within: _ } => op,
             Intrinsic { op, intrinsic: _ } => op,
             Def { expr, params: _ } => expr,
             Flag(f) => f,
@@ -775,7 +777,7 @@ impl fmt::Display for AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk: _ } => write!(f, "Op({})", op.str()),
+            Op { op, blk: _, within } => write!(f, "Op({})", op.str()),
             Intrinsic {
                 op: _,
                 intrinsic: _,
