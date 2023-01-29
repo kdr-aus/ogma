@@ -193,7 +193,11 @@ impl AstGraph {
                     }
                 };
 
-                let op = g.add_node(AstNode::Op { op, blk: blk_tag, within });
+                let op = g.add_node(AstNode::Op {
+                    op,
+                    blk: blk_tag,
+                    within,
+                });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 
                 if let Some(t) = map_ty_tag(in_ty, tys)? {
@@ -759,7 +763,11 @@ impl AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk: _, within: _ } => op,
+            Op {
+                op,
+                blk: _,
+                within: _,
+            } => op,
             Intrinsic { op, intrinsic: _ } => op,
             Def { expr, params: _ } => expr,
             Flag(f) => f,

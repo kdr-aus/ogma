@@ -126,7 +126,11 @@ mod tests {
         init_graphs_w_defs(expr, &Definitions::default(), &defs2::Definitions::new())
     }
 
-    fn init_graphs_w_defs(expr: &str, defs: &Definitions, defs2: &defs2::Definitions) -> (AstGraph, TypeGraph) {
+    fn init_graphs_w_defs(
+        expr: &str,
+        defs: &Definitions,
+        defs2: &defs2::Definitions,
+    ) -> (AstGraph, TypeGraph) {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
         let (ag, _) = astgraph::init(expr, defs2).unwrap();

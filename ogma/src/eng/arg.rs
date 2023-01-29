@@ -215,7 +215,11 @@ impl<'a> ArgBuilder<'a> {
         } = compiler;
 
         match &ag[node.idx()] {
-            Op { op: _, blk: _, within: _ } => unreachable!("an argument cannot be an Op variant"),
+            Op {
+                op: _,
+                blk: _,
+                within: _,
+            } => unreachable!("an argument cannot be an Op variant"),
             Flag(_) => unreachable!("an argument cannot be a Flag variant"),
             Intrinsic { .. } => unreachable!("an argument cannot be a Intrinsic variant"),
             Def { .. } => unreachable!("an argument cannot be a Def variant"),
