@@ -1,7 +1,10 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::{impls::Impl2, parse::File};
+use lang::{
+    impls::{Impl2, ImplEntry},
+    parse::File,
+};
 use std::{
     collections::{BTreeMap, VecDeque},
     path::{Path, PathBuf},
@@ -431,6 +434,32 @@ impl<'a> Impls<'a> {
             (None, None) => k_.fail(|tag| Error::impl_not_found(tag, chk_ty)),
         }
     }
+
+    fn matches_<K>(&self, key: &str, within: Id, k_: K) -> K::Output
+    where
+        K: PolyGet<Vec<ImplEntry<'a>>>,
+    {
+        let (bnd, imports) = self.0.partitions.bnd_and_imports(within);
+
+        let mut xs = self
+            .0
+            .partitions
+            .find_impls(bnd, imports, key)
+            .map(|n| make_impl_entry(self.0, n))
+            .collect::<Vec<_>>();
+
+        // xs.sort_unstable_by(|a,b| a.ty.cmp(&b.ty));
+
+        todo!()
+    }
+
+    pub fn matches<'b, K>(&self, key: K) -> K::Output
+    where
+        K: PolyGet<Vec<ImplEntry<'a>>> + AsKey<(&'b str, Id)>,
+    {
+        let (k, id) = key.as_key();
+        self.matches_(k, id, key)
+    }
 }
 
 impl<'a> Types<'a> {
@@ -562,6 +591,16 @@ pub struct TypesIn<'a> {
     pub partition: Id,
 }
 
+impl<'a> ImplsIn<'a> {
+    pub fn matches<'b, K>(&self, key: K) -> K::Output
+    where
+        K: PolyGet<Vec<ImplEntry<'a>>> + AsKey<&'b str>,
+    {
+        let k = key.as_key();
+        self.impls.matches_(k, self.partition, key)
+    }
+}
+
 impl<'a, 'd> DefItems<'a, (&'a str, &'a Type)> for ImplsIn<'d> {
     type Item = &'d Implementation;
     type Iter = ImplsIter;
@@ -629,7 +668,24 @@ impl<'a, 'd> DefItems<'a, &'a str> for TypesIn<'d> {
 
 pub struct ImplsIter {}
 
-pub struct TypesIter {}
+fn make_impl_entry<'a>(defs: &'a Definitions, n: ImplNode) -> ImplEntry<'a> {
+    let node = &defs.partitions[n];
+    debug_assert!(node.is_impl());
+    let Impl2 {
+        inner,
+        inty,
+        cat,
+        help,
+    } = &defs.impls[&n];
+
+    ImplEntry {
+        name: node.name(),
+        ty: inty.as_ref(),
+        cat: *cat,
+        help,
+        impl_: inner,
+    }
+}
 
 impl Iterator for ImplsIter {
     type Item = ();
@@ -638,6 +694,8 @@ impl Iterator for ImplsIter {
         todo!()
     }
 }
+
+pub struct TypesIter {}
 
 impl Iterator for TypesIter {
     type Item = ();

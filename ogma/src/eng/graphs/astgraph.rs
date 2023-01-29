@@ -1,4 +1,5 @@
 use super::*;
+use defs2::{Definitions, Id as DefId, TypesIn};
 use kserd::Number;
 use petgraph::prelude::*;
 use std::ops::Deref;
@@ -107,7 +108,7 @@ pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<(AstGraph, Chgs
 
     let expr_tag = expr.tag.clone();
 
-    graph.flatten_expr(expr, &mut chgs, defs)?;
+    graph.flatten_expr(expr, &mut chgs, defs, defs2::ROOT.into())?;
 
     let recursion_detector = &mut RecursionDetection::default();
 
@@ -130,6 +131,7 @@ impl AstGraph {
         expr: ast::Expression,
         chgs: &mut Chgs,
         defs: &Definitions,
+        within: DefId,
     ) -> Result<NodeIndex> {
         use ast::*;
 
@@ -157,7 +159,7 @@ impl AstGraph {
         q.push_back(Qi {
             root,
             blocks,
-            out_ty: map_ty_tag(out_ty, defs)?,
+            out_ty: map_ty_tag(out_ty, defs.types().within(within))?,
         });
 
         // FIFO -- breadth-first
@@ -190,10 +192,12 @@ impl AstGraph {
                 let op = g.add_node(AstNode::Op { op, blk: blk_tag });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 
-                if let Some(t) = map_ty_tag(in_ty, defs)? {
+                let tys = defs.types().within(defs2::ROOT);
+                todo!("figure out partition location");
+                if let Some(t) = map_ty_tag(in_ty, tys)? {
                     chgs.push(Chg::ObligeInput(op, t));
                 }
-                if let Some(t) = map_ty_tag(out_ty, defs)? {
+                if let Some(t) = map_ty_tag(out_ty, tys)? {
                     chgs.push(Chg::ObligeOutput(op, t));
                 }
 
@@ -236,7 +240,7 @@ impl AstGraph {
                         q.push_back(Qi {
                             root: term,
                             blocks,
-                            out_ty: map_ty_tag(out_ty, defs)?,
+                            out_ty: map_ty_tag(out_ty, tys)?,
                         });
                     }
                 }
@@ -267,7 +271,8 @@ impl AstGraph {
         let mut expanded = false;
 
         for op in ops {
-            let x = self.expand_def(op, chgs, defs, recursion_detector)?;
+            todo!("figure out partition location");
+            let x = self.expand_def(op, chgs, defs, todo!(), recursion_detector)?;
             expanded |= x;
         }
 
@@ -279,6 +284,7 @@ impl AstGraph {
         opnode: OpNode,
         chgs: &mut Chgs,
         defs: &Definitions,
+        within: DefId,
         recursion_detector: &mut RecursionDetection,
     ) -> Result<bool> {
         let opnode_ = NodeIndex::from(opnode);
@@ -289,13 +295,9 @@ impl AstGraph {
             .0
             .clone();
 
-        let impls = defs.impls();
+        let impls = defs.impls().within(within);
 
-        if !impls.contains_op(op.str()) {
-            return Err(Error::op_not_found(&op, None, false, impls));
-        }
-
-        let op_impls = impls.iter_op(op.str());
+        let op_impls = impls.matches(&op)?;
 
         recursion_detector.clear_cache();
 
@@ -331,7 +333,8 @@ impl AstGraph {
                     }
 
                     // no recursion detected, this id will need to be added to the detector
-                    let tys = defs.types();
+                    // TODO: use something other than ROOT
+                    let tys = defs.types().within(defs2::ROOT);
                     let params = def
                         .params
                         .iter()
@@ -342,7 +345,10 @@ impl AstGraph {
                         expr: def.expr.tag.clone(),
                         params,
                     });
-                    let expr = self.flatten_expr(def.expr.clone(), chgs, defs)?;
+                    // TODO: use something other than ROOT
+                    // not sure what yet, need to consider how looking down into
+                    // ast works
+                    let expr = self.flatten_expr(def.expr.clone(), chgs, defs, todo!())?;
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
                     // add the id into the recursion detector
@@ -402,9 +408,8 @@ impl AstGraph {
     }
 }
 
-fn map_ty_tag(tag: Option<Tag>, defs: &Definitions) -> Result<Option<Type>> {
-    tag.map(|t| defs.types().get_using_tag(&t).map(|x| x.clone()))
-        .transpose()
+fn map_ty_tag(tag: Option<Tag>, tys: TypesIn) -> Result<Option<Type>> {
+    tag.map(|t| tys.get(&t).map(Clone::clone)).transpose()
 }
 
 #[derive(Default)]
@@ -847,7 +852,7 @@ impl fmt::Display for Relation {
 }
 
 impl Parameter {
-    fn from_ast(param: &ast::Parameter, tys: &types::Types) -> Result<Self> {
+    fn from_ast(param: &ast::Parameter, tys: TypesIn) -> Result<Self> {
         let ast::Parameter { ident, ty } = param;
 
         let name = ident.clone();
@@ -855,7 +860,7 @@ impl Parameter {
         let ty = if ty.map(|t| t.str() == "Expr").unwrap_or(false) {
             ParameterTy::Expr
         } else {
-            ty.map(|t| tys.get_using_tag(t))
+            ty.map(|t| tys.get(t))
                 .transpose()?
                 .map(Clone::clone)
                 .map(ParameterTy::Specified)
