@@ -214,6 +214,10 @@ impl Definitions {
     pub fn types(&self) -> Types {
         Types(self)
     }
+
+    fn fuzzy_find(&self, path: &Tag) -> Result<()> {
+        todo!()
+    }
 }
 
 type FsMap = BTreeMap<PathBuf, Vec<File>>;
@@ -448,9 +452,35 @@ impl<'a> Impls<'a> {
             .map(|n| make_impl_entry(self.0, n))
             .collect::<Vec<_>>();
 
-        // xs.sort_unstable_by(|a,b| a.ty.cmp(&b.ty));
+        // if only one or no options, return early and skip checking for input type ambiguity
+        if xs.len() <= 1 {
+            return K::success(xs);
+        }
 
-        todo!()
+        // check for duplicate in types -- this would lead to ambiguity
+        xs.sort_unstable_by(|a, b| a.ty.cmp(&b.ty));
+        for [a, b] in xs
+            .windows(2)
+            .map(|x| <&[_; 2]>::try_from(x).expect("only slices of 2"))
+        {
+            if a.ty == b.ty {
+                return k_.fail(|tag| Error {
+                    cat: err::Category::Definitions,
+                    desc: format!("ambiguous op reference for `{key}`"),
+                    traces: err::trace(
+                        tag,
+                        format!(
+                            "multiple instances for input type {}",
+                            a.ty.map(ToString::to_string).unwrap_or("<any>".into())
+                        ),
+                    ),
+                    help_msg: err::help_msg_ambiguous_import(),
+                    hard: true,
+                });
+            }
+        }
+
+        K::success(xs)
     }
 
     pub fn matches<'b, K>(&self, key: K) -> K::Output
@@ -493,10 +523,7 @@ impl<'a> Types<'a> {
                 cat: err::Category::Definitions,
                 desc: "ambiguous type reference".to_string(),
                 traces: err::trace(tag, format!("{tag} references multiple definitions")),
-                help_msg:
-                    "check your imports for ambiguity\nconsider using fully qualified path syntax"
-                        .to_string()
-                        .into(),
+                help_msg: err::help_msg_ambiguous_import(),
                 hard: true,
             });
         }
@@ -598,6 +625,10 @@ impl<'a> ImplsIn<'a> {
     {
         let k = key.as_key();
         self.impls.matches_(k, self.partition, key)
+    }
+
+    pub fn fuzzy_find(&self, path: &Tag) -> Result<Vec<ImplEntry>> {
+        todo!()
     }
 }
 

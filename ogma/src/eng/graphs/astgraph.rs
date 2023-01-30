@@ -269,15 +269,15 @@ impl AstGraph {
         let ops = self
             .node_indices()
             // is an Op
-            .filter_map(|n| self[n].op().map(|x| (OpNode(n), x.2)))
+            .filter_map(|n| self[n].op().map(|x| OpNode(n)))
             // have not already expanded it
-            .filter(|n| !self.op_expanded(n.0))
+            .filter(|&n| !self.op_expanded(n))
             .collect::<Vec<_>>();
 
         let mut expanded = false;
 
-        for (op, within) in ops {
-            let x = self.expand_def(op, chgs, defs, within, recursion_detector)?;
+        for op in ops {
+            let x = self.expand_def(op, chgs, defs, recursion_detector)?;
             expanded |= x;
         }
 
@@ -289,20 +289,19 @@ impl AstGraph {
         opnode: OpNode,
         chgs: &mut Chgs,
         defs: &Definitions,
-        within: DefId,
         recursion_detector: &mut RecursionDetection,
     ) -> Result<bool> {
         let opnode_ = NodeIndex::from(opnode);
 
-        let op = self[opnode_]
-            .op()
-            .expect("opnode must be an Op variant")
-            .0
-            .clone();
+        let (op, _, within) = self[opnode_].op().expect("opnode must be an Op variant");
+        let op = op.clone();
 
         let impls = defs.impls().within(within);
 
         let op_impls = impls.matches(&op)?;
+        if op_impls.is_empty() {
+            return Err(Error::op_not_found2(&op, false, impls));
+        }
 
         recursion_detector.clear_cache();
 
