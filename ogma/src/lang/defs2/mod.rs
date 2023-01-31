@@ -215,8 +215,40 @@ impl Definitions {
         Types(self)
     }
 
-    fn fuzzy_find(&self, path: &Tag) -> Result<()> {
-        todo!()
+    /// Fuzzy find items that fit `path`, respecting the boundary and imports.
+    fn fuzzy_find<'n: 'i, 'i, N: Into<Id>>(
+        &'n self,
+        path: &'i str,
+        within: N,
+    ) -> impl Iterator<Item = (Id, &'n Node)> + 'i {
+        let (bnd, imports) = self.partitions.bnd_and_imports(within);
+
+        let name_with_slash = {
+            let x = path.trim_start_matches('/');
+            let from = x.rfind('/').unwrap_or(0);
+            &x[from..]
+        };
+
+        let path = path.strip_suffix(name_with_slash).expect("will match");
+
+        let bnds: Vec<_> =
+            if path.is_empty() {
+                // do not find a set of bounds, use the current ones
+                std::iter::once(bnd)
+                    .chain(imports.iter().filter_map(|n| {
+                        self.partitions[n].is_boundary().then_some(BoundaryNode(n))
+                    }))
+                    .collect()
+            } else {
+                self.partitions
+                    .find_boundaries(bnd, imports, path)
+                    .collect()
+            };
+
+        let name = name_with_slash.trim_start_matches('/');
+
+        bnds.into_iter()
+            .flat_map(move |bnd| self.partitions.fuzzy_find(bnd, name))
     }
 }
 
@@ -627,8 +659,15 @@ impl<'a> ImplsIn<'a> {
         self.impls.matches_(k, self.partition, key)
     }
 
-    pub fn fuzzy_find(&self, path: &Tag) -> Result<Vec<ImplEntry>> {
-        todo!()
+    pub fn fuzzy_find<'b>(&self, path: &'b str) -> impl Iterator<Item = ImplEntry<'a>> + 'b
+    where
+        'a: 'b,
+    {
+        self.impls
+            .0
+            .fuzzy_find(path, self.partition)
+            .filter_map(|(id, node)| node.is_impl().then_some(ImplNode(id)))
+            .map(|n| make_impl_entry(self.impls.0, n))
     }
 }
 

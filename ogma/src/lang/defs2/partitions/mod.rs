@@ -484,7 +484,7 @@ impl Partitions {
         Ok(a)
     }
 
-    fn fuzzy_find<P: AsRef<str>>(
+    pub fn fuzzy_find<P: AsRef<str>>(
         &self,
         parent: BoundaryNode,
         n: P,
@@ -548,6 +548,20 @@ impl Partitions {
         self.find(within, imports, path)
             .into_iter()
             .filter_map(|n| self[n].is_impl().then_some(ImplNode(n)))
+    }
+
+    /// Finds the boundary nodes which match `path` from the given `within` partition.
+    ///
+    /// Looks within the `imports`, use [`PartSet::empty`] if no imports.
+    pub fn find_boundaries(
+        &self,
+        within: BoundaryNode,
+        imports: &PartSet,
+        path: &str,
+    ) -> impl Iterator<Item = BoundaryNode> + '_ {
+        self.find(within, imports, path)
+            .into_iter()
+            .filter_map(|n| self[n].is_boundary().then_some(BoundaryNode(n)))
     }
 
     /// Find all [`Id]s that match `path`, from `within` the partition and `imports`.

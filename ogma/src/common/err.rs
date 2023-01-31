@@ -224,29 +224,27 @@ impl Error {
     }
 
     pub(crate) fn op_not_found2(op: &Tag, recursion_detected: bool, impls: ImplsIn) -> Self {
-        todo!()
-        //         let hlp = if recursion_detected {
-        //             "recursion is not supported.
-        //           for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>".into()
-        //         } else if ty.is_empty() {
-        //             "view a list of definitions using `def --list`".into()
-        //         } else {
-        //             ty.into_iter().fold(
-        //                 format!("`{op}` is implemented for the following input types:"),
-        //                 |s, t| s + " " + &tystr(t.ty),
-        //             )
-        //         };
-        //
-        //         Error {
-        //             cat: Category::UnknownCommand,
-        //             desc: format!("operation `{op}` not defined"),
-        //             traces: trace(
-        //                 op,
-        //                 None,
-        //             ),
-        //             help_msg: Some(hlp),
-        //             hard: true,
-        //         }
+        let alts = impls.fuzzy_find(op.str()).collect::<Vec<_>>();
+
+        let hlp = if recursion_detected {
+            "recursion is not supported.
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>".into()
+        } else if alts.is_empty() {
+            "view a list of definitions using `def --list`".into()
+        } else {
+            alts.into_iter().fold(
+                format!("`{op}` is implemented for the following input types:"),
+                |s, t| s + " " + t.name,
+            )
+        };
+
+        Error {
+            cat: Category::UnknownCommand,
+            desc: format!("operation `{op}` not defined"),
+            traces: trace(op, None),
+            help_msg: Some(hlp),
+            hard: true,
+        }
     }
 
     pub(crate) fn impl_not_found(op: &Tag, in_ty: &Type) -> Self {
