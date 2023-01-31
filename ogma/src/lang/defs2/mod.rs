@@ -1,7 +1,10 @@
 //! This handles definitions (fns, structs, enums)
 use crate::prelude::*;
 use ast::Location;
-use lang::{impls::Impl2, parse::File};
+use lang::{
+    impls::{Impl2, ImplEntry},
+    parse::File,
+};
 use std::{
     collections::{BTreeMap, VecDeque},
     path::{Path, PathBuf},
@@ -210,6 +213,42 @@ impl Definitions {
 
     pub fn types(&self) -> Types {
         Types(self)
+    }
+
+    /// Fuzzy find items that fit `path`, respecting the boundary and imports.
+    fn fuzzy_find<'n: 'i, 'i, N: Into<Id>>(
+        &'n self,
+        path: &'i str,
+        within: N,
+    ) -> impl Iterator<Item = (Id, &'n Node)> + 'i {
+        let (bnd, imports) = self.partitions.bnd_and_imports(within);
+
+        let name_with_slash = {
+            let x = path.trim_start_matches('/');
+            let from = x.rfind('/').unwrap_or(0);
+            &x[from..]
+        };
+
+        let path = path.strip_suffix(name_with_slash).expect("will match");
+
+        let bnds: Vec<_> =
+            if path.is_empty() {
+                // do not find a set of bounds, use the current ones
+                std::iter::once(bnd)
+                    .chain(imports.iter().filter_map(|n| {
+                        self.partitions[n].is_boundary().then_some(BoundaryNode(n))
+                    }))
+                    .collect()
+            } else {
+                self.partitions
+                    .find_boundaries(bnd, imports, path)
+                    .collect()
+            };
+
+        let name = name_with_slash.trim_start_matches('/');
+
+        bnds.into_iter()
+            .flat_map(move |bnd| self.partitions.fuzzy_find(bnd, name))
     }
 }
 
@@ -431,6 +470,58 @@ impl<'a> Impls<'a> {
             (None, None) => k_.fail(|tag| Error::impl_not_found(tag, chk_ty)),
         }
     }
+
+    fn matches_<K>(&self, key: &str, within: Id, k_: K) -> K::Output
+    where
+        K: PolyGet<Vec<ImplEntry<'a>>>,
+    {
+        let (bnd, imports) = self.0.partitions.bnd_and_imports(within);
+
+        let mut xs = self
+            .0
+            .partitions
+            .find_impls(bnd, imports, key)
+            .map(|n| make_impl_entry(self.0, n))
+            .collect::<Vec<_>>();
+
+        // if only one or no options, return early and skip checking for input type ambiguity
+        if xs.len() <= 1 {
+            return K::success(xs);
+        }
+
+        // check for duplicate in types -- this would lead to ambiguity
+        xs.sort_unstable_by(|a, b| a.ty.cmp(&b.ty));
+        for [a, b] in xs
+            .windows(2)
+            .map(|x| <&[_; 2]>::try_from(x).expect("only slices of 2"))
+        {
+            if a.ty == b.ty {
+                return k_.fail(|tag| Error {
+                    cat: err::Category::Definitions,
+                    desc: format!("ambiguous op reference for `{key}`"),
+                    traces: err::trace(
+                        tag,
+                        format!(
+                            "multiple instances for input type {}",
+                            a.ty.map(ToString::to_string).unwrap_or("<any>".into())
+                        ),
+                    ),
+                    help_msg: err::help_msg_ambiguous_import(),
+                    hard: true,
+                });
+            }
+        }
+
+        K::success(xs)
+    }
+
+    pub fn matches<'b, K>(&self, key: K) -> K::Output
+    where
+        K: PolyGet<Vec<ImplEntry<'a>>> + AsKey<(&'b str, Id)>,
+    {
+        let (k, id) = key.as_key();
+        self.matches_(k, id, key)
+    }
 }
 
 impl<'a> Types<'a> {
@@ -464,10 +555,7 @@ impl<'a> Types<'a> {
                 cat: err::Category::Definitions,
                 desc: "ambiguous type reference".to_string(),
                 traces: err::trace(tag, format!("{tag} references multiple definitions")),
-                help_msg:
-                    "check your imports for ambiguity\nconsider using fully qualified path syntax"
-                        .to_string()
-                        .into(),
+                help_msg: err::help_msg_ambiguous_import(),
                 hard: true,
             });
         }
@@ -519,7 +607,7 @@ impl<'a, 'd> DefItems<'a, (&'a str, &'a Type, Id)> for Impls<'d> {
 
 impl<'a, 'd> DefItems<'a, (&'a str, Id)> for Types<'d> {
     type Item = &'d Type;
-    type Iter = TypesIter;
+    type Iter = TypesIter<'a>;
 
     fn contains<K>(&self, key: K) -> bool
     where
@@ -562,6 +650,27 @@ pub struct TypesIn<'a> {
     pub partition: Id,
 }
 
+impl<'a> ImplsIn<'a> {
+    pub fn matches<'b, K>(&self, key: K) -> K::Output
+    where
+        K: PolyGet<Vec<ImplEntry<'a>>> + AsKey<&'b str>,
+    {
+        let k = key.as_key();
+        self.impls.matches_(k, self.partition, key)
+    }
+
+    pub fn fuzzy_find<'b>(&self, path: &'b str) -> impl Iterator<Item = ImplEntry<'a>> + 'b
+    where
+        'a: 'b,
+    {
+        self.impls
+            .0
+            .fuzzy_find(path, self.partition)
+            .filter_map(|(id, node)| node.is_impl().then_some(ImplNode(id)))
+            .map(|n| make_impl_entry(self.impls.0, n))
+    }
+}
+
 impl<'a, 'd> DefItems<'a, (&'a str, &'a Type)> for ImplsIn<'d> {
     type Item = &'d Implementation;
     type Iter = ImplsIter;
@@ -597,7 +706,7 @@ impl<'a, 'd> DefItems<'a, (&'a str, &'a Type)> for ImplsIn<'d> {
 
 impl<'a, 'd> DefItems<'a, &'a str> for TypesIn<'d> {
     type Item = &'d Type;
-    type Iter = TypesIter;
+    type Iter = TypesIter<'a>;
 
     fn contains<K>(&self, key: K) -> bool
     where
@@ -629,7 +738,24 @@ impl<'a, 'd> DefItems<'a, &'a str> for TypesIn<'d> {
 
 pub struct ImplsIter {}
 
-pub struct TypesIter {}
+fn make_impl_entry<'a>(defs: &'a Definitions, n: ImplNode) -> ImplEntry<'a> {
+    let node = &defs.partitions[n];
+    debug_assert!(node.is_impl());
+    let Impl2 {
+        inner,
+        inty,
+        cat,
+        help,
+    } = &defs.impls[&n];
+
+    ImplEntry {
+        name: node.name(),
+        ty: inty.as_ref(),
+        cat: *cat,
+        help,
+        impl_: inner,
+    }
+}
 
 impl Iterator for ImplsIter {
     type Item = ();
@@ -639,13 +765,7 @@ impl Iterator for ImplsIter {
     }
 }
 
-impl Iterator for TypesIter {
-    type Item = ();
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
+type TypesIter<'a> = std::collections::hash_map::Values<'a, TypeNode, Type>;
 
 macro_rules! key_impl {
     ($($k:ty => $v:ident),*) => {

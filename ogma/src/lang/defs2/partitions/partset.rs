@@ -55,6 +55,10 @@ impl PartSet {
         self.0[lwr..upr].iter().copied()
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = Id> + '_ {
+        self.0.iter().copied()
+    }
+
     #[cfg(test)]
     pub fn eq_names(&self, parts: &Partitions, names: &[&str]) -> bool {
         let names_ = self

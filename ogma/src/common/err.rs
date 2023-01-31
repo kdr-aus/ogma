@@ -2,6 +2,7 @@
 
 use crate::{
     lang::{
+        defs2::ImplsIn,
         help::*,
         syntax::ast::*,
         types::{Type, TypeDef},
@@ -139,6 +140,12 @@ pub fn help_as_error(msg: &HelpMessage, in_ty: Option<&Type>) -> Error {
     }
 }
 
+pub fn help_msg_ambiguous_import() -> Option<String> {
+    "check your imports for ambiguity\nconsider using fully qualified path syntax"
+        .to_string()
+        .into()
+}
+
 // ###### ERROR ################################################################
 /// Create a single trace item using the tag.
 pub fn trace<D: Into<Option<String>>>(tag: &Tag, desc: D) -> Vec<Trace> {
@@ -211,6 +218,30 @@ impl Error {
                 op,
                 format!("`{}` not defined for input `{}`", op, tystr(inty)),
             ),
+            help_msg: Some(hlp),
+            hard: true,
+        }
+    }
+
+    pub(crate) fn op_not_found2(op: &Tag, recursion_detected: bool, impls: ImplsIn) -> Self {
+        let alts = impls.fuzzy_find(op.str()).collect::<Vec<_>>();
+
+        let hlp = if recursion_detected {
+            "recursion is not supported.
+          for alternatives, please see <https://daedalus.report/d/docs/ogma.book/11%20(no)%20recursion.md?pwd-raw=docs>".into()
+        } else if alts.is_empty() {
+            "view a list of definitions using `def --list`".into()
+        } else {
+            alts.into_iter().fold(
+                format!("`{op}` is implemented for the following input types:"),
+                |s, t| s + " " + t.name,
+            )
+        };
+
+        Error {
+            cat: Category::UnknownCommand,
+            desc: format!("operation `{op}` not defined"),
+            traces: trace(op, None),
             help_msg: Some(hlp),
             hard: true,
         }

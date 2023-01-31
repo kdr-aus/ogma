@@ -1,4 +1,5 @@
 use super::*;
+use defs2::{Definitions, Id as DefId, TypesIn};
 use kserd::Number;
 use petgraph::prelude::*;
 use std::ops::Deref;
@@ -23,6 +24,9 @@ pub enum AstNode {
     Op {
         op: Tag,
         blk: Tag,
+
+        /// The invocation location of the op.
+        within: DefId,
     },
     Intrinsic {
         op: Tag,
@@ -107,7 +111,7 @@ pub fn init(expr: ast::Expression, defs: &Definitions) -> Result<(AstGraph, Chgs
 
     let expr_tag = expr.tag.clone();
 
-    graph.flatten_expr(expr, &mut chgs, defs)?;
+    graph.flatten_expr(expr, &mut chgs, defs, defs2::ROOT.into())?;
 
     let recursion_detector = &mut RecursionDetection::default();
 
@@ -130,6 +134,7 @@ impl AstGraph {
         expr: ast::Expression,
         chgs: &mut Chgs,
         defs: &Definitions,
+        within: DefId,
     ) -> Result<NodeIndex> {
         use ast::*;
 
@@ -143,6 +148,7 @@ impl AstGraph {
         } = expr;
 
         let root = g.add_node(AstNode::Expr(tag));
+        let tys = defs.types().within(within);
 
         // rather than building a recursive function, we'll use a queue of expressions to process,
         // since expressions are the recursive element
@@ -157,7 +163,7 @@ impl AstGraph {
         q.push_back(Qi {
             root,
             blocks,
-            out_ty: map_ty_tag(out_ty, defs)?,
+            out_ty: map_ty_tag(out_ty, tys)?,
         });
 
         // FIFO -- breadth-first
@@ -187,13 +193,17 @@ impl AstGraph {
                     }
                 };
 
-                let op = g.add_node(AstNode::Op { op, blk: blk_tag });
+                let op = g.add_node(AstNode::Op {
+                    op,
+                    blk: blk_tag,
+                    within,
+                });
                 g.add_edge(root, op, Relation::Normal); // edge from the expression root to the op
 
-                if let Some(t) = map_ty_tag(in_ty, defs)? {
+                if let Some(t) = map_ty_tag(in_ty, tys)? {
                     chgs.push(Chg::ObligeInput(op, t));
                 }
-                if let Some(t) = map_ty_tag(out_ty, defs)? {
+                if let Some(t) = map_ty_tag(out_ty, tys)? {
                     chgs.push(Chg::ObligeOutput(op, t));
                 }
 
@@ -236,7 +246,7 @@ impl AstGraph {
                         q.push_back(Qi {
                             root: term,
                             blocks,
-                            out_ty: map_ty_tag(out_ty, defs)?,
+                            out_ty: map_ty_tag(out_ty, tys)?,
                         });
                     }
                 }
@@ -259,7 +269,7 @@ impl AstGraph {
         let ops = self
             .node_indices()
             // is an Op
-            .filter_map(|n| self[n].op().map(|_| OpNode(n)))
+            .filter_map(|n| self[n].op().map(|x| OpNode(n)))
             // have not already expanded it
             .filter(|&n| !self.op_expanded(n))
             .collect::<Vec<_>>();
@@ -283,19 +293,15 @@ impl AstGraph {
     ) -> Result<bool> {
         let opnode_ = NodeIndex::from(opnode);
 
-        let op = self[opnode_]
-            .op()
-            .expect("opnode must be an Op variant")
-            .0
-            .clone();
+        let (op, _, within) = self[opnode_].op().expect("opnode must be an Op variant");
+        let op = op.clone();
 
-        let impls = defs.impls();
+        let impls = defs.impls().within(within);
 
-        if !impls.contains_op(op.str()) {
-            return Err(Error::op_not_found(&op, None, false, impls));
+        let op_impls = impls.matches(&op)?;
+        if op_impls.is_empty() {
+            return Err(Error::op_not_found2(&op, false, impls));
         }
-
-        let op_impls = impls.iter_op(op.str());
 
         recursion_detector.clear_cache();
 
@@ -331,7 +337,9 @@ impl AstGraph {
                     }
 
                     // no recursion detected, this id will need to be added to the detector
-                    let tys = defs.types();
+                    // TODO: use something other than ROOT
+                    todo!();
+                    let tys = defs.types().within(defs2::ROOT);
                     let params = def
                         .params
                         .iter()
@@ -342,7 +350,10 @@ impl AstGraph {
                         expr: def.expr.tag.clone(),
                         params,
                     });
-                    let expr = self.flatten_expr(def.expr.clone(), chgs, defs)?;
+                    // TODO: use something other than ROOT
+                    // not sure what yet, need to consider how looking down into
+                    // ast works
+                    let expr = self.flatten_expr(def.expr.clone(), chgs, defs, todo!())?;
                     // link cmd to expr
                     self.0.add_edge(cmd, expr, Relation::Normal);
                     // add the id into the recursion detector
@@ -402,9 +413,8 @@ impl AstGraph {
     }
 }
 
-fn map_ty_tag(tag: Option<Tag>, defs: &Definitions) -> Result<Option<Type>> {
-    tag.map(|t| defs.types().get_using_tag(&t).map(|x| x.clone()))
-        .transpose()
+fn map_ty_tag(tag: Option<Tag>, tys: TypesIn) -> Result<Option<Type>> {
+    tag.map(|t| tys.get(&t).map(Clone::clone)).transpose()
 }
 
 #[derive(Default)]
@@ -709,9 +719,9 @@ impl AstGraph {
 
 impl AstNode {
     /// If this is an op node, returns the `(op, blk)` tags.
-    pub fn op(&self) -> Option<(&Tag, &Tag)> {
+    pub fn op(&self) -> Option<(&Tag, &Tag, DefId)> {
         match self {
-            AstNode::Op { op, blk } => Some((op, blk)),
+            AstNode::Op { op, blk, within } => Some((op, blk, *within)),
             _ => None,
         }
     }
@@ -752,7 +762,11 @@ impl AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk: _ } => op,
+            Op {
+                op,
+                blk: _,
+                within: _,
+            } => op,
             Intrinsic { op, intrinsic: _ } => op,
             Def { expr, params: _ } => expr,
             Flag(f) => f,
@@ -770,7 +784,7 @@ impl fmt::Display for AstNode {
         use AstNode::*;
 
         match self {
-            Op { op, blk: _ } => write!(f, "Op({})", op.str()),
+            Op { op, blk: _, within } => write!(f, "Op({})", op.str()),
             Intrinsic {
                 op: _,
                 intrinsic: _,
@@ -847,7 +861,7 @@ impl fmt::Display for Relation {
 }
 
 impl Parameter {
-    fn from_ast(param: &ast::Parameter, tys: &types::Types) -> Result<Self> {
+    fn from_ast(param: &ast::Parameter, tys: TypesIn) -> Result<Self> {
         let ast::Parameter { ident, ty } = param;
 
         let name = ident.clone();
@@ -855,7 +869,7 @@ impl Parameter {
         let ty = if ty.map(|t| t.str() == "Expr").unwrap_or(false) {
             ParameterTy::Expr
         } else {
-            ty.map(|t| tys.get_using_tag(t))
+            ty.map(|t| tys.get(t))
                 .transpose()?
                 .map(Clone::clone)
                 .map(ParameterTy::Specified)

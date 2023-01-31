@@ -97,6 +97,11 @@ impl Tag {
 
         self
     }
+
+    /// Treat this tag as a partition path, returning an iterator over the path componenets.
+    pub fn path_iter(&self) -> PathIter {
+        PathIter::from(self)
+    }
 }
 
 impl AsRef<str> for Tag {
@@ -516,6 +521,129 @@ pub struct Field {
     pub params: Vec<Tag>,
 }
 
+// ###### TAG PATHS ############################################################
+pub struct PathIter {
+    tag: Tag,
+    is_root: bool,
+    is_plugin: bool,
+    start: usize,
+    end: usize,
+}
+
+impl PathIter {
+    pub fn is_root(&self) -> bool {
+        self.is_root
+    }
+
+    pub fn is_plugin(&self) -> bool {
+        self.is_plugin
+    }
+}
+
+impl From<Tag> for PathIter {
+    fn from(mut tag: Tag) -> Self {
+        let x = tag.make_mut();
+
+        let (is_plugin, is_root) = if x.line.starts_with("//") {
+            x.start += 2;
+
+            (true, false)
+        } else if x.line.starts_with('/') {
+            x.start += 1;
+
+            (false, true)
+        } else {
+            (false, false)
+        };
+
+        let start = tag.start;
+        let end = tag.end;
+
+        Self {
+            tag,
+            is_root,
+            is_plugin,
+            start,
+            end,
+        }
+    }
+}
+
+impl From<&Tag> for PathIter {
+    fn from(tag: &Tag) -> Self {
+        PathIter::from(tag.clone())
+    }
+}
+
+impl Iterator for PathIter {
+    type Item = Tag;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self {
+            tag,
+            is_root,
+            is_plugin,
+            start,
+            end,
+        } = self;
+
+        if start == end {
+            return None;
+        }
+
+        *is_plugin = false;
+        *is_root = false;
+
+        let s = *start;
+        let e = *end;
+
+        let upr = tag.line[s..e].find('/').unwrap_or_else(|| e - s);
+
+        let t = tag.make_mut();
+        t.start = s;
+        t.end = s + upr;
+
+        // move the start to the new end -- prepping for next iter
+        // skips one bytes ('/' char) and clamps to maximal end value
+        *start = (t.end + 1).min(e);
+
+        Some(tag.clone())
+    }
+}
+
+impl DoubleEndedIterator for PathIter {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let Self {
+            tag,
+            is_root,
+            is_plugin,
+            start,
+            end,
+        } = self;
+
+        if start == end {
+            return None;
+        }
+
+        let s = *start;
+        let e = *end;
+
+        let s_ = tag.line[s..e].rfind('/').map(|x| x + 1).unwrap_or(s);
+
+        let t = tag.make_mut();
+        t.start = s_;
+        t.end = e;
+
+        // move the end to the new start -- prepping for next iter
+        // move back one byte (for '/' char)
+        *end = s_.saturating_sub(1).max(s);
+
+        Some(tag.clone())
+    }
+}
+
+// TODO remove this?
+// I do not think it is necessary with the defs2::Definitions system.
 // ###### PARTITION PATHS ######################################################
 /// A partition _path_, terminating in a command.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -590,6 +718,7 @@ impl Op {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::{Arbitrary, Gen};
 
     #[test]
     fn tag_testing() {
@@ -619,6 +748,88 @@ mod tests {
         .into()
     }
 
+    fn path_iter_check(s: &str) {
+        let tag = tt(s);
+
+        let mut iter = PathIter::from(tag);
+
+        let s = if let Some(x) = s.strip_prefix("//") {
+            assert!(iter.is_plugin());
+            x
+        } else if let Some(x) = s.strip_prefix('/') {
+            assert!(iter.is_root());
+            x
+        } else {
+            &s
+        };
+
+        // empty string produces a single empty string for `.split`,
+        // PathIter will return none
+        if s.is_empty() {
+            assert_eq!(iter.next(), None);
+            return;
+        }
+
+        let mut split = s.split_terminator('/');
+
+        loop {
+            let a = dbg!(iter.next());
+            let b = dbg!(split.next());
+            assert_eq!(a.as_ref().map(Tag::str), b);
+
+            if a.is_none() || b.is_none() {
+                break;
+            }
+        }
+    }
+
+    fn path_iter_check_rev(s: &str) {
+        let tag = tt(s);
+
+        let mut iter = PathIter::from(tag);
+
+        let s = if let Some(x) = s.strip_prefix("//") {
+            assert!(iter.is_plugin());
+            x
+        } else if let Some(x) = s.strip_prefix('/') {
+            assert!(iter.is_root());
+            x
+        } else {
+            &s
+        };
+
+        // empty string produces a single empty string for `.split`,
+        // PathIter will return none
+        if s.is_empty() {
+            assert_eq!(iter.next(), None);
+            return;
+        }
+
+        let mut split = dbg!(s).split('/');
+
+        loop {
+            let a = dbg!(iter.next_back());
+            let b = dbg!(split.next_back());
+            assert_eq!(a.as_ref().map(Tag::str), b);
+
+            if a.is_none() || b.is_none() {
+                break;
+            }
+        }
+    }
+
+    #[quickcheck]
+    fn path_iter_fuzz(s: String) {
+        path_iter_check(&s);
+        path_iter_check_rev(&s)
+    }
+
     #[test]
-    fn path_testing() {}
+    fn path_iter_specific() {
+        path_iter_check("\0");
+        path_iter_check_rev("\0");
+        path_iter_check("\0/");
+        path_iter_check_rev("\0/");
+        path_iter_check("\0/\0");
+    }
 }

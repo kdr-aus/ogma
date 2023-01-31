@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use crate::prelude::*;
 use crate::Mutex;
 use ::kserd::{Kserd, Number, ToKserd, ToKserdErr, Value as KValue};
@@ -8,7 +11,7 @@ use ::libs::{
 use ast::Location;
 use lang::defs2::{self, DefItems};
 use lang::help::HelpMessage;
-use std::{convert::TryFrom, fmt, hash, ops, sync::Arc};
+use std::{cmp, convert::TryFrom, fmt, hash, ops, sync::Arc};
 use table::Entry;
 
 // ###### TABLE ################################################################
@@ -60,7 +63,10 @@ impl Drop for Table {
 /// Ogma data types.
 ///
 /// Primitive types with support for ogma defined types ([`TypeDef`]).
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+///
+/// Equality, ordering, and hashing are all achieved through a pointer reference for user defined
+/// types.
+#[derive(Debug, Clone)]
 pub enum Type {
     /// A nil, or nothing, type.
     Nil,
@@ -120,6 +126,71 @@ impl fmt::Display for Type {
         };
 
         write!(f, "{}", ident)
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, b: &Self) -> bool {
+        use Type::*;
+        match (self, b) {
+            (Nil, Nil) => true,
+            (Bool, Bool) => true,
+            (Num, Num) => true,
+            (Str, Str) => true,
+            (Tab, Tab) => true,
+            (TabRow, TabRow) => true,
+            (Def(a), Def(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+impl Eq for Type {}
+impl Ord for Type {
+    fn cmp(&self, b: &Self) -> cmp::Ordering {
+        use cmp::Ordering::*;
+        use Type::*;
+
+        if self.eq(b) {
+            Equal
+        } else {
+            match (self, b) {
+                // Nil
+                (Nil, _) => Less,
+                (_, Nil) => Greater,
+                // Bool
+                (Bool, _) => Less,
+                (_, Bool) => Greater,
+                // Num
+                (Num, _) => Less,
+                (_, Num) => Greater,
+                // Str
+                (Str, _) => Less,
+                (_, Str) => Greater,
+                // Tab
+                (Tab, _) => Less,
+                (_, Tab) => Greater,
+                // TabRow
+                (TabRow, _) => Less,
+                (_, TabRow) => Greater,
+                // Def
+                (Def(a), Def(b)) => (Arc::as_ptr(a) as usize).cmp(&(Arc::as_ptr(b) as usize)),
+                (Def(a), _) => Less,
+                (_, Def(b)) => Greater,
+            }
+        }
+    }
+}
+impl PartialOrd for Type {
+    fn partial_cmp(&self, b: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(b))
+    }
+}
+impl hash::Hash for Type {
+    fn hash<H: hash::Hasher>(&self, h: &mut H) {
+        std::mem::discriminant::<Self>(self).hash(h);
+        if let Type::Def(x) = self {
+            (Arc::as_ptr(x) as usize).hash(h);
+        }
     }
 }
 
@@ -1045,196 +1116,5 @@ impl<'a> Split<'a> {
         map(all_consuming(parse_tuple), Split::Tuple)(s)
             .ok()
             .map(|(_, x)| x)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use Type::*;
-
-    #[test]
-    fn display_impl() {
-        let ty = vec![Nil, Bool, Num, Str, Tab, TabRow, Def(ORD.get())]
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        assert_eq!(&ty, "Nil, Bool, Number, String, Table, TableRow, Ord");
-    }
-
-    fn x(t: Type) -> String {
-        crate::common::err::help_as_error(&t.help(), None).to_string()
-    }
-
-    #[test]
-    fn prim_type_help_messages() {
-        assert_eq!(
-            &x(Nil),
-            "Help: `Nil`
---> shell:0
- | ---- Input Type: <any> ----
- | nothing value
- | 
- | Usage:
- |  => Nil
-"
-        );
-        assert_eq!(
-            &x(Bool),
-            "Help: `Bool`
---> shell:0
- | ---- Input Type: <any> ----
- | boolean value
- | true | false
- | 
- | Usage:
- |  => Bool
-"
-        );
-        assert_eq!(
-            &x(Num),
-            "Help: `Number`
---> shell:0
- | ---- Input Type: <any> ----
- | number value
- | 100 | -1 | 3.14 | -1.23e-5
- | 
- | Usage:
- |  => Number
-"
-        );
-        assert_eq!(
-            &x(Str),
-            "Help: `String`
---> shell:0
- | ---- Input Type: <any> ----
- | string value
- | 
- | Usage:
- |  => String
-"
-        );
-        assert_eq!(
-            &x(Tab),
-            "Help: `Table`
---> shell:0
- | ---- Input Type: <any> ----
- | table value
- | 
- | Usage:
- |  => Table
-"
-        );
-        assert_eq!(
-            &x(TabRow),
-            "Help: `TableRow`
---> shell:0
- | ---- Input Type: <any> ----
- | table row
- | 
- | Usage:
- |  => TableRow
-"
-        );
-    }
-
-    #[test]
-    fn ord_ty_help_msg() {
-        assert_eq!(
-            &x(Def(ORD.get())),
-            "Help: `Ord`
---> shell:0
- | ---- Input Type: <any> ----
- | <ogma>
- | `def-ty Ord :: Lt | Eq | Gt`
- | 
- | Usage:
- |  => Ord
-"
-        );
-    }
-
-    #[test]
-    fn tuple_type_testing() {
-        let args = [Type::Nil, Type::Num, Type::Str];
-
-        let ty = Tuple::ty(args[..2].to_vec());
-        assert_eq!(ty.name().str(), "U_Nil-Num_");
-        match ty.structure() {
-            TypeVariant::Product(x) => {
-                assert_eq!(x[0].name().str(), "t0");
-                assert_eq!(x[0].ty(), &Type::Nil);
-                assert_eq!(x[1].name().str(), "t1");
-                assert_eq!(x[1].ty(), &Type::Num);
-            }
-            _ => panic!(),
-        }
-
-        let ty = Tuple::ty(args[1..].to_vec());
-        assert_eq!(ty.name().str(), "U_Num-Str_");
-        match ty.structure() {
-            TypeVariant::Product(x) => {
-                assert_eq!(x[0].name().str(), "t0");
-                assert_eq!(x[0].ty(), &Type::Num);
-                assert_eq!(x[1].name().str(), "t1");
-                assert_eq!(x[1].ty(), &Type::Str);
-            }
-            _ => panic!(),
-        }
-
-        let ty = Tuple::ty(args[..].to_vec());
-        assert_eq!(ty.name().str(), "U_Nil-Num-Str_");
-        match ty.structure() {
-            TypeVariant::Product(x) => {
-                assert_eq!(x[0].name().str(), "t0");
-                assert_eq!(x[0].ty(), &Type::Nil);
-                assert_eq!(x[1].name().str(), "t1");
-                assert_eq!(x[1].ty(), &Type::Num);
-                assert_eq!(x[2].name().str(), "t2");
-                assert_eq!(x[2].ty(), &Type::Str);
-            }
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn tuple_parse_name_testing() {
-        let tys = crate::prelude::Definitions::new();
-        assert_eq!(
-            Some(Type::Def(Arc::new(Tuple::ty(vec![
-                Type::Nil,
-                Type::Num,
-                Type::Str
-            ])))),
-            Tuple::parse_name("U_Nil-Num-Str_", tys.types())
-        )
-    }
-
-    #[test]
-    fn split_parse_testing() {
-        use Split::*;
-        let f = Split::parse;
-
-        assert_eq!(f(""), None);
-        assert_eq!(f("fdsaff sfdsa"), None);
-        assert_eq!(f("   "), None);
-        assert_eq!(f("U__"), None);
-        assert_eq!(f("U_    _"), Some(Tuple(vec![Ty("    ")])));
-        assert_eq!(f("U_Nil_"), Some(Tuple(vec![Ty("Nil")])));
-        assert_eq!(
-            f("U_Nil-Num-Str_"),
-            Some(Tuple(vec![Ty("Nil"), Ty("Num"), Ty("Str")]))
-        );
-        assert_eq!(f("U_Nil-Num-Str-_"), None);
-        assert_eq!(f("U_Nil-Num-Str"), None);
-        assert_eq!(
-            f("U_Nil-U_Num-Str_-Str_"),
-            Some(Tuple(vec![
-                Ty("Nil"),
-                Tuple(vec![Ty("Num"), Ty("Str")]),
-                Ty("Str")
-            ]))
-        );
     }
 }
