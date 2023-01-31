@@ -235,18 +235,19 @@ fn add_derived_impl(
     desc: &str,
     eg: Vec<HelpExample>,
 ) {
-    let im = lang::syntax::parse::definition_impl(s, Location::Ogma, defs).unwrap();
-    let in_ty = if let Some(in_ty) = &im.in_ty {
-        Some(defs.types.get_using_tag(in_ty).unwrap().clone())
-    } else {
-        None
-    };
-    let mut help = lang::impls::usr_impl_help(&im);
-    let d = help.desc.to_mut();
-    d.push('\n');
-    d.push_str(desc);
-    help.examples = eg;
-    defs.impls.insert_impl(in_ty, im, opcat, help).unwrap();
+    todo!("this is probably not used anymore");
+//     let im = lang::syntax::parse::definition_impl(s, Location::Ogma, defs).unwrap();
+//     let in_ty = if let Some(in_ty) = &im.in_ty {
+//         Some(defs.types.get_using_tag(in_ty).unwrap().clone())
+//     } else {
+//         None
+//     };
+//     let mut help = lang::impls::usr_impl_help(&im);
+//     let d = help.desc.to_mut();
+//     d.push('\n');
+//     d.push_str(desc);
+//     help.examples = eg;
+//     defs.impls.insert_impl(in_ty, im, opcat, help).unwrap();
 }
 
 /// Recognise a string which defines an implementation or type.
@@ -305,73 +306,74 @@ fn process_impl<'a>(
     help: Option<String>,
     defs: &mut Definitions,
 ) -> DefResult<'a> {
-    if s.contains("--help") {
-        let help = HelpMessage {
-            desc: "define a command that encapsulates an expression
-def has specialised syntax which takes variable params: ( )"
-                .into(),
-            params: vec![
-                HelpParameter::Required("name".into()),
-                HelpParameter::Optional("Ty".into()),
-                HelpParameter::Custom(
-                    "([param1[:Ty|Expr]] [param2[:Ty|Expr]] ...) { expr }".into(),
-                ),
-            ],
-            flags: vec![
-                ("list", "list the definitions as a table"),
-                (
-                    "load",
-                    "load persistent definitions from files in daedalus folder",
-                ),
-                ("clear", "clear all user defined definitions"),
-            ],
-            examples: vec![
-                HelpExample {
-                    desc: "define a command that returns the number 5",
-                    code: "def num5 () { \\ 5 }",
-                },
-                HelpExample {
-                    desc: "list directory items that match a type",
-                    code: "def list (ty) { ls | filter = type $ty }",
-                },
-                HelpExample {
-                    desc: "use types to better define use",
-                    code: "def sum Table (seed:Num value:Expr) { fold $seed + $acc $value }",
-                },
-            ],
-            ..HelpMessage::new("def")
-        };
-        Err(err::help_as_error(&help, None))
-    } else if s.contains(" --list") {
-        let post = s.split_once(" | ").map(|x| x.1);
-        Ok((Value::Tab(construct_def_table(defs)), post))
-    } else if s.contains(" --clear") {
-        defs.clear(false);
-        Ok((Value::Nil, None))
-    } else {
-        let def = lang::syntax::parse::definition_impl(s, loc, defs).map_err(|e| e.0)?;
-
-        assert_all_ops_defined(&def, defs.impls())?;
-
-        let in_ty = if let Some(in_ty) = &def.in_ty {
-            Some(defs.types.get_using_tag(in_ty)?.clone())
-        } else {
-            None
-        };
-
-        let mut helpmsg = lang::impls::usr_impl_help(&def);
-        if let Some(help) = help {
-            helpmsg.desc = format!("{}\n\n{}", helpmsg.desc, help).into();
-        }
-
-        defs.impls.insert_impl(
-            in_ty,
-            def,
-            lang::impls::OperationCategory::UserDefined,
-            helpmsg,
-        )?;
-        Ok((Value::Nil, None))
-    }
+    todo!();
+//     if s.contains("--help") {
+//         let help = HelpMessage {
+//             desc: "define a command that encapsulates an expression
+// def has specialised syntax which takes variable params: ( )"
+//                 .into(),
+//             params: vec![
+//                 HelpParameter::Required("name".into()),
+//                 HelpParameter::Optional("Ty".into()),
+//                 HelpParameter::Custom(
+//                     "([param1[:Ty|Expr]] [param2[:Ty|Expr]] ...) { expr }".into(),
+//                 ),
+//             ],
+//             flags: vec![
+//                 ("list", "list the definitions as a table"),
+//                 (
+//                     "load",
+//                     "load persistent definitions from files in daedalus folder",
+//                 ),
+//                 ("clear", "clear all user defined definitions"),
+//             ],
+//             examples: vec![
+//                 HelpExample {
+//                     desc: "define a command that returns the number 5",
+//                     code: "def num5 () { \\ 5 }",
+//                 },
+//                 HelpExample {
+//                     desc: "list directory items that match a type",
+//                     code: "def list (ty) { ls | filter = type $ty }",
+//                 },
+//                 HelpExample {
+//                     desc: "use types to better define use",
+//                     code: "def sum Table (seed:Num value:Expr) { fold $seed + $acc $value }",
+//                 },
+//             ],
+//             ..HelpMessage::new("def")
+//         };
+//         Err(err::help_as_error(&help, None))
+//     } else if s.contains(" --list") {
+//         let post = s.split_once(" | ").map(|x| x.1);
+//         Ok((Value::Tab(construct_def_table(defs)), post))
+//     } else if s.contains(" --clear") {
+//         defs.clear(false);
+//         Ok((Value::Nil, None))
+//     } else {
+//         let def = lang::syntax::parse::definition_impl(s, loc, defs).map_err(|e| e.0)?;
+// 
+//         assert_all_ops_defined(&def, defs.impls())?;
+// 
+//         let in_ty = if let Some(in_ty) = &def.in_ty {
+//             Some(defs.types.get_using_tag(in_ty)?.clone())
+//         } else {
+//             None
+//         };
+// 
+//         let mut helpmsg = lang::impls::usr_impl_help(&def);
+//         if let Some(help) = help {
+//             helpmsg.desc = format!("{}\n\n{}", helpmsg.desc, help).into();
+//         }
+// 
+//         defs.impls.insert_impl(
+//             in_ty,
+//             def,
+//             lang::impls::OperationCategory::UserDefined,
+//             helpmsg,
+//         )?;
+//         Ok((Value::Nil, None))
+//     }
 }
 
 fn process_ty<'a>(

@@ -22,7 +22,9 @@ fn ops(s: &str) -> Op {
 #[test]
 fn input_expr() {
     let d = &Definitions::new();
-    let x = expression("in", Location::Shell, d);
+    let n = defs2::ROOT;
+
+    let x = expression("in", Location::Shell, d, n);
     assert_eq!(
         x,
         Ok(Expression {
@@ -38,7 +40,7 @@ fn input_expr() {
         })
     );
 
-    let x = expression("in file.csv", Location::Shell, d);
+    let x = expression("in file.csv", Location::Shell, d, n);
     assert_eq!(
         x,
         Ok(Expression {
@@ -58,7 +60,9 @@ fn input_expr() {
 #[test]
 fn empty_expr() {
     let d = &Definitions::new();
-    let x = expression("", Location::Shell, d)
+    let n = defs2::ROOT;
+
+    let x = expression("", Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -70,6 +74,8 @@ fn empty_expr() {
 --> shell:0
 "
     );
+
+    let d = d.impls().within(n);
 
     let x = line(" { asdf {  }  } ");
     let x = expr(&x, d)(&x.line);
@@ -98,9 +104,10 @@ fn empty_expr() {
 #[test]
 fn after_pipe_error() {
     let d = &Definitions::new();
+    let n = defs2::ROOT;
 
     let src = "\\ | ";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -118,7 +125,7 @@ fn after_pipe_error() {
     );
 
     let src = "\\ { \\ | }";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -159,8 +166,10 @@ fn op_ident_test() {
 #[test]
 fn broken_expr_delimiter() {
     let d = &Definitions::new();
+    let n = defs2::ROOT;
+
     let src = "\\ { cmd ident ";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -178,7 +187,7 @@ fn broken_expr_delimiter() {
     );
 
     let src = "\\ { cmd { ident }";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -196,7 +205,7 @@ fn broken_expr_delimiter() {
     );
 
     let src = "\\ f | asdf { cmd { ident } ";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -214,7 +223,7 @@ fn broken_expr_delimiter() {
     );
 
     let src = "\\ file.csv | asdf { cmd {   } ";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -235,7 +244,7 @@ fn broken_expr_delimiter() {
     );
 
     let src = "\\ adsf | cmd { \\ |";
-    let x = expression(src, Location::Shell, d)
+    let x = expression(src, Location::Shell, d, n)
         .unwrap_err()
         .0
         .to_string();
@@ -258,8 +267,11 @@ fn broken_expr_delimiter() {
 
 #[test]
 fn arguments() {
+    let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let src = line("{ \\ asdf } remaining");
-    let x = term(&src, &Definitions::new())(&src.line);
+    let x = term(&src, defs)(&src.line);
     assert_eq!(
         x,
         Ok((
@@ -281,8 +293,10 @@ fn arguments() {
 
 #[test]
 fn pipelining() {
+    let defs = &Definitions::new();
+
     let src = "\\ test.csv | cmd { \\ asdf }";
-    let x = expression(src, Location::Shell, &Definitions::new());
+    let x = expression(src, Location::Shell, defs, defs2::ROOT);
     assert_eq!(
         x,
         Ok(Expression {
@@ -328,9 +342,12 @@ fn variable_parsing() {
 
 #[test]
 fn variable_term() {
+    let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let l = line("$in");
     assert_eq!(
-        term(&l, &Definitions::new())(&l.line),
+        term(&l, defs)(&l.line),
         Ok(("", Arg(Var(tt("in")))))
     );
 }
@@ -400,6 +417,8 @@ fn numbers() {
 #[test]
 fn flags() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let i = |s| {
         let line = line(s);
         let x = term(&line, defs)(&line.line).unwrap().1;
@@ -414,6 +433,8 @@ fn flags() {
 #[test]
 fn term_parsing_which_is_cmd() {
     let d = &Definitions::new();
+    let d = d.impls().within(defs2::ROOT);
+
     let l = line("filter adsf cdx | ls");
     let x = term(&l, d)(&l.line);
     assert_eq!(
@@ -468,6 +489,8 @@ fn term_parsing_which_is_cmd() {
 #[test]
 fn nested_expressions_without_braces() {
     let d = &Definitions::new();
+    let d = d.impls().within(defs2::ROOT);
+
     let src = line("filter > col-name 1e3");
     let b = block(&src, d)(&src.line);
     assert_eq!(
@@ -588,6 +611,8 @@ fn nested_expressions_without_braces() {
 #[test]
 fn known_op_test() {
     let d = &Definitions::new();
+    let d = d.impls().within(defs2::ROOT);
+
     let known_op = |s| {
         let line = line(s);
         let x = known_op(&line, d)(&line.line);
@@ -698,7 +723,7 @@ fn full_op_str() {
 
 #[test]
 fn spec_op_chars() {
-    let x = expression("+ 101 ", Location::Shell, &Definitions::new());
+    let x = expression("+ 101 ", Location::Shell, &Definitions::new(), defs2::ROOT);
     assert_eq!(
         x,
         Ok(Expression {
@@ -900,7 +925,7 @@ fn no_type_on_field() {
 #[test]
 fn def_impl_on_ty() {
     let y = "def add Point () { in }";
-    let x = definition_impl(y, Location::Shell, &Definitions::new());
+    let x = definition_impl(y, Location::Shell, &Definitions::new(), defs2::ROOT);
     assert_eq!(
         x,
         Ok(DefinitionImpl {
@@ -924,7 +949,7 @@ fn def_impl_on_ty() {
     );
 
     let y = "def + Point () { in }";
-    let x = definition_impl(y, Location::Shell, &Definitions::new());
+    let x = definition_impl(y, Location::Shell, &Definitions::new(), defs2::ROOT);
     assert_eq!(
         x,
         Ok(DefinitionImpl {
@@ -970,7 +995,7 @@ fn op_with_path() {
 // -- partial parsing expecting checks
 #[test]
 fn incomplete_expecting_tests() {
-    let exp = |s| parse(s, &Definitions::default()).map(|_| ()).unwrap_err().1;
+    let exp = |s| parse(s, &Definitions::new(), defs2::ROOT).map(|_| ()).unwrap_err().1;
 
     assert_eq!(exp("foo-bar | "), Expecting::IMPL);
     assert_eq!(exp("foo-bar | in 5 {"), Expecting::IMPL);
@@ -988,12 +1013,15 @@ fn empty_string() {
 
 #[test]
 fn brace_ends_arg() {
+    let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let src = line("ident{in asdf } remaining");
     let x = ident(&src)(&src.line);
     assert_eq!(x, Ok(("{in asdf } remaining", tt("ident"))));
 
     let src = line("$rhs{in asdf } remaining");
-    let x = term(&src, &Definitions::new())(&src.line);
+    let x = term(&src, defs)(&src.line);
     assert_eq!(x, Ok(("{in asdf } remaining", Arg(Var(tt("rhs"))))));
 
     let src = line("3.14{in asdf } remaining");
@@ -1006,8 +1034,11 @@ fn brace_ends_arg() {
 
 #[test]
 fn no_padding() {
+    let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let src = line("{in asdf } remaining");
-    let x = term(&src, &Definitions::new())(&src.line);
+    let x = term(&src, defs)(&src.line);
     assert_eq!(
         x,
         Ok((
@@ -1027,7 +1058,7 @@ fn no_padding() {
     );
 
     let src = line("{in asdf} remaining");
-    let x = term(&src, &Definitions::new())(&src.line);
+    let x = term(&src, defs)(&src.line);
     assert_eq!(
         x,
         Ok((
@@ -1047,7 +1078,7 @@ fn no_padding() {
     );
 
     let src = line("foo|bar|zog");
-    let x = expr(&src, &Definitions::new())(&src.line);
+    let x = expr(&src, defs)(&src.line);
     assert_eq!(
         x,
         Ok((
@@ -1085,8 +1116,11 @@ fn no_padding() {
 
 #[test]
 fn no_padding_integration() {
+    let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let src = line("append{get first|if{= 0}{+ 100}{- 100}}");
-    let x = expr(&src, &Definitions::new())(&src.line);
+    let x = expr(&src, defs)(&src.line);
     assert_eq!(
         x,
         Ok((
@@ -1284,6 +1318,8 @@ fn dot_infix_sml() {
 #[test]
 fn dot_infix_large() {
     let d = &Definitions::new();
+    let d = d.impls().within(defs2::ROOT);
+
 
     let src = line("$x.y");
     let x = term(&src, d)(&src.line);
@@ -1339,6 +1375,8 @@ fn dot_infix_large() {
 #[test]
 fn boolean_parsing() {
     let d = &Definitions::new();
+    let d = d.impls().within(defs2::ROOT);
+
     let src = line("#t foo");
     let x = term(&src, d)(&src.line);
     assert_eq!(x, Ok((" foo", Arg(Pound('t', tt("#t"))))));
@@ -1388,11 +1426,12 @@ fn boolean_parsing() {
 #[test]
 fn multiline_def_expecting_impl() {
     let d = &Definitions::new();
+
     let x = definition_impl(
         "def foo Zog () {
     ",
         Location::Shell,
-        d,
+        d, defs2::ROOT
     );
     assert!(matches!(x, Err((_, Expecting::IMPL))));
 }
@@ -1407,6 +1446,8 @@ fn spec_ops_dont_need_trailing_space() {
     assert_eq!(x, Ok(("#t", ops("+"))));
 
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
     let src = line("\\#t");
     let x = block(&src, defs)(&src.line);
     assert_eq!(
@@ -1450,6 +1491,8 @@ fn backslash_str() {
 #[test]
 fn ty_annotation_01_op() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
 
     let l = line(":Num foo:Bar zog");
     assert_eq!(
@@ -1497,6 +1540,8 @@ fn ty_annotation_01_op() {
 #[test]
 fn ty_annotation_02_err() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
 
     let l = line(": foo:Bar zog");
     let x = block(&l, defs)(&l.line);
@@ -1553,6 +1598,8 @@ fn ty_annotation_02_err() {
 #[test]
 fn ty_annotation_03_nested() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
 
     let l = line(":Num foo:Bar ls");
     assert_eq!(
@@ -1648,6 +1695,8 @@ fn ty_annotation_03_nested() {
 #[test]
 fn ty_annotation_04_dotop() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
+
 
     let l = line("foo $row.var:Str");
     assert_eq!(
@@ -1707,6 +1756,7 @@ fn ty_annotation_04_dotop() {
 #[test]
 fn ty_annotation_05_expr() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
 
     let l = line("foo {:Bar zog:Num }:Bool");
     assert_eq!(
@@ -1784,6 +1834,7 @@ fn ty_annotation_05_expr() {
 #[test]
 fn iblock_impls() {
     let defs = &Definitions::new();
+    let defs = defs.impls().within(defs2::ROOT);
 
     let l = line(":Num foo:Bar");
     let (_, b) = block(&l, defs)(&l.line).unwrap();

@@ -127,16 +127,17 @@ pub struct Eval {
 
 impl CodeInjector<Build> {
     pub fn new(code: impl Into<String>, defs: &Definitions) -> Result<Self> {
-        let expr =
-            lang::parse::expression(code.into(), ast::Location::Ogma, defs).map_err(|e| e.0)?;
-
-        Ok(Self {
-            args: Vec::new(),
-            data: Build {
-                expr,
-                locals: Default::default(),
-            },
-        })
+        todo!("wire in once compiler is transitioned");
+//         let expr =
+//             lang::parse::expression(code.into(), ast::Location::Ogma, defs).map_err(|e| e.0)?;
+// 
+//         Ok(Self {
+//             args: Vec::new(),
+//             data: Build {
+//                 expr,
+//                 locals: Default::default(),
+//             },
+//         })
     }
 
     /// Map the **next** block argument to the specified variable `name`.

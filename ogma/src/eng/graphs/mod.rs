@@ -131,7 +131,7 @@ mod tests {
         defs: &Definitions,
         defs2: &defs2::Definitions,
     ) -> (AstGraph, TypeGraph) {
-        let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
+        let expr = lang::parse::expression(expr, Default::default(), defs2, defs2::ROOT).unwrap();
 
         let (ag, _) = astgraph::init(expr, defs2).unwrap();
         let tg = TypeGraph::build(&ag, defs2.types());

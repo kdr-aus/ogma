@@ -9,8 +9,8 @@ pub use file::*;
 use crate::prelude::{
     ast::*,
     err,
-    lang::defs2::{self, DefItems},
-    Definitions, HashSet,
+    lang::defs2::{self, Id as DefId, DefItems, Definitions, ImplsIn},
+    HashSet,
 };
 use ::kserd::Number;
 use ::libs::divvy::Str;
@@ -72,29 +72,37 @@ pub enum ParseSuccess {
 /// Parse the `input` as a valid `ogma` expression or definition.
 ///
 /// Uses `Location::Shell`.
-pub fn parse(input: &str, defs: &Definitions) -> Result<ParseSuccess, ParseFail> {
+pub fn parse<N>(input: &str, defs: &Definitions, within: N) -> Result<ParseSuccess, ParseFail> 
+where
+N: Into<DefId>
+{
     let loc = Location::Shell;
     if input.starts_with("def ") {
-        definition_impl(input, loc, defs).map(ParseSuccess::Impl)
+        definition_impl(input, loc, defs, within).map(ParseSuccess::Impl)
     } else if input.starts_with("def-ty ") {
         definition_type(input, loc).map(ParseSuccess::Ty)
     } else {
-        expression(input, loc, defs).map(ParseSuccess::Expr)
+        expression(input, loc, defs, within).map(ParseSuccess::Expr)
     }
 }
 
 /// Parse an expression.
-pub fn expression<S: Into<Arc<str>>>(
+pub fn expression<S, N>(
     expr: S,
     location: Location,
     definitions: &Definitions,
-) -> Result<Expression, ParseFail> {
+    within: N
+) -> Result<Expression, ParseFail> 
+where
+S: Into<Arc<str>>,
+N: Into<DefId>
+{
     let line = Line {
         loc: location,
         line: expr.into(),
     };
     let expr = &line.line;
-    let x = no_trailing_input(self::expr(&line, definitions))(expr)
+    let x = no_trailing_input(self::expr(&line, definitions.impls().within(within)))(expr)
         .map_err(|e| convert_parse_error(e, &line.line, line.loc.clone()))
         .map(|x| x.1);
 
@@ -102,17 +110,22 @@ pub fn expression<S: Into<Arc<str>>>(
 }
 
 /// Parse a definition implementation (`def`).
-pub fn definition_impl<S: Into<Arc<str>>>(
+pub fn definition_impl<S, N>(
     def: S,
     location: Location,
     definitions: &Definitions,
-) -> Result<DefinitionImpl, ParseFail> {
+    within: N
+) -> Result<DefinitionImpl, ParseFail> 
+where
+S: Into<Arc<str>>,
+N: Into<DefId>
+{
     let line = Line {
         loc: location.clone(),
         line: def.into(),
     };
 
-    self::def_impl_inner(&line.line, &line, location.clone(), definitions)
+    self::def_impl_inner(&line.line, &line, location.clone(), definitions.impls().within(within))
         .map(|x| x.1)
         .map_err(|e| convert_parse_error(e, &line.line, location))
 }
@@ -377,11 +390,11 @@ where
 // ------ Expression -----------------------------------------------------------
 fn expr<'f>(
     line: &'f Line,
-    defs: &'f Definitions,
+    impls: ImplsIn<'f>,
 ) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, Expression, ParsingError<'a>> + 'f {
     move |input| {
         let mut blocks: Vec<Block> = Vec::new();
-        let mut blkparse = maybe_cx("no command", ws(map(block(line, defs), Box::new)));
+        let mut blkparse = maybe_cx("no command", ws(map(block(line, impls), Box::new)));
 
         // first -- try block parsing
         let (mut i, blk) = blkparse(input)?;
@@ -423,14 +436,14 @@ fn expr<'f>(
 
 fn block<'f>(
     line: &'f Line,
-    defs: &'f Definitions,
+    impls: ImplsIn<'f>
 ) -> impl for<'a> Fn(&'a str) -> IResult<&'a str, PrefixBlock, ParsingError<'a>> + 'f {
     move |i| {
         let (i, in_ty) = opt_ty(line)(i)?;
         // NOTE, op is not wrapped in `ws` since this would consume trailing whitespace
         let (i, op) = exp(preceded(multispace0, op(line)), Expecting::IMPL)(i)?;
         let (i, out_ty) = opt_ty(line)(i)?;
-        let (i, terms) = many0(ws(term(line, defs)))(i)?;
+        let (i, terms) = many0(ws(term(line, impls)))(i)?;
         Ok((
             i,
             PrefixBlock {
@@ -561,10 +574,10 @@ fn op_ident(line: &Line) -> impl Fn(&str) -> IResult<&str, Tag, ParsingError> + 
     }
 }
 
-fn known_op<'a>(line: &'a Line, defs: &'a Definitions) -> impl Fn(&str) -> bool + 'a {
+fn known_op<'a>(line: &'a Line, impls: ImplsIn<'a>) -> impl Fn(&str) -> bool + 'a {
     move |i| match op(line)(i) {
         Ok((_, op)) => match op.is_op() {
-            Some(t) => defs.impls().contains_op(t.str()),
+            Some(t) => impls.contains_op(t.str()),
             None => false, // TODO handle this once `defs` can have path queries
         },
         _ => false,
@@ -576,13 +589,13 @@ fn known_op<'a>(line: &'a Line, defs: &'a Definitions) -> impl Fn(&str) -> bool 
 /// If an argument, try applying matching infix operators.
 fn term<'f>(
     line: &'f Line,
-    defs: &'f Definitions,
+    impls: ImplsIn<'f>,
 ) -> impl Fn(&str) -> IResult<&str, Term, ParsingError> + 'f {
     move |i| {
         if i.starts_with("--") {
             map(flag(line), Term::Flag)(i)
         } else {
-            let (i, arg) = arg(line, defs)(i)?;
+            let (i, arg) = arg(line, impls)(i)?;
             let (i, arg) = maybe_infix(line, i, arg)?;
             Ok((i, Term::Arg(arg)))
         }
@@ -659,7 +672,7 @@ fn dot_infixed(
 /// - finally parse as Ident if nothing else
 fn arg<'f>(
     line: &'f Line,
-    defs: &'f Definitions,
+    impls: ImplsIn<'f>,
 ) -> impl Fn(&str) -> IResult<&str, Argument, ParsingError> + 'f {
     move |i| {
         if i.starts_with('{') {
@@ -677,7 +690,7 @@ fn arg<'f>(
 
                 let (i, mut e) = cut(delimited(
                     char('{'),
-                    ws(expr(line, defs)),
+                    ws(expr(line, impls)),
                     exp(char('}'), Expecting::TERM),
                 ))(i)?;
 
@@ -725,9 +738,9 @@ fn arg<'f>(
             }
         } else if let Ok((j, (n, s))) = num(line)(i) {
             Ok((j, Argument::Num(n, s)))
-        } else if known_op(line, defs)(i) {
+        } else if known_op(line, impls)(i) {
             let mut tag = line.create_tag(i);
-            let (i, block) = ws(block(line, defs))(i)?;
+            let (i, block) = ws(block(line, impls))(i)?;
             tag.make_mut().end = line.line.offset(i);
             let expr = Expression {
                 tag,
@@ -805,7 +818,7 @@ fn def_impl_inner<'a>(
     i: &'a str,
     line: &Line,
     loc: Location,
-    definitions: &Definitions,
+    impls: ImplsIn,
 ) -> IResult<&'a str, DefinitionImpl, ParsingError<'a>> {
     let (i, name) = def_op(line)(i)?;
     let (i, in_ty) = ws(opt(op_ident(line)))(i)?;
@@ -817,7 +830,7 @@ fn def_impl_inner<'a>(
     let (i, params) = exp(def_params(line), x)(i)?;
     let (i, expr) = no_trailing_input(ws(delimited(
         char('{'),
-        ws(expr(line, definitions)),
+        ws(expr(line, impls)),
         char('}'),
     )))(i)?;
 

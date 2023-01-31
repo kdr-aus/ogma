@@ -81,14 +81,15 @@ fn check_is_table(r: Result<Value>, table: Vec<Vec<Entry<Value>>>) {
 }
 
 fn print_help(src: &str, defs: &Definitions) -> String {
-    let x = rt::handle_help(
-        &lang::parse::expression(src, Location::Shell, defs).unwrap(),
-        defs,
-    )
-    .unwrap_err()
-    .to_string();
-    println!("{}", x);
-    x
+    todo!("wire in once compiler switches");
+//     let x = rt::handle_help(
+//         &lang::parse::expression(src, Location::Shell, defs).unwrap(),
+//         defs,
+//     )
+//     .unwrap_err()
+//     .to_string();
+//     println!("{}", x);
+//     x
 }
 
 fn with_dummy_defs() -> Definitions {

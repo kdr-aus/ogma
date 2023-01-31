@@ -651,6 +651,11 @@ pub struct TypesIn<'a> {
 }
 
 impl<'a> ImplsIn<'a> {
+    /// Does not check for type matching, see [`contains`] instead.
+    pub fn contains_op(&self, key: &str) -> bool {
+        self.impls.contains_op(key, self.partition)
+    }
+
     pub fn matches<'b, K>(&self, key: K) -> K::Output
     where
         K: PolyGet<Vec<ImplEntry<'a>>> + AsKey<&'b str>,
