@@ -694,14 +694,15 @@ mod tests {
     }
 
     fn compile_w_defs(expr: &str, defs: &Definitions) -> Result<()> {
-        let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
-
-        super::compile(expr, defs, None)
-            .map_err(|e| {
-                eprintln!("{}", e);
-                e
-            })
-            .map(|_| ())
+        todo!("wire in once compiler switches to defs2");
+//         let expr = lang::parse::expression(expr, Default::default(), defs, defs2::ROOT).unwrap();
+// 
+//         super::compile(expr, defs, None)
+//             .map_err(|e| {
+//                 eprintln!("{}", e);
+//                 e
+//             })
+//             .map(|_| ())
     }
 
     #[test]
