@@ -134,7 +134,7 @@ mod tests {
         let expr = lang::parse::expression(expr, Default::default(), defs).unwrap();
 
         let (ag, _) = astgraph::init(expr, defs2).unwrap();
-        let tg = TypeGraph::build(&ag, defs.types());
+        let tg = TypeGraph::build(&ag, defs2.types());
         (ag, tg)
     }
 
@@ -203,8 +203,8 @@ mod tests {
 
         use tygraph::{Knowledge, Node};
         let def = || Node {
-            input: TypesSet::full(Definitions::new().types()).into(),
-            output: TypesSet::full(Definitions::new().types()).into(),
+            input: TypesSet::full(defs2::Definitions::new().types()).into(),
+            output: TypesSet::full(defs2::Definitions::new().types()).into(),
         };
 
         assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
@@ -302,8 +302,8 @@ mod tests {
         // Type graph nodes
         use tygraph::{Flow, Knowledge, Node};
         let def = || Node {
-            input: TypesSet::full(Definitions::new().types()).into(),
-            output: TypesSet::full(Definitions::new().types()).into(),
+            input: TypesSet::full(defs2::Definitions::new().types()).into(),
+            output: TypesSet::full(defs2::Definitions::new().types()).into(),
         };
 
         assert_eq!(tg.node_weight(0.into()), Some(&def())); // root
@@ -450,8 +450,8 @@ mod tests {
         // Type graph nodes
         use tygraph::{Flow, Knowledge, Node};
         let def = || Node {
-            input: TypesSet::full(&Definitions::new().types()).into(),
-            output: TypesSet::full(&Definitions::new().types()).into(),
+            input: TypesSet::full(defs2::Definitions::new().types()).into(),
+            output: TypesSet::full(defs2::Definitions::new().types()).into(),
         };
 
         assert_eq!(tg.edge_count(), 9);
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn tg_types_with_keyed_some() {
-        let defs = &mut Definitions::default();
+        let defs = &mut Definitions::new();
         let defs2 = &mut defs2::Definitions::new();
 
         lang::process_definition(
@@ -680,7 +680,7 @@ mod tests {
             tg.node_weight(idx),
             Some(&Node {
                 input: Knowledge::Known(Type::Nil),
-                output: TypesSet::full(defs.types()).into(),
+                output: TypesSet::full(defs2.types()).into(),
             })
         ); // 3
     }

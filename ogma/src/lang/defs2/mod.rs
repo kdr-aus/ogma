@@ -607,7 +607,7 @@ impl<'a, 'd> DefItems<'a, (&'a str, &'a Type, Id)> for Impls<'d> {
 
 impl<'a, 'd> DefItems<'a, (&'a str, Id)> for Types<'d> {
     type Item = &'d Type;
-    type Iter = TypesIter;
+    type Iter = TypesIter<'a>;
 
     fn contains<K>(&self, key: K) -> bool
     where
@@ -706,7 +706,7 @@ impl<'a, 'd> DefItems<'a, (&'a str, &'a Type)> for ImplsIn<'d> {
 
 impl<'a, 'd> DefItems<'a, &'a str> for TypesIn<'d> {
     type Item = &'d Type;
-    type Iter = TypesIter;
+    type Iter = TypesIter<'a>;
 
     fn contains<K>(&self, key: K) -> bool
     where
@@ -765,15 +765,7 @@ impl Iterator for ImplsIter {
     }
 }
 
-pub struct TypesIter {}
-
-impl Iterator for TypesIter {
-    type Item = ();
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
+type TypesIter<'a> = std::collections::hash_map::Values<'a, TypeNode, Type>;
 
 macro_rules! key_impl {
     ($($k:ty => $v:ident),*) => {

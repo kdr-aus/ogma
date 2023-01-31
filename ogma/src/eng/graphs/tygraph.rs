@@ -1,8 +1,8 @@
 use super::*;
-use crate::lang::types::Types;
 use astgraph::*;
 use petgraph::prelude::*;
 use std::{iter, ops::Deref, rc::Rc};
+use defs2::Types;
 
 type TypeGraphInner = petgraph::stable_graph::StableGraph<Node, Flow, petgraph::Directed, u32>;
 
@@ -130,7 +130,7 @@ impl TypeGraph {
     }
 
     /// Builds a type graph based off the ast graph.
-    pub fn build(ast_graph: &AstGraph, tys: &Types) -> Self {
+    pub fn build(ast_graph: &AstGraph, tys: Types) -> Self {
         let full = TypesSet::full(tys);
 
         let mut g = ast_graph.map(
@@ -831,9 +831,9 @@ impl TypesSet {
     }
 
     /// Return a full set of types.
-    pub fn full(tys: &Types) -> Self {
+    pub fn full(tys: Types) -> Self {
         let mut s = Self::empty();
-        for t in tys.iter().map(|(_, x)| x.clone()) {
+        for t in tys.iter().cloned() {
             s.insert(t);
         }
         s
